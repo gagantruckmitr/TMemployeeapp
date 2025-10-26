@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Invoice - {{ $invoice_no }}</title>
+    <style>
+        body {
+            font-family: 'DejaVu Sans', sans-serif;
+            font-size: 16px;
+            color: #000;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header img {
+            max-height: 80px;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1a4e91;
+            margin-top: 40px;
+        }
+
+        .invoice-details,
+        .user-details {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .invoice-details td,
+        .user-details td {
+            padding: 4px;
+            vertical-align: top;
+        }
+
+        .section-title {
+            font-size: 21px;
+            font-weight: bold;
+            color: #1a4e91;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: left;
+        }
+
+        th {
+            background: #f0f0f0;
+        }
+
+        .no-border td {
+            border: none;
+        }
+
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .disclaimer-title {
+            font-weight: bold;
+            color: #1a4e91;
+            margin-top: 30px;
+            font-size: 16px;
+        }
+
+        .footer ol li {
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        @if (isset($logo))
+            {{-- Email Body --}}
+            <img src="{{ $logo }}" alt="TruckMitr Logo" style="max-height:80px;">
+        @else
+            {{-- PDF --}}
+            <img src="{{ public_path('assets/img/logo.png') }}" alt="TruckMitr Logo" style="max-height:80px;">
+        @endif
+
+        <div class="title">{{ $user_role }} {{ $payment_type }} Invoice</div>
+        <p>
+            <strong>TruckMitr Corporate Services Pvt. Ltd.</strong><br>
+            B3-0102, Sector - 10, Shree Vardhman Gardenia, Sonipat, Haryana 131001<br>
+            GST # 06AAKCT8410G1ZB || Email : contact@truckmitr.com
+        </p>
+    </div>
+
+    <!-- Invoice + User Details -->
+    <!-- Invoice + User Details -->
+    <table class="invoice-details no-border" style="width:100%; margin-bottom:15px;">
+        <tr>
+            <td style="width:50%; vertical-align:top;">
+                <p><strong>Invoice No:</strong> {{ $invoice_no }}</p>
+                <p><strong>Invoice Date:</strong> {{ $invoice_date }}</p>
+                <p>
+                    <strong>Subscription Type:</strong>
+                    {{ $user_role }}
+                    {{ strtolower($user_role) === 'transporter' && strtolower($payment_type) === 'subscription' ? '(Quarterly Subscription)' : $payment_type }}
+                </p>
+
+            </td>
+            <td style="width:50%; vertical-align:top;">
+                <p><strong>Name:</strong> {{ $user_name ?? '_________________' }}</p>
+                <p><strong>Mobile Number:</strong> {{ $user->mobile ?? '_________________' }}</p>
+                <p><strong>Email ID:</strong> {{ $user->email ?? '_________________' }}</p>
+                <p><strong>State:</strong> {{ $state ?? '_________________' }}</p>
+                <p><strong>TM ID:</strong> {{ $user->unique_id ?? '_________________' }}</p>
+                <p><strong>WhatsApp Enabled Number:</strong> Yes/No</p>
+            </td>
+        </tr>
+    </table>
+
+    <br />
+    <!-- Subscription Summary -->
+    <div class="section-title mt-5">Subscription Summary</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Description</th>
+                <th>Qty</th>
+                <th>Unit Price (&#8377;)</th>
+                <th>Discount</th>
+                <th>Total (&#8377;)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>TruckMitr {{ $user_role }} {{ $payment_type }} Fee</td>
+                <td>1</td>
+                <td>{{ $originalamt }}</td>
+                <td>90%</td>
+                <td>{{ $amount }}</td>
+            </tr>
+        </tbody>
+    </table>
+    <br />
+
+    <!-- Payment Details -->
+    <div class="section-title mt-5">Payment Details</div>
+    <table>
+        <tr>
+            <th>Mode of Payment</th>
+            <td>Razorpay (Online Payment Gateway)</td>
+        </tr>
+        <tr>
+            <th>Transaction ID</th>
+            <td>{{ $transaction_id ?? '_________________' }}</td>
+        </tr>
+        <tr>
+            <th>Payment Status</th>
+            <td>{{ $payment_status == 'captured' ? 'Paid' : ($payment_status ?? '_________________') }}</td>
+        </tr>
+    </table>
+    <br /> <br />
+    <!-- Terms and Conditions -->
+    <div class="footer mt-5">
+        <div class="disclaimer-title">Terms and Conditions:</div>
+        <ol>
+            <li>The subscription fee of &#8377;{{ $amount }} is non-refundable and valid for the period as defined by TruckMitr
+                policies.
+            </li>
+            <li>Access to premium features, including job applications, training modules, and certificates, is granted
+                only upon confirmation of payment.</li>
+            <li>The driver is responsible for providing accurate details including name, mobile number, WhatsApp-enabled
+                number, and email ID for invoicing purposes.</li>
+            <li>Certificates issued through TruckMitr will include driver details such as name, photograph, and driving
+                license number, as available in the system.</li>
+        </ol>
+
+        <div class="disclaimer-title">Legal Disclaimer:</div>
+        <ol>
+            <li>TruckMitr acts solely as a digital platform facilitating connections between drivers and transporters.
+                TruckMitr is not responsible for any disputes, payments, losses, or claims arising between drivers and
+                transporters.</li>
+            <li>By subscribing, the driver acknowledges and agrees that TruckMitr shall not be held liable for any
+                direct, indirect, incidental, or consequential damages resulting from the use of its services.</li>
+            <li>All records of payments, subscriptions, training, and certifications are digitally maintained by
+                TruckMitr. In case of disputes, the records maintained by TruckMitr shall be considered final and
+                binding.</li>
+            <li>Jurisdiction for all legal matters related to TruckMitr shall lie exclusively with the courts located in
+                Delhi NCR, India.</li>
+        </ol>
+
+        <div class="disclaimer-title">Training and Certification Disclaimer:</div>
+        <p style="font-size: 14px;">
+            All training provided by TruckMitr is delivered entirely through pre-recorded videos available within the
+            TruckMitr mobile application. TruckMitr does not provide any physical or classroom-based training to
+            drivers. The certification issued upon completion of training modules is based solely on internal quizzes
+            and evaluation algorithms designed by TruckMitr. These certificates are not recognized by any government
+            authority and should not be considered as government-approved certifications.
+        </p>
+    </div>
+    <!-- Computer Generated Disclaimer -->
+    <div style="text-align:center; margin-top:20px; font-size:14px;">
+        ------------- This is computer generated invoice hence no signature required -------------
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,37 @@
+# Ignore documentation and guides
+*.md
+!README.md
+
+# Ignore local development files
+.env.local
+.env.development
+
+# Ignore build scripts
+*.bat
+*.ps1
+
+# Ignore test files
+test/
+tests/
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore Flutter files (not needed for backend)
+lib/
+assets/
+pubspec.yaml
+pubspec.lock
+analysis_options.yaml
+.flutter-plugins
+.flutter-plugins-dependencies
+.dart_tool/
+build/
+
+# Keep only API files
+!api/
+!railway.json
+!nixpacks.toml
