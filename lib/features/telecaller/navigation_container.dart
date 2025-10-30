@@ -7,6 +7,8 @@ import 'screens/interested_screen.dart';
 import 'screens/connected_calls_screen.dart';
 import 'screens/call_backs_screen.dart';
 import 'screens/call_back_later_screen.dart';
+import 'screens/pending_calls_screen.dart';
+import 'screens/call_history_screen.dart';
 import 'screens/dynamic_profile_screen.dart';
 
 class NavigationContainer extends StatefulWidget {
@@ -20,6 +22,7 @@ class _NavigationContainerState extends State<NavigationContainer> {
   NavigationSection _currentSection = NavigationSection.home;
   bool _isDrawerOpen = false;
   late PageController _pageController;
+  String? _callHistoryFilter;
 
   @override
   void initState() {
@@ -46,21 +49,25 @@ class _NavigationContainerState extends State<NavigationContainer> {
     });
   }
 
-  void _onSectionChanged(NavigationSection section) {
-    if (section != _currentSection) {
-      setState(() {
-        _currentSection = section;
-      });
+  void _onSectionChanged(NavigationSection section, {String? filter}) {
+    print('🔍 Navigation: section=$section, index=${section.index}, filter=$filter');
+    
+    setState(() {
+      _currentSection = section;
+      // Store filter for call history screen
+      if (section == NavigationSection.callHistory && filter != null) {
+        _callHistoryFilter = filter;
+      }
+    });
 
-      // Animate to the new page
-      _pageController.animateToPage(
-        section.index,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
-      );
+    // Animate to the new page
+    _pageController.animateToPage(
+      section.index,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+    );
 
-      HapticFeedback.selectionClick();
-    }
+    HapticFeedback.selectionClick();
   }
 
   void _navigateToProfile() {
@@ -79,8 +86,10 @@ class _NavigationContainerState extends State<NavigationContainer> {
       child: Scaffold(
         body: GestureDetector(
           onHorizontalDragEnd: (details) {
-            // Swipe right to open drawer
-            if (details.primaryVelocity! > 0 && !_isDrawerOpen) {
+            // Only allow swipe right to open drawer when on home screen
+            if (details.primaryVelocity! > 0 &&
+                !_isDrawerOpen &&
+                _currentSection == NavigationSection.home) {
               _openDrawer();
             }
             // Swipe left to close drawer
@@ -95,11 +104,19 @@ class _NavigationContainerState extends State<NavigationContainer> {
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  DashboardPage(onNavigateToProfile: _navigateToProfile),
+                  DashboardPage(
+                    onNavigateToProfile: _navigateToProfile,
+                    onNavigateToSection: _onSectionChanged,
+                  ),
                   const InterestedScreen(),
                   const ConnectedCallsScreen(),
                   const CallBacksScreen(),
                   const CallBackLaterScreen(),
+                  const PendingCallsScreen(),
+                  CallHistoryScreen(
+                    key: ValueKey(_callHistoryFilter),
+                    initialFilter: _callHistoryFilter,
+                  ),
                   const DynamicProfileScreen(),
                 ],
               ),

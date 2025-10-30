@@ -193,6 +193,9 @@ define('ALLOWED_ORIGINS', ['*']); // In production, specify your app's domain
 // ============================================
 $conn = getDBConnection();
 
+// Set MySQL timezone to IST (+05:30)
+$conn->query("SET time_zone = '+05:30'");
+
 // ============================================
 // PDO CONNECTION (for admin panel)
 // ============================================
@@ -207,6 +210,10 @@ try {
             PDO::ATTR_EMULATE_PREPARES => false
         ]
     );
+    
+    // Set MySQL timezone to IST (+05:30)
+    $pdo->exec("SET time_zone = '+05:30'");
+    
 } catch(PDOException $e) {
     error_log('PDO Connection Error: ' . $e->getMessage());
     if (DB_HOST === 'localhost') {

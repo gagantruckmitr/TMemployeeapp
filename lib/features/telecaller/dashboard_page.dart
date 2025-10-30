@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/constants.dart';
 import '../../models/dummy_models.dart';
+import '../../models/smart_calling_models.dart';
 import '../../routes/app_router.dart';
 import 'widgets/smart_call_button.dart';
 import '../../core/services/real_auth_service.dart';
 import '../../core/services/telecaller_service.dart';
+import '../../core/services/activity_tracker_service.dart';
 
 class DashboardPage extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
   final VoidCallback? onOpenDrawer;
-  
-  const DashboardPage({super.key, this.onNavigateToProfile, this.onOpenDrawer});
+  final Function(NavigationSection section, {String? filter})? onNavigateToSection;
+
+  const DashboardPage({
+    super.key,
+    this.onNavigateToProfile,
+    this.onOpenDrawer,
+    this.onNavigateToSection,
+  });
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -22,11 +31,10 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-
   late ScrollController _scrollController;
   late AnimationController _counterController;
   bool _isKPIVisible = true;
-  
+
   // Dynamic data
   Map<String, int> _dashboardStats = {};
   bool _isLoadingStats = true;
@@ -46,6 +54,9 @@ class _DashboardPageState extends State<DashboardPage>
     _scrollController.addListener(_onScroll);
     _loadDashboardData();
 
+    // Start activity tracking
+    ActivityTrackerService.instance.startTracking();
+
     // Start counter animation with delay to improve initial render
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(milliseconds: 300), () {
@@ -53,24 +64,24 @@ class _DashboardPageState extends State<DashboardPage>
       });
     });
   }
-  
+
   Future<void> _loadDashboardData() async {
     if (!mounted) return;
-    
+
     setState(() => _isLoadingStats = true);
-    
+
     try {
       // Load stats from telecaller service
       final stats = await TelecallerService.instance.getDashboardStats();
       print('📊 Dashboard Stats Loaded: $stats');
-      
+
       if (mounted) {
         setState(() {
           _dashboardStats = stats;
           _isLoadingStats = false;
         });
         print('✅ Dashboard UI Updated with stats');
-        
+
         // Show message if no data
         if (stats['total_calls'] == 0) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -86,7 +97,7 @@ class _DashboardPageState extends State<DashboardPage>
       print('❌ Error loading dashboard stats: $e');
       if (mounted) {
         setState(() => _isLoadingStats = false);
-        
+
         // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -137,7 +148,7 @@ class _DashboardPageState extends State<DashboardPage>
   String _getSuccessRate() {
     final total = _dashboardStats['total_calls'] ?? 0;
     final connected = _dashboardStats['connected_calls'] ?? 0;
-    
+
     if (total == 0) return '0%';
     final rate = (connected / total * 100).toStringAsFixed(1);
     return '$rate%';
@@ -146,27 +157,30 @@ class _DashboardPageState extends State<DashboardPage>
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // Main Content with pull-to-refresh
-            RefreshIndicator(
-              onRefresh: _loadDashboardData,
-              color: AppTheme.primaryBlue,
-              child: CustomScrollView(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                cacheExtent: 1000,
-                slivers: [
-                  // Custom App Bar
-                  _buildStickyAppBar(),
+    return GestureDetector(
+      onTap: () => ActivityTrackerService.instance.recordActivity(),
+      onPanUpdate: (_) => ActivityTrackerService.instance.recordActivity(),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              // Main Content with pull-to-refresh
+              RefreshIndicator(
+                onRefresh: _loadDashboardData,
+                color: AppTheme.primaryBlue,
+                child: CustomScrollView(
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  cacheExtent: 1000,
+                  slivers: [
+                    // Custom App Bar
+                    _buildStickyAppBar(),
 
-                  // KPI Section as separate sliver for better performance
-                  SliverToBoxAdapter(child: _buildKPISection()),
+                    // KPI Section as separate sliver for better performance
+                    SliverToBoxAdapter(child: _buildKPISection()),
 
-                  // Smart Calling Section
+                    // Smart Calling Section
                   SliverToBoxAdapter(child: _buildSmartCallingSection()),
 
                   // Performance Section with Charts
@@ -176,9 +190,7 @@ class _DashboardPageState extends State<DashboardPage>
                   SliverToBoxAdapter(child: _buildFollowupsSection()),
 
                   // Bottom padding for bottom navigation
-                  const SliverToBoxAdapter(
-                    child: SizedBox(height: 100),
-                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
             ),
@@ -187,6 +199,7 @@ class _DashboardPageState extends State<DashboardPage>
             if (!_isKPIVisible) _buildFloatingKPISummary(),
           ],
         ),
+      ),
       ),
     );
   }
@@ -225,32 +238,32 @@ class _DashboardPageState extends State<DashboardPage>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              _getGreeting(),
-                              style: AppTheme.bodyLarge.copyWith(
-                                color: Colors.grey.shade600,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            )
-                            .animate()
-                            .fadeIn(duration: 600.ms)
-                            .slideX(begin: -0.3, end: 0),
+                                  _getGreeting(),
+                                  style: AppTheme.bodyLarge.copyWith(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                )
+                                .animate()
+                                .fadeIn(duration: 600.ms)
+                                .slideX(begin: -0.3, end: 0),
                             const SizedBox(height: 4),
                             Text(
-                              'Hi ${_getUserName()} 👋',
-                              style: AppTheme.headingMedium.copyWith(
-                                color: Colors.grey.shade900,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.5,
-                                height: 1.2,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            )
-                            .animate()
-                            .fadeIn(duration: 600.ms, delay: 200.ms)
-                            .slideX(begin: -0.3, end: 0),
+                                  'Hi ${_getUserName()} 👋',
+                                  style: AppTheme.headingMedium.copyWith(
+                                    color: Colors.grey.shade900,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.5,
+                                    height: 1.2,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                )
+                                .animate()
+                                .fadeIn(duration: 600.ms, delay: 200.ms)
+                                .slideX(begin: -0.3, end: 0),
                           ],
                         ),
                       ),
@@ -363,7 +376,7 @@ class _DashboardPageState extends State<DashboardPage>
   Widget _buildKPISection() {
     // Create dynamic KPI data from real stats
     final kpiData = _getDynamicKPIData();
-    
+
     return Padding(
       padding: const EdgeInsets.only(top: 20),
       child: SizedBox(
@@ -384,13 +397,14 @@ class _DashboardPageState extends State<DashboardPage>
       ),
     );
   }
-  
+
   List<KPIData> _getDynamicKPIData() {
     final totalCalls = _dashboardStats['total_calls'] ?? 0;
     final connectedCalls = _dashboardStats['connected_calls'] ?? 0;
     final pendingCalls = _dashboardStats['pending_calls'] ?? 0;
+    final freshLeads = _dashboardStats['fresh_leads'] ?? 0;
     final callbacksScheduled = _dashboardStats['callbacks_scheduled'] ?? 0;
-    
+
     return [
       KPIData(
         title: 'Total Calls',
@@ -405,10 +419,16 @@ class _DashboardPageState extends State<DashboardPage>
         color: 0xFF10B981,
       ),
       KPIData(
-        title: 'Pending',
+        title: 'Pending Calls',
         value: pendingCalls.toString(),
         icon: '⏳',
         color: 0xFFF59E0B,
+      ),
+      KPIData(
+        title: 'Fresh Leads',
+        value: freshLeads.toString(),
+        icon: '🆕',
+        color: 0xFF8B5CF6,
       ),
       KPIData(
         title: 'Callbacks',
@@ -423,27 +443,31 @@ class _DashboardPageState extends State<DashboardPage>
     final screenWidth = MediaQuery.of(context).size.width;
     final tileWidth = (screenWidth - 60) / 2.2; // Responsive width
 
-    return RepaintBoundary( // Isolate repaints for better performance
-      child: Container(
-        width: tileWidth.clamp(140.0, 160.0),
-        margin: const EdgeInsets.only(right: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
+    return RepaintBoundary(
+      // Isolate repaints for better performance
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-              spreadRadius: -5,
+          onTap: () {
+            HapticFeedback.lightImpact();
+            _showKPIDetails(kpi);
+          },
+          child: Container(
+            width: tileWidth.clamp(140.0, 160.0),
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.black.withOpacity(0.04),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                  spreadRadius: -5,
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () => _showKPIDetails(kpi),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -509,7 +533,7 @@ class _DashboardPageState extends State<DashboardPage>
   Widget _buildFloatingKPISummary() {
     if (_isLoadingStats) return const SizedBox.shrink();
     final kpiData = _getDynamicKPIData();
-    
+
     return Positioned(
       top: 10,
       left: 16,
@@ -570,54 +594,138 @@ class _DashboardPageState extends State<DashboardPage>
 
   Widget _buildSmartCallingSection() {
     return RepaintBoundary(
-      child: Container(
-        margin: const EdgeInsets.all(20),
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primaryBlue.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                  spreadRadius: -5,
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'Smart Calling',
+                  style: AppTheme.headingMedium.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Start automated IVR call sequence for your next best lead.',
+                  style: AppTheme.bodyMedium.copyWith(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                SmartCallButton(
+                  onPressed: () {
+                    _startSmartCalling();
+                  },
+                ),
+              ],
+            ),
           ),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.primaryBlue.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-              spreadRadius: -5,
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Text(
-              'Smart Calling',
-              style: AppTheme.headingMedium.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
+          // Call History Button
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _navigateToCallHistory,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.indigo.withValues(alpha: 0.2),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.history_rounded,
+                          color: Colors.indigo,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Call History',
+                              style: AppTheme.titleMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'View all your call logs with feedback',
+                              style: AppTheme.bodyMedium.copyWith(
+                                color: Colors.grey.shade600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: Colors.grey.shade400,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Start automated IVR call sequence for your next best lead.',
-              style: AppTheme.bodyMedium.copyWith(
-                color: Colors.white.withOpacity(0.8),
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            SmartCallButton(
-              onPressed: () {
-                _startSmartCalling();
-              },
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  void _navigateToCallHistory() {
+    HapticFeedback.lightImpact();
+    if (widget.onNavigateToSection != null) {
+      widget.onNavigateToSection!(NavigationSection.callHistory);
+    }
   }
 
   Widget _buildPerformanceSection() {
@@ -688,200 +796,197 @@ class _DashboardPageState extends State<DashboardPage>
               ],
             ),
             const SizedBox(height: 24),
-              // Optimized Bar Chart with RepaintBoundary
-              RepaintBoundary(
-                child: SizedBox(
-                  height: 200,
-                  child: BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY: 50,
-                      barTouchData: BarTouchData(
-                        enabled: true,
-                        touchTooltipData: BarTouchTooltipData(
-                          getTooltipColor: (group) =>
-                              AppTheme.primaryBlue.withOpacity(0.9),
-                          tooltipPadding: const EdgeInsets.all(8),
-                          tooltipRoundedRadius: 8,
-                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                            const labels = ['Calls', 'Leads', 'Follow-ups'];
-                            return BarTooltipItem(
-                              '${labels[group.x.toInt()]}\n${rod.toY.round()}',
-                              AppTheme.bodyMedium.copyWith(
-                                color: AppTheme.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
+            // Optimized Bar Chart with RepaintBoundary
+            RepaintBoundary(
+              child: SizedBox(
+                height: 200,
+                child: BarChart(
+                  BarChartData(
+                    alignment: BarChartAlignment.spaceAround,
+                    maxY: 50,
+                    barTouchData: BarTouchData(
+                      enabled: true,
+                      touchTooltipData: BarTouchTooltipData(
+                        getTooltipColor: (group) =>
+                            AppTheme.primaryBlue.withOpacity(0.9),
+                        tooltipPadding: const EdgeInsets.all(8),
+                        tooltipRoundedRadius: 8,
+                        getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                          const labels = ['Calls', 'Leads', 'Follow-ups'];
+                          return BarTooltipItem(
+                            '${labels[group.x.toInt()]}\n${rod.toY.round()}',
+                            AppTheme.bodyMedium.copyWith(
+                              color: AppTheme.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    titlesData: FlTitlesData(
+                      show: true,
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          getTitlesWidget: (value, meta) {
+                            const labels = ['Calls', 'Leads', 'F/Ups'];
+                            if (value.toInt() < labels.length) {
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  labels[value.toInt()],
+                                  style: AppTheme.bodyMedium.copyWith(
+                                    color: AppTheme.gray,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              );
+                            }
+                            return const Text('');
+                          },
+                        ),
+                      ),
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 30,
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              value.toInt().toString(),
+                              style: AppTheme.bodyMedium.copyWith(
+                                color: AppTheme.gray.withOpacity(0.7),
+                                fontWeight: FontWeight.w400,
+                                fontSize: 10,
                               ),
                             );
                           },
                         ),
                       ),
-                      titlesData: FlTitlesData(
-                        show: true,
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (value, meta) {
-                              const labels = ['Calls', 'Leads', 'F/Ups'];
-                              if (value.toInt() < labels.length) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    labels[value.toInt()],
-                                    style: AppTheme.bodyMedium.copyWith(
-                                      color: AppTheme.gray,
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                );
-                              }
-                              return const Text('');
-                            },
-                          ),
-                        ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 30,
-                            getTitlesWidget: (value, meta) {
-                              return Text(
-                                value.toInt().toString(),
-                                style: AppTheme.bodyMedium.copyWith(
-                                  color: AppTheme.gray.withOpacity(0.7),
-                                  fontWeight: FontWeight.w400,
-                                  fontSize: 10,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        topTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        rightTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
                       ),
-                      borderData: FlBorderData(show: false),
-                      barGroups: [
-                        BarChartGroupData(
-                          x: 0,
-                          barRods: [
-                            BarChartRodData(
-                              toY: (_dashboardStats['total_calls'] ?? 35).toDouble(),
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppTheme.primaryBlue.withOpacity(0.8),
-                                  AppTheme.primaryBlue,
-                                ],
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                              ),
-                              width: 20,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(6),
-                                topRight: Radius.circular(6),
-                              ),
-                            ),
-                          ],
-                        ),
-                        BarChartGroupData(
-                          x: 1,
-                          barRods: [
-                            BarChartRodData(
-                              toY: (_dashboardStats['connected_calls'] ?? 28).toDouble(),
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppTheme.accentPurple.withOpacity(
-                                    0.8,
-                                  ),
-                                  AppTheme.accentPurple,
-                                ],
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                              ),
-                              width: 20,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(6),
-                                topRight: Radius.circular(6),
-                              ),
-                            ),
-                          ],
-                        ),
-                        BarChartGroupData(
-                          x: 2,
-                          barRods: [
-                            BarChartRodData(
-                              toY: (_dashboardStats['callbacks_scheduled'] ?? 22).toDouble(),
-                              gradient: const LinearGradient(
-                                colors: [
-                                  Color(0xFF66BB6A),
-                                  Color(0xFF4CAF50),
-                                ],
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                              ),
-                              width: 20,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(6),
-                                topRight: Radius.circular(6),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      gridData: FlGridData(
-                        show: true,
-                        drawVerticalLine: false,
-                        horizontalInterval: 10,
-                        getDrawingHorizontalLine: (value) {
-                          return FlLine(
-                            color: AppTheme.gray.withOpacity(0.1),
-                            strokeWidth: 1,
-                          );
-                        },
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
                       ),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    barGroups: [
+                      BarChartGroupData(
+                        x: 0,
+                        barRods: [
+                          BarChartRodData(
+                            toY: (_dashboardStats['total_calls'] ?? 35)
+                                .toDouble(),
+                            gradient: LinearGradient(
+                              colors: [
+                                AppTheme.primaryBlue.withOpacity(0.8),
+                                AppTheme.primaryBlue,
+                              ],
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                            ),
+                            width: 20,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(6),
+                              topRight: Radius.circular(6),
+                            ),
+                          ),
+                        ],
+                      ),
+                      BarChartGroupData(
+                        x: 1,
+                        barRods: [
+                          BarChartRodData(
+                            toY: (_dashboardStats['connected_calls'] ?? 28)
+                                .toDouble(),
+                            gradient: LinearGradient(
+                              colors: [
+                                AppTheme.accentPurple.withOpacity(0.8),
+                                AppTheme.accentPurple,
+                              ],
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                            ),
+                            width: 20,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(6),
+                              topRight: Radius.circular(6),
+                            ),
+                          ),
+                        ],
+                      ),
+                      BarChartGroupData(
+                        x: 2,
+                        barRods: [
+                          BarChartRodData(
+                            toY: (_dashboardStats['callbacks_scheduled'] ?? 22)
+                                .toDouble(),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF66BB6A), Color(0xFF4CAF50)],
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                            ),
+                            width: 20,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(6),
+                              topRight: Radius.circular(6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      horizontalInterval: 10,
+                      getDrawingHorizontalLine: (value) {
+                        return FlLine(
+                          color: AppTheme.gray.withOpacity(0.1),
+                          strokeWidth: 1,
+                        );
+                      },
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
-              // Performance Metrics Row
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildMetricCard(
-                      'Success Rate',
-                      _getSuccessRate(),
-                      Icons.check_circle_rounded,
-                      const Color(0xFF4CAF50),
-                    ),
+            ),
+            const SizedBox(height: 20),
+            // Performance Metrics Row
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricCard(
+                    'Success Rate',
+                    _getSuccessRate(),
+                    Icons.check_circle_rounded,
+                    const Color(0xFF4CAF50),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildMetricCard(
-                      'Total Calls',
-                      (_dashboardStats['total_calls'] ?? 0).toString(),
-                      Icons.phone,
-                      AppTheme.primaryBlue,
-                    ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMetricCard(
+                    'Total Calls',
+                    (_dashboardStats['total_calls'] ?? 0).toString(),
+                    Icons.phone,
+                    AppTheme.primaryBlue,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildMetricCard(
-                      'Connected',
-                      (_dashboardStats['connected_calls'] ?? 0).toString(),
-                      Icons.check_circle,
-                      AppTheme.accentPurple,
-                    ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildMetricCard(
+                    'Connected',
+                    (_dashboardStats['connected_calls'] ?? 0).toString(),
+                    Icons.check_circle,
+                    AppTheme.accentPurple,
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
-      
+      ),
     );
   }
 
@@ -994,230 +1099,216 @@ class _DashboardPageState extends State<DashboardPage>
               ],
             ),
             const SizedBox(height: 20),
-              ...followups.take(3).map((followup) {
-                return RepaintBoundary(
-                  key: Key('followup_${followup.id}'),
-                  child: Dismissible(
-                    key: Key(followup.id),
-                    background: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4CAF50),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.check_circle_outline_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Complete',
-                            style: AppTheme.bodyMedium.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
+            ...followups.take(3).map((followup) {
+              return RepaintBoundary(
+                key: Key('followup_${followup.id}'),
+                child: Dismissible(
+                  key: Key(followup.id),
+                  background: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4CAF50),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    secondaryBackground: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentPurple,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Reschedule',
-                            style: AppTheme.bodyMedium.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.schedule_rounded,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Complete',
+                          style: AppTheme.bodyMedium.copyWith(
                             color: Colors.white,
-                            size: 20,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    onDismissed: (direction) {
-                      if (direction == DismissDirection.startToEnd) {
-                        _markFollowupComplete(followup);
-                      } else {
-                        _rescheduleFollowup(followup);
-                      }
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
+                  ),
+                  secondaryBackground: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentPurple,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Reschedule',
+                          style: AppTheme.bodyMedium.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.schedule_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                  onDismissed: (direction) {
+                    if (direction == DismissDirection.startToEnd) {
+                      _markFollowupComplete(followup);
+                    } else {
+                      _rescheduleFollowup(followup);
+                    }
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(followup.status).withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
                         color: _getStatusColor(
                           followup.status,
-                        ).withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _getStatusColor(
-                            followup.status,
-                          ).withOpacity(0.1),
-                          width: 1,
-                        ),
+                        ).withOpacity(0.1),
+                        width: 1,
                       ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () => _initiateCall(followup),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: _getStatusColor(
-                                      followup.status,
-                                    ).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(
-                                    Icons.business_center_rounded,
-                                    color: _getStatusColor(followup.status),
-                                    size: 16,
-                                  ),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => _initiateCall(followup),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(
+                                    followup.status,
+                                  ).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        followup.companyName,
-                                        style: AppTheme.titleMedium.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        followup.contactPerson,
-                                        style: AppTheme.bodyMedium.copyWith(
-                                          color: AppTheme.gray,
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 12,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.access_time_rounded,
-                                            size: 12,
-                                            color: AppTheme.gray.withOpacity(
-                                              0.7,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Flexible(
-                                            child: Text(
-                                              _formatFollowupTime(
-                                                followup.followUpDate!,
-                                              ),
-                                              style: AppTheme.bodyMedium
-                                                  .copyWith(
-                                                    color: AppTheme.gray
-                                                        .withOpacity(
-                                                          0.8,
-                                                        ),
-                                                    fontSize: 11,
-                                                    fontWeight:
-                                                        FontWeight.w400,
-                                                  ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
+                                child: Icon(
+                                  Icons.business_center_rounded,
+                                  color: _getStatusColor(followup.status),
+                                  size: 16,
                                 ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisSize: MainAxisSize.min,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
+                                    Text(
+                                      followup.companyName,
+                                      style: AppTheme.titleMedium.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: _getStatusColor(
-                                          followup.status,
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          12,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        _getStatusText(followup.status),
-                                        style: AppTheme.bodyMedium.copyWith(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.primaryBlue
-                                            .withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(
-                                          8,
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      followup.contactPerson,
+                                      style: AppTheme.bodyMedium.copyWith(
+                                        color: AppTheme.gray,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 12,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.access_time_rounded,
+                                          size: 12,
+                                          color: AppTheme.gray.withOpacity(0.7),
                                         ),
-                                      ),
-                                      child: Icon(
-                                        Icons.phone_rounded,
-                                        color: AppTheme.primaryBlue,
-                                        size: 14,
-                                      ),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            _formatFollowupTime(
+                                              followup.followUpDate!,
+                                            ),
+                                            style: AppTheme.bodyMedium.copyWith(
+                                              color: AppTheme.gray.withOpacity(
+                                                0.8,
+                                              ),
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _getStatusColor(followup.status),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      _getStatusText(followup.status),
+                                      style: AppTheme.bodyMedium.copyWith(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryBlue.withOpacity(
+                                        0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.phone_rounded,
+                                      color: AppTheme.primaryBlue,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
-                );
-              }).toList(),
-            ],
-          ),
+                ),
+              );
+            }).toList(),
+          ],
         ),
-      
+      ),
     );
   }
 
@@ -1289,73 +1380,60 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   void _showKPIDetails(KPIData kpi) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: AppTheme.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
+    // Navigate to appropriate screen based on KPI
+    if (widget.onNavigateToSection != null) {
+      NavigationSection? targetSection;
+      String? filter;
+      
+      print('📊 KPI Tapped: ${kpi.title}');
+      
+      switch (kpi.title.toLowerCase()) {
+        case 'total calls':
+          targetSection = NavigationSection.callHistory;
+          filter = 'all';
+          break;
+        case 'connected':
+          targetSection = NavigationSection.callHistory;
+          filter = 'connected';
+          break;
+        case 'pending calls':
+          // Navigate to dedicated pending calls screen
+          targetSection = NavigationSection.pendingCalls;
+          break;
+        case 'fresh leads':
+          // Navigate to dedicated pending calls screen (same as pending)
+          targetSection = NavigationSection.pendingCalls;
+          break;
+        case 'callbacks':
+          targetSection = NavigationSection.callHistory;
+          filter = 'callback';
+          break;
+        default:
+          targetSection = NavigationSection.callHistory;
+          filter = 'all';
+      }
+      
+      print('📊 Navigating to: $targetSection (index=${targetSection.index}), filter=$filter');
+      
+      // Navigate with or without filter
+      if (filter != null) {
+        widget.onNavigateToSection!(targetSection, filter: filter);
+      } else {
+        widget.onNavigateToSection!(targetSection);
+      }
+      
+      // Show a snackbar to indicate navigation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Showing ${kpi.title}'),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Color(kpi.color),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppTheme.gray.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              '${kpi.title} Details 📊',
-              style: AppTheme.headingMedium.copyWith(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Detailed analytics for ${kpi.title.toLowerCase()} will be shown here. This includes time-series data and drill-down metrics.',
-              style: AppTheme.bodyLarge.copyWith(
-                color: AppTheme.gray,
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryBlue,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Got It',
-                  style: AppTheme.bodyLarge.copyWith(
-                    color: AppTheme.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ).animate().slideY(begin: 1, end: 0, duration: 300.ms).fadeIn(),
-    );
+      );
+    }
   }
+
 
   void _startSmartCalling() {
     context.push(AppRouter.smartCalling);

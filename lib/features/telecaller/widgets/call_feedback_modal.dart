@@ -267,7 +267,14 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.lightGray.withValues(alpha: 0.5),
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primaryBlue.withValues(alpha: 0.15),
+            AppTheme.accentOrange.withValues(alpha: 0.1),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
           topRight: Radius.circular(24),
@@ -275,21 +282,40 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.phone_callback,
-            color: AppTheme.primaryBlue,
-            size: 24,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            'Call Feedback',
-            style: AppTheme.headingMedium.copyWith(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryBlue.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.phone_callback,
+              color: AppTheme.primaryBlue,
+              size: 24,
             ),
           ),
-          const Spacer(),
-          // Close button removed - feedback must be submitted
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Call Feedback',
+                  style: AppTheme.headingMedium.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'Select status and provide details',
+                  style: AppTheme.bodyMedium.copyWith(
+                    color: AppTheme.gray,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -588,35 +614,77 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Remarks (Optional)',
-          style: AppTheme.titleMedium.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+        Row(
+          children: [
+            Icon(
+              Icons.note_add_outlined,
+              size: 18,
+              color: AppTheme.primaryBlue,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Additional Notes',
+              style: AppTheme.titleMedium.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.gray.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Optional',
+                style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.gray,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.lightGray.withValues(alpha: 0.3),
+            color: AppTheme.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: AppTheme.gray.withValues(alpha: 0.2),
+              color: AppTheme.primaryBlue.withValues(alpha: 0.2),
+              width: 1.5,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryBlue.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: TextField(
             controller: _remarksController,
-            maxLines: 3,
+            maxLines: 4,
+            maxLength: 500,
             decoration: InputDecoration(
-              hintText: 'Add any additional notes...',
+              hintText: 'Add any important details, concerns, or follow-up notes...',
               hintStyle: AppTheme.bodyLarge.copyWith(
-                color: AppTheme.gray.withValues(alpha: 0.6),
+                color: AppTheme.gray.withValues(alpha: 0.5),
+                fontSize: 14,
               ),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.all(16),
+              counterStyle: AppTheme.bodySmall.copyWith(
+                color: AppTheme.gray,
+                fontSize: 11,
+              ),
             ),
             style: AppTheme.bodyLarge.copyWith(
               color: AppTheme.black,
+              fontSize: 14,
+              height: 1.5,
             ),
           ),
         ),
@@ -627,36 +695,81 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   Widget _buildSubmitButton() {
     final canSubmit = _canSubmit();
     
-    return SizedBox(
-      width: double.infinity,
-      child: GestureDetector(
-        onTap: canSubmit ? _submitFeedback : null,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            gradient: canSubmit 
-                ? AppTheme.primaryGradient
-                : LinearGradient(
-                    colors: [
-                      AppTheme.gray.withValues(alpha: 0.3),
-                      AppTheme.gray.withValues(alpha: 0.2),
-                    ],
+    return Column(
+      children: [
+        if (!canSubmit)
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.orange.shade200,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: Colors.orange.shade700,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Please select a status and provide required details',
+                    style: AppTheme.bodyMedium.copyWith(
+                      color: Colors.orange.shade900,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: canSubmit ? AppTheme.buttonShadow : [],
+                ),
+              ],
+            ),
           ),
-          child: Center(
-            child: Text(
-              'Submit Feedback',
-              style: AppTheme.titleMedium.copyWith(
-                color: AppTheme.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+        SizedBox(
+          width: double.infinity,
+          child: GestureDetector(
+            onTap: canSubmit ? _submitFeedback : null,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              decoration: BoxDecoration(
+                gradient: canSubmit 
+                    ? AppTheme.primaryGradient
+                    : LinearGradient(
+                        colors: [
+                          AppTheme.gray.withValues(alpha: 0.3),
+                          AppTheme.gray.withValues(alpha: 0.2),
+                        ],
+                      ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: canSubmit ? AppTheme.buttonShadow : [],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    canSubmit ? Icons.check_circle : Icons.lock_outline,
+                    color: AppTheme.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    canSubmit ? 'Submit Feedback' : 'Complete Required Fields',
+                    style: AppTheme.titleMedium.copyWith(
+                      color: AppTheme.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

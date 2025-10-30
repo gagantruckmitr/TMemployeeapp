@@ -10,6 +10,8 @@ import 'screens/interested_screen.dart';
 import 'screens/connected_calls_screen.dart';
 import 'screens/call_backs_screen.dart';
 import 'screens/call_back_later_screen.dart';
+import 'screens/pending_calls_screen.dart';
+import 'screens/call_history_screen.dart';
 
 enum MainNavigationTab {
   home,
@@ -30,6 +32,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   bool _isDrawerOpen = false;
   late PageController _pageController;
   late PageController _subPageController;
+  String? _callHistoryFilter;
 
   @override
   void initState() {
@@ -74,21 +77,25 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     }
   }
 
-  void _onSectionChanged(NavigationSection section) {
-    if (section != _currentSection) {
-      setState(() {
-        _currentSection = section;
-      });
-      
-      // Animate to the new sub-page
-      _subPageController.animateToPage(
-        section.index,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
-      );
-      
-      HapticFeedback.selectionClick();
-    }
+  void _onSectionChanged(NavigationSection section, {String? filter}) {
+    print('🔍 MainNav: section=$section, index=${section.index}, filter=$filter');
+    
+    setState(() {
+      _currentSection = section;
+      // Store filter for call history
+      if (section == NavigationSection.callHistory && filter != null) {
+        _callHistoryFilter = filter;
+      }
+    });
+    
+    // Animate to the new sub-page
+    _subPageController.animateToPage(
+      section.index,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+    );
+    
+    HapticFeedback.selectionClick();
   }
 
   @override
@@ -125,9 +132,13 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                       // Home tab - contains dashboard and sub-screens
                       _buildHomeTabContent(),
                       // Analytics tab
-                      const PerformanceAnalyticsPage(),
+                      PerformanceAnalyticsPage(
+                        onNavigateBack: () => _onTabChanged(MainNavigationTab.home),
+                      ),
                       // Profile tab
-                      const DynamicProfileScreen(),
+                      DynamicProfileScreen(
+                        onNavigateBack: () => _onTabChanged(MainNavigationTab.home),
+                      ),
                     ],
                   ),
                 ),
@@ -228,11 +239,17 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         DashboardPage(
           onOpenDrawer: _openDrawer,
           onNavigateToProfile: () => _onTabChanged(MainNavigationTab.profile),
+          onNavigateToSection: _onSectionChanged,
         ),
         const InterestedScreen(),
         const ConnectedCallsScreen(),
         const CallBacksScreen(),
         const CallBackLaterScreen(),
+        const PendingCallsScreen(),
+        CallHistoryScreen(
+          key: ValueKey(_callHistoryFilter),
+          initialFilter: _callHistoryFilter,
+        ),
         const DynamicProfileScreen(), // This won't be used since profile has its own tab
       ],
     );

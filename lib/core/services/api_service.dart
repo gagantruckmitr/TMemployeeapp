@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../models/smart_calling_models.dart';
+import '../../models/leave_models.dart';
 import '../config/api_config.dart';
 
 class ApiService {
@@ -496,6 +497,64 @@ class ApiService {
     }
   }
 
+  // Initiate manual call (direct phone dialer)
+  static Future<Map<String, dynamic>> initiateManualCall({
+    required String driverMobile,
+    required int callerId,
+    required String driverId,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/manual_call_api.php').replace(
+        queryParameters: {'action': 'initiate_call'},
+      );
+
+      final requestBody = {
+        'driver_mobile': driverMobile,
+        'caller_id': callerId,
+        'driver_id': driverId,
+      };
+
+      print('🔵 Manual Call API Request:');
+      print('   URL: $uri');
+      print('   Body: ${json.encode(requestBody)}');
+      
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      ).timeout(timeout);
+
+      print('🔵 Manual Call API Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ Manual call logged successfully');
+          print('   Reference ID: ${data['data']?['reference_id']}');
+          return data;
+        } else {
+          print('❌ Manual call failed: ${data['error']}');
+          return data;
+        }
+      } else {
+        final errorMsg = 'HTTP ${response.statusCode}: ${response.body}';
+        print('❌ HTTP Error: $errorMsg');
+        return {
+          'success': false,
+          'error': errorMsg,
+        };
+      }
+    } catch (e) {
+      print('❌ Exception in initiateManualCall: $e');
+      return {
+        'success': false,
+        'error': 'Connection error: $e',
+      };
+    }
+  }
+
   // Get call status by reference ID
   static Future<Map<String, dynamic>> getCallStatus(String referenceId) async {
     try {
@@ -616,6 +675,201 @@ class ApiService {
     } catch (e) {
       print('❌ Failed to fetch profile completion details: $e');
       return null;
+    }
+  }
+
+  // Get call history
+  static Future<List<dynamic>> getCallHistory({String? status}) async {
+    try {
+      final queryParams = <String, String>{
+        'action': 'call_history',
+        'caller_id': _currentCallerId ?? '1',
+        'limit': '100',
+      };
+      
+      if (status != null && status != 'all') {
+        queryParams['status'] = status;
+      }
+      
+      final uri = Uri.parse('$baseUrl/call_history_api.php').replace(
+        queryParameters: queryParams,
+      );
+
+      print('🔵 Fetching call history from: $uri');
+      final response = await http.get(uri).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> historyJson = data['data'] ?? [];
+          print('✅ Fetched ${historyJson.length} call history entries');
+          return historyJson;
+        } else {
+          print('⚠️ API returned success=false: ${data['error']}');
+          return [];
+        }
+      } else {
+        print('❌ HTTP Error ${response.statusCode}: ${response.body}');
+        return [];
+      }
+    } catch (e) {
+      print('❌ Failed to fetch call history: $e');
+      return [];
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEAVE MANAGEMENT METHODS
+  // ═══════════════════════════════════════════════════════════════
+
+  // Apply for leave
+  static Future<bool> applyLeave({
+    required String telecallerId,
+    required String leaveType,
+    required DateTime startDate,
+    required DateTime endDate,
+    required int totalDays,
+    required String reason,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/enhanced_leave_management_api.php').replace(
+        queryParameters: {'action': 'apply_leave'},
+      );
+
+      final requestBody = {
+        'telecaller_id': telecallerId,
+        'leave_type': leaveType,
+        'start_date': startDate.toIso8601String().split('T')[0],
+        'end_date': endDate.toIso8601String().split('T')[0],
+        'total_days': totalDays,
+        'reason': reason,
+      };
+
+      print('🔵 Apply Leave Request: ${json.encode(requestBody)}');
+
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      ).timeout(timeout);
+
+      print('🔵 Apply Leave Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      print('❌ Failed to apply leave: $e');
+      return false;
+    }
+  }
+
+  // Get leave requests for telecaller
+  static Future<List<LeaveRequest>> getLeaveRequests({
+    required String telecallerId,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/enhanced_leave_management_api.php').replace(
+        queryParameters: {
+          'action': 'get_my_leaves',
+          'telecaller_id': telecallerId,
+        },
+      );
+
+      final response = await http.get(uri).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> leaveData = data['data'] ?? [];
+          return leaveData.map((json) => LeaveRequest.fromJson(json)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('❌ Failed to get leave requests: $e');
+      return [];
+    }
+  }
+
+  // Get all leave requests (for managers)
+  static Future<List<LeaveRequest>> getAllLeaveRequests({
+    String? managerId,
+    String? status,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'action': 'get_leave_requests_for_approval',
+      };
+      
+      if (managerId != null) queryParams['manager_id'] = managerId;
+      if (status != null) queryParams['status'] = status;
+
+      final uri = Uri.parse('$baseUrl/enhanced_leave_management_api.php').replace(
+        queryParameters: queryParams,
+      );
+
+      final response = await http.get(uri).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> leaveData = data['data'] ?? [];
+          return leaveData.map((json) => LeaveRequest.fromJson(json)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('❌ Failed to get all leave requests: $e');
+      return [];
+    }
+  }
+
+  // Update leave status (approve/reject)
+  static Future<bool> updateLeaveStatus({
+    required String leaveId,
+    required String status,
+    required String managerId,
+    String? managerRemarks,
+  }) async {
+    try {
+      final action = status == 'approved' 
+          ? 'manager_approve_leave' 
+          : 'reject_leave';
+      
+      final uri = Uri.parse('$baseUrl/enhanced_leave_management_api.php').replace(
+        queryParameters: {'action': action},
+      );
+
+      final requestBody = {
+        'leave_request_id': leaveId,
+        'manager_id': managerId,
+        if (managerRemarks != null && managerRemarks.isNotEmpty)
+          'manager_remarks': managerRemarks,
+        if (status == 'rejected')
+          'rejected_by': managerId,
+      };
+
+      print('🔵 Update Leave Status Request: ${json.encode(requestBody)}');
+
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      ).timeout(timeout);
+
+      print('🔵 Update Leave Status Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      print('❌ Failed to update leave status: $e');
+      return false;
     }
   }
 }

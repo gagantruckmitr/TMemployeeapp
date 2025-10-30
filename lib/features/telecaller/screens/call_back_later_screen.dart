@@ -120,11 +120,39 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
   }
 
   Future<void> _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback) async {
-    // Update via API
+    // Show loading indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Saving feedback...'),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // Build complete feedback text with all details
+    final feedbackText = _buildCompleteFeedbackText(feedback);
+    
+    // Update via API with complete feedback
     final success = await SmartCallingService.instance.updateCallStatus(
       driverId: contact.id,
       status: feedback.status,
-      feedback: _getFeedbackText(feedback),
+      feedback: feedbackText,
       remarks: feedback.remarks,
     );
 
@@ -136,17 +164,31 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
         HapticFeedback.lightImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Updated ${contact.name}'),
-            backgroundColor: Colors.purple,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Updated ${contact.name}\n$feedbackText'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to update status'),
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Failed to save feedback'),
+            ],
+          ),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -154,15 +196,27 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
     }
   }
 
-  String _getFeedbackText(CallFeedback feedback) {
+  String _buildCompleteFeedbackText(CallFeedback feedback) {
+    final parts = <String>[];
+    
+    // Add status
+    parts.add('Status: ${feedback.status.name}');
+    
+    // Add specific feedback based on status
     if (feedback.connectedFeedback != null) {
-      return feedback.connectedFeedback!.displayName;
+      parts.add('Feedback: ${feedback.connectedFeedback!.displayName}');
     } else if (feedback.callBackReason != null) {
-      return feedback.callBackReason!.displayName;
+      parts.add('Reason: ${feedback.callBackReason!.displayName}');
     } else if (feedback.callBackTime != null) {
-      return feedback.callBackTime!.displayName;
+      parts.add('Time: ${feedback.callBackTime!.displayName}');
     }
-    return feedback.status.name;
+    
+    // Add remarks if present
+    if (feedback.remarks != null && feedback.remarks!.isNotEmpty) {
+      parts.add('Notes: ${feedback.remarks}');
+    }
+    
+    return parts.join(' | ');
   }
 
   @override

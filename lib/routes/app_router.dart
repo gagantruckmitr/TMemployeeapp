@@ -9,6 +9,7 @@ import '../features/telecaller/performance_analytics_page.dart';
 import '../features/telecaller/screens/dynamic_profile_screen.dart';
 import '../features/telecaller/screens/edit_profile_screen.dart';
 import '../features/telecaller/screens/settings_screen.dart';
+import '../features/telecaller/screens/driver_full_detail_page.dart';
 import '../features/manager/manager_dashboard_page.dart';
 import '../core/services/real_auth_service.dart';
 import '../test_db_connection.dart';
@@ -41,6 +42,7 @@ class AppRouter {
   static const String profile = '/dashboard/profile';
   static const String editProfile = '/dashboard/profile/edit';
   static const String settings = '/dashboard/profile/settings';
+  static const String driverDetail = '/dashboard/driver-detail';
   static const String testDb = '/test-db';
 
   static final GoRouter router = GoRouter(
@@ -159,6 +161,30 @@ class AppRouter {
                 );
               },
             ),
+          ),
+          GoRoute(
+            path: 'driver-detail/:driverId/:driverName',
+            name: 'driver-detail',
+            pageBuilder: (context, state) {
+              final driverId = state.pathParameters['driverId'] ?? '';
+              final driverName = state.pathParameters['driverName'] ?? 'Driver';
+              return CustomTransitionPage(
+                key: state.pageKey,
+                child: DriverFullDetailPage(
+                  driverId: driverId,
+                  driverName: Uri.decodeComponent(driverName),
+                ),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1.0, 0.0),
+                      end: Offset.zero,
+                    ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
+                    child: child,
+                  );
+                },
+              );
+            },
           ),
           GoRoute(
             path: 'profile',

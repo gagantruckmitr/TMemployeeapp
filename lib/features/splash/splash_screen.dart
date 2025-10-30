@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/real_auth_service.dart';
+import '../../core/services/api_service.dart';
+import '../../core/services/telecaller_status_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -55,6 +57,16 @@ class _SplashScreenState extends State<SplashScreen>
       // User is logged in, check their role and route accordingly
       final user = RealAuthService.instance.currentUser;
       final userRole = user?.role ?? '';
+
+      // Set caller ID for API calls
+      if (user?.id != null) {
+        ApiService.setCallerId(user!.id);
+        
+        // Initialize status tracking for telecallers
+        if (userRole.toLowerCase() == 'telecaller') {
+          await TelecallerStatusService.instance.initialize(user!.id);
+        }
+      }
 
       if (userRole == 'manager') {
         // Manager goes to manager dashboard

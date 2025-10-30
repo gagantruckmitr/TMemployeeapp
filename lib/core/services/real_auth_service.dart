@@ -57,6 +57,7 @@ class RealAuthService {
           // Update telecaller status to online if role is telecaller
           if (user.role == 'telecaller') {
             await _updateTelecallerStatus(user.id, 'online');
+            await _recordLogin(user.id);
           }
           
           return LoginResult.success(user);
@@ -165,6 +166,7 @@ class RealAuthService {
       // Update telecaller status to offline if role is telecaller
       if (_currentUser?.role == 'telecaller') {
         await _updateTelecallerStatus(_currentUser!.id, 'offline');
+        await _recordLogout(_currentUser!.id);
       }
       
       // Call logout API
@@ -205,6 +207,44 @@ class RealAuthService {
       print('✅ Telecaller status updated to: $status');
     } catch (e) {
       print('❌ Failed to update telecaller status: $e');
+    }
+  }
+
+  // Record login time
+  Future<void> _recordLogin(String telecallerId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/live_status_api.php?action=login');
+      
+      await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'telecaller_id': int.parse(telecallerId),
+        }),
+      ).timeout(timeout);
+      
+      print('✅ Login time recorded');
+    } catch (e) {
+      print('❌ Failed to record login: $e');
+    }
+  }
+
+  // Record logout time
+  Future<void> _recordLogout(String telecallerId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/live_status_api.php?action=logout');
+      
+      await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'telecaller_id': int.parse(telecallerId),
+        }),
+      ).timeout(timeout);
+      
+      print('✅ Logout time recorded');
+    } catch (e) {
+      print('❌ Failed to record logout: $e');
     }
   }
 

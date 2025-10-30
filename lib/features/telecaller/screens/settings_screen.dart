@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_router.dart';
+import '../widgets/status_control_widget.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -51,6 +52,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Status Control Widget
+            const StatusControlWidget(),
+            const SizedBox(height: 24),
+            
             _buildSectionTitle('Notifications'),
             const SizedBox(height: 16),
             _buildSettingsCard([

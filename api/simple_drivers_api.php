@@ -14,6 +14,9 @@ $password = '825Redp&4';
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // Include activity middleware
+    require_once 'update_activity_middleware_pdo.php';
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 } catch(PDOException $e) {
     http_response_code(500);
@@ -127,7 +130,7 @@ function getDrivers($pdo) {
                             FROM call_logs cl2 
                             WHERE cl2.user_id = u.id
                         )
-                    WHERE u.role = 'driver'";
+                    WHERE u.role IN ('driver', 'transporter')";
         } else {
             $sql = "SELECT 
                         u.id,
@@ -145,7 +148,7 @@ function getDrivers($pdo) {
                         NULL as last_feedback,
                         NULL as remarks
                     FROM users u
-                    WHERE u.role = 'driver'";
+                    WHERE u.role IN ('driver', 'transporter')";
         }
         
         $params = [];
@@ -246,7 +249,7 @@ function getSingleDriver($pdo) {
                 FROM users u 
                 LEFT JOIN call_logs cl ON u.id = cl.user_id 
                     AND cl.call_time = (SELECT MAX(call_time) FROM call_logs WHERE user_id = u.id)
-                WHERE u.id = ? AND u.role = 'driver'";
+                WHERE u.id = ? AND u.role IN ('driver', 'transporter')";
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$driverId]);

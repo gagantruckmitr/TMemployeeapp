@@ -5,6 +5,7 @@ import '../../routes/app_router.dart';
 import '../../core/utils/assets.dart';
 import '../../core/services/real_auth_service.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/telecaller_status_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -370,6 +371,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           // Set caller ID for API calls
           if (result.user?.id != null) {
             ApiService.setCallerId(result.user!.id);
+            
+            // Initialize status tracking for telecallers
+            if (result.user!.role.toLowerCase() == 'telecaller') {
+              await TelecallerStatusService.instance.initialize(result.user!.id);
+            }
           }
           
           // Show success message

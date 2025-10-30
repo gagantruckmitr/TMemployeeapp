@@ -61,12 +61,12 @@ function getProfileDetails($conn) {
     $user = $result->fetch_assoc();
     $role = $user['role'];
     
-    // Define required fields based on role
+    // Define required fields based on role (excluding system fields)
     $requiredFields = [];
     if ($role === 'driver') {
         $requiredFields = [
-            'name', 'email', 'city', 'unique_id', 'id', 'status', 'sex', 'vehicle_type',
-            'father_name', 'images', 'address', 'dob', 'role', 'created_at', 'updated_at',
+            'name', 'email', 'city', 'sex', 'vehicle_type',
+            'father_name', 'images', 'address', 'dob',
             'type_of_license', 'driving_experience', 'highest_education', 'license_number',
             'expiry_date_of_license', 'expected_monthly_income', 'current_monthly_income',
             'marital_status', 'preferred_location', 'aadhar_number', 'aadhar_photo',
@@ -74,7 +74,7 @@ function getProfileDetails($conn) {
         ];
     } elseif ($role === 'transporter') {
         $requiredFields = [
-            'name', 'email', 'unique_id', 'id', 'transport_name', 'year_of_establishment',
+            'name', 'email', 'transport_name', 'year_of_establishment',
             'fleet_size', 'operational_segment', 'average_km', 'city', 'images', 'address',
             'pan_number', 'pan_image', 'gst_certificate'
         ];

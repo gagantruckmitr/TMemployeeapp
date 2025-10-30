@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../../core/services/manager_service.dart';
-import '../../../core/theme/app_theme.dart';
 
 class CallActivityWidget extends StatefulWidget {
   final int managerId;
@@ -17,6 +16,14 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
   List<dynamic> _timeline = [];
   bool _isLoading = true;
   Timer? _refreshTimer;
+
+  // Modern teal green color scheme
+  static const Color _tealPrimary = Color(0xFF14B8A6);
+  static const Color _tealLight = Color(0xFF5EEAD4);
+  static const Color _white = Color(0xFFFFFFFF);
+  static const Color _textPrimary = Color(0xFF0F172A);
+  static const Color _textSecondary = Color(0xFF64748B);
+  static const Color _borderColor = Color(0xFFE2E8F0);
 
   @override
   void initState() {
@@ -63,12 +70,13 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: _tealPrimary.withValues(alpha: 0.08),
+            blurRadius: 20,
             offset: const Offset(0, 4),
           ),
         ],
@@ -76,11 +84,11 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
-          const Divider(height: 1),
+          _buildModernHeader(),
+          Divider(height: 1, color: _borderColor),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? _buildLoadingState()
                 : _timeline.isEmpty
                 ? _buildEmptyState()
                 : _buildTimeline(),
@@ -90,31 +98,62 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
     );
   }
 
-  Widget _buildHeader() {
-    return Padding(
+  Widget _buildModernHeader() {
+    return Container(
       padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            _tealPrimary.withValues(alpha: 0.05),
+            _white,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              gradient: const LinearGradient(
+                colors: [_tealPrimary, _tealLight],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: _tealPrimary.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: const Icon(Icons.timeline, color: Colors.blue, size: 24),
+            child: const Icon(Icons.timeline_rounded, color: _white, size: 22),
           ),
-          const SizedBox(width: 12),
-          Expanded(
+          const SizedBox(width: 14),
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Live Call Activity',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _textPrimary,
+                    letterSpacing: -0.3,
+                  ),
                 ),
+                SizedBox(height: 2),
                 Text(
                   'Real-time call tracking',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -122,8 +161,11 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: const Color(0xFF10B981).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: const Color(0xFF10B981).withValues(alpha: 0.3),
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -132,8 +174,15 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
                   width: 8,
                   height: 8,
                   decoration: const BoxDecoration(
-                    color: Colors.green,
+                    color: Color(0xFF10B981),
                     shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0xFF10B981),
+                        blurRadius: 4,
+                        spreadRadius: 1,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -142,7 +191,8 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                    color: Color(0xFF10B981),
+                    letterSpacing: 0.5,
                   ),
                 ),
               ],
@@ -155,17 +205,17 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
 
   Widget _buildTimeline() {
     return ListView.separated(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       itemCount: _timeline.length,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final call = _timeline[index];
-        return _buildCallCard(call);
+        return _buildModernCallCard(call);
       },
     );
   }
 
-  Widget _buildCallCard(Map<String, dynamic> call) {
+  Widget _buildModernCallCard(Map<String, dynamic> call) {
     final status = call['call_status'] ?? 'pending';
     final telecallerName = call['telecaller_name'] ?? 'Unknown';
     final driverName = call['driver_name'] ?? 'Unknown Driver';
@@ -176,146 +226,311 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
 
     Color statusColor;
     IconData statusIcon;
+    String statusLabel;
 
     switch (status) {
       case 'connected':
-        statusColor = Colors.green;
-        statusIcon = Icons.check_circle;
+        statusColor = const Color(0xFF10B981);
+        statusIcon = Icons.check_circle_rounded;
+        statusLabel = 'Connected';
         break;
       case 'interested':
-        statusColor = Colors.orange;
-        statusIcon = Icons.star;
+        statusColor = const Color(0xFFF59E0B);
+        statusIcon = Icons.star_rounded;
+        statusLabel = 'Interested';
         break;
       case 'not_answered':
-        statusColor = Colors.grey;
-        statusIcon = Icons.phone_missed;
+        statusColor = const Color(0xFF6B7280);
+        statusIcon = Icons.phone_missed_rounded;
+        statusLabel = 'Not Answered';
         break;
       case 'busy':
-        statusColor = Colors.amber;
-        statusIcon = Icons.phone_disabled;
+        statusColor = const Color(0xFFFBBF24);
+        statusIcon = Icons.phone_disabled_rounded;
+        statusLabel = 'Busy';
         break;
       default:
-        statusColor = Colors.blue;
-        statusIcon = Icons.phone;
+        statusColor = _tealPrimary;
+        statusIcon = Icons.phone_rounded;
+        statusLabel = 'Calling';
     }
 
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(statusIcon, color: statusColor, size: 20),
+        color: _white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: statusColor.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header with status
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.05),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        telecallerName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward,
-                      size: 16,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        driverName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                        textAlign: TextAlign.right,
-                      ),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(statusIcon, color: statusColor, size: 18),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.phone_android,
-                      size: 12,
-                      color: Colors.grey[600],
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      driverMobile,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                    if (driverState.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.location_on,
-                        size: 12,
-                        color: Colors.grey[600],
-                      ),
-                      const SizedBox(width: 4),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        driverState,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        status.toUpperCase(),
+                        statusLabel,
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: statusColor,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      Text(
+                        _formatTime(callTime),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: _textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (duration > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.timer_outlined, size: 14, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${duration}s',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: statusColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Call details
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // Telecaller to Driver flow
+                Row(
+                  children: [
+                    // Telecaller
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _tealPrimary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _tealPrimary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.headset_mic_rounded,
+                                  size: 16,
+                                  color: _tealPrimary,
+                                ),
+                                const SizedBox(width: 6),
+                                const Text(
+                                  'Telecaller',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: _textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              telecallerName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: _textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    if (duration > 0) ...[
-                      const SizedBox(width: 8),
-                      Icon(Icons.timer, size: 12, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${duration}s',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    // Arrow
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        color: statusColor,
+                        size: 24,
                       ),
-                    ],
-                    const Spacer(),
-                    Text(
-                      _formatTime(callTime),
-                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    ),
+                    // Driver
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: statusColor.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.local_shipping_rounded,
+                                  size: 16,
+                                  color: statusColor,
+                                ),
+                                const SizedBox(width: 6),
+                                const Text(
+                                  'Driver',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: _textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              driverName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: _textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                // Driver contact info
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.phone_android_rounded,
+                        size: 16,
+                        color: _textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        driverMobile,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: _textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (driverState.isNotEmpty) ...[
+                        const SizedBox(width: 16),
+                        Icon(
+                          Icons.location_on_rounded,
+                          size: 16,
+                          color: _textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            driverState,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: _textPrimary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _tealPrimary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const CircularProgressIndicator(
+              color: _tealPrimary,
+              strokeWidth: 3,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Loading call activity...',
+            style: TextStyle(
+              color: _textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -328,11 +543,34 @@ class _CallActivityWidgetState extends State<CallActivityWidget> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.timeline_outlined, size: 64, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text(
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _tealPrimary.withValues(alpha: 0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.timeline_outlined,
+              size: 64,
+              color: _tealPrimary.withValues(alpha: 0.3),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
             'No calls yet today',
-            style: TextStyle(fontSize: 16, color: AppTheme.textSecondary),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: _textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Call activity will appear here',
+            style: TextStyle(
+              fontSize: 13,
+              color: _textSecondary,
+            ),
           ),
         ],
       ),

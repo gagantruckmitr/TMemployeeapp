@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/smart_calling_models.dart';
 import '../../core/services/smart_calling_service.dart';
@@ -130,8 +131,68 @@ class _SmartCallingPageState extends State<SmartCallingPage>
         '🔵 Starting call - Caller ID: $callerId, Driver: ${contact.name} (${contact.phoneNumber})',
       );
 
-      // Show info dialog about MyOperator IVR
+      // Show call type selection dialog
       if (mounted) {
+        final callType = await showDialog<String>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('📞 Select Call Type'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Choose how to call ${contact.name}:',
+                  style: AppTheme.bodyLarge,
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.phone_forwarded, color: AppTheme.primaryBlue),
+                  title: const Text('IVR Call'),
+                  subtitle: const Text('MyOperator progressive dialing'),
+                  onTap: () => Navigator.pop(context, 'ivr'),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: const BorderSide(color: AppTheme.primaryBlue),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Icon(Icons.phone, color: AppTheme.success),
+                  title: const Text('Manual Call'),
+                  subtitle: const Text('Direct phone dialer'),
+                  onTap: () => Navigator.pop(context, 'manual'),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: AppTheme.success),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, null),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        );
+
+        if (callType == null) {
+          setState(() {
+            _isCallInProgress = false;
+            _currentCallingContact = null;
+          });
+          return;
+        }
+
+        if (callType == 'manual') {
+          await _handleManualCall(contact, callerId);
+          return;
+        }
+
+        // IVR call flow continues below
+        if (!mounted) return;
+        
         final proceed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -166,6 +227,8 @@ class _SmartCallingPageState extends State<SmartCallingPage>
           return;
         }
 
+        if (!mounted) return;
+        
         // Show loading indicator
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -314,6 +377,104 @@ class _SmartCallingPageState extends State<SmartCallingPage>
             content: Text('Error initiating call: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCallInProgress = false;
+          _currentCallingContact = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleManualCall(DriverContact contact, int callerId) async {
+    try {
+      // Clean phone number
+      final cleanDriverMobile = contact.phoneNumber.replaceAll(
+        RegExp(r'[^\d]'),
+        '',
+      );
+      
+      debugPrint('📱 Manual Call - Driver: ${contact.name}, Mobile: $cleanDriverMobile');
+
+      // Log manual call to database
+      final result = await SmartCallingService.instance.initiateManualCall(
+        driverMobile: cleanDriverMobile,
+        callerId: callerId,
+        driverId: contact.id,
+      );
+
+      if (mounted) {
+        if (result['success'] == true) {
+          final referenceId = result['data']?['reference_id'];
+          final driverMobileRaw = result['data']?['driver_mobile_raw'];
+          
+          debugPrint('✅ Manual call logged - Ref: $referenceId');
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('📱 Calling ${contact.name}...'),
+              backgroundColor: AppTheme.success,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          // Make direct call using flutter_phone_direct_caller
+          // This will automatically return to app when call ends
+          try {
+            await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+            
+            debugPrint('📞 Direct call initiated to $driverMobileRaw');
+            
+            // Show feedback modal immediately after call is initiated
+            // The modal will appear when user returns to app after call ends
+            if (mounted) {
+              // Small delay to ensure call screen has appeared
+              await Future.delayed(const Duration(milliseconds: 500));
+              
+              if (mounted) {
+                _showFeedbackModal(
+                  contact,
+                  referenceId: referenceId,
+                  callDuration: 0,
+                );
+              }
+            }
+          } catch (callError) {
+            debugPrint('❌ Direct call error: $callError');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to make call: $callError'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        } else {
+          final errorMsg = result['error'] ?? 'Unknown error';
+          debugPrint('❌ Manual call failed: $errorMsg');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to log call: $errorMsg'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Manual call error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }

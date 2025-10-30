@@ -5,7 +5,9 @@ import '../../core/services/api_service.dart';
 import '../../widgets/gradient_background.dart';
 
 class PerformanceAnalyticsPage extends StatefulWidget {
-  const PerformanceAnalyticsPage({super.key});
+  final VoidCallback? onNavigateBack;
+  
+  const PerformanceAnalyticsPage({super.key, this.onNavigateBack});
 
   @override
   State<PerformanceAnalyticsPage> createState() =>
@@ -160,7 +162,12 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
               size: 20,
             ),
             onPressed: () {
-              context.pop();
+              // Try callback first, then fallback to context.go
+              if (widget.onNavigateBack != null) {
+                widget.onNavigateBack!();
+              } else {
+                context.go('/dashboard');
+              }
             },
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),

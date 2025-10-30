@@ -2,13 +2,13 @@
 /// Update the IP address here and it will reflect across all services
 class ApiConfig {
   // ⚠️ DEPLOYMENT MODE: Switch between LOCAL and ONLINE
-  // PRODUCTION: Active - Plesk Server
-  static const String baseUrl = 'https://truckmitr.com/truckmitr-app/api';
-  static const String serverIp = 'truckmitr.com';
-
-  // LOCAL DEVELOPMENT: (Commented out)
+  // LOCAL DEVELOPMENT: (Commented out for production)
   // static const String serverIp = '192.168.29.149';
   // static const String baseUrl = 'http://$serverIp/api';
+
+  // PRODUCTION: Plesk Server (Active)
+  static const String baseUrl = 'https://truckmitr.com/truckmitr-app/api';
+  static const String serverIp = 'truckmitr.com';
 
   // ONLINE PRODUCTION: InfinityFree hosting (Commented out)
   // static const String baseUrl = 'https://truckmitr.gt.tc/api';
@@ -16,7 +16,7 @@ class ApiConfig {
 
   // Specific API Endpoints
   static const String authApi = '$baseUrl/auth_api.php';
-  static const String dashboardStatsApi = '$baseUrl/dashboard_stats_api.php';
+  static const String dashboardStatsApi = '$baseUrl/telecaller_dashboard_stats.php';
   static const String freshLeadsApi = '$baseUrl/fresh_leads_api.php';
   static const String driversApi = '$baseUrl/simple_drivers_api.php';
   static const String managerDashboardApi =

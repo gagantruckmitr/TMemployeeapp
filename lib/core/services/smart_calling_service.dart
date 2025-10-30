@@ -61,6 +61,10 @@ class SmartCallingService {
         // Fresh leads - uncalled drivers
         return await getDrivers();
 
+      case NavigationSection.pendingCalls:
+        // Pending calls - same as fresh leads (uncalled drivers)
+        return await getDrivers();
+
       case NavigationSection.connectedCalls:
         // Get drivers with connected status
         return await getDriversByStatus(CallStatus.connected);
@@ -79,6 +83,10 @@ class SmartCallingService {
         return connectedDrivers.where((contact) {
           return ContactCategorizer.isInterestedFeedback(contact.lastFeedback);
         }).toList();
+
+      case NavigationSection.callHistory:
+        // Call history doesn't return drivers
+        return [];
 
       case NavigationSection.profile:
         return [];
@@ -197,6 +205,27 @@ class SmartCallingService {
     }
   }
 
+  // Initiate manual call (direct phone dialer)
+  Future<Map<String, dynamic>> initiateManualCall({
+    required String driverMobile,
+    required int callerId,
+    required String driverId,
+  }) async {
+    try {
+      return await ApiService.initiateManualCall(
+        driverMobile: driverMobile,
+        callerId: callerId,
+        driverId: driverId,
+      );
+    } catch (e) {
+      print('Failed to initiate manual call: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
   // Get call status by reference ID
   Future<Map<String, dynamic>> getCallStatus(String referenceId) async {
     try {
@@ -296,6 +325,16 @@ class SmartCallingService {
         'callBacks': 0,
         'callBackLater': 0,
       };
+    }
+  }
+
+  // Get call history
+  Future<List<dynamic>> getCallHistory({String? status}) async {
+    try {
+      return await ApiService.getCallHistory(status: status);
+    } catch (e) {
+      print('Failed to get call history: $e');
+      return [];
     }
   }
 }

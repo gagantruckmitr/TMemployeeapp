@@ -1,5 +1,6 @@
 <?php
 require_once 'config.php';
+require_once 'update_activity_middleware.php';
 
 try {
     // Get total telecallers
@@ -96,7 +97,7 @@ try {
         cl.call_status,
         cl.call_time
     FROM call_logs cl
-    JOIN admins a ON cl.telecaller_id = a.id
+    JOIN admins a ON cl.caller_id = a.id
     LEFT JOIN drivers d ON cl.driver_id = d.id
     ORDER BY cl.call_time DESC
     LIMIT 10";

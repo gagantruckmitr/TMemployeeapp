@@ -41,6 +41,7 @@ class TelecallerService {
             'total_calls': stats['total_calls'] ?? 0,
             'connected_calls': stats['connected_calls'] ?? 0,
             'pending_calls': stats['pending_calls'] ?? 0,
+            'fresh_leads': stats['fresh_leads'] ?? 0,
             'callbacks_scheduled': stats['callbacks_scheduled'] ?? 0,
             'interested_count': stats['interested_count'] ?? 0,
           };
@@ -70,6 +71,7 @@ class TelecallerService {
       'total_calls': 0,
       'connected_calls': 0,
       'pending_calls': 0,
+      'fresh_leads': 0,
       'callbacks_scheduled': 0,
       'interested_count': 0,
     };

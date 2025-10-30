@@ -63,11 +63,11 @@ class _ProfileCompletionDetailsPageState
   ProfileCompletion _createFallbackCompletion() {
     final percentage = widget.contact.profileCompletion?.percentage ?? 0;
 
-    // Create basic field mapping with available contact data
+    // Create basic field mapping with available contact data (excluding system fields)
     final fieldValues = <String, String?>{
       'name': widget.contact.name,
-      'email': null, // Will be fetched from API
-      'city': null, // Will be fetched from API
+      'email': null,
+      'city': null,
       'sex': null,
       'vehicle_type': null,
       'father_name': null,
@@ -277,148 +277,136 @@ class _ProfileCompletionDetailsPageState
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Column(
-                children: [
-                  // Header Card
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        // Avatar with circular progress
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              width: 100,
-                              height: 100,
-                              child: CircularProgressIndicator(
-                                value: percentage / 100,
-                                strokeWidth: 6,
-                                backgroundColor: Colors.grey.shade300,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  progressColor,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF2196F3),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  widget.contact.name
-                                      .substring(0, 1)
-                                      .toUpperCase(),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.w600,
+          : SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: Column(
+                  children: [
+                    // Header Card
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          // Avatar with circular progress
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              SizedBox(
+                                width: 70,
+                                height: 70,
+                                child: CircularProgressIndicator(
+                                  value: percentage / 100,
+                                  strokeWidth: 4,
+                                  backgroundColor: Colors.grey.shade300,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    progressColor,
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Name
-                        Text(
-                          widget.contact.name,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1A1A1A),
-                          ),
-                        ),
-
-                        const SizedBox(height: 4),
-
-                        // TMID
-                        Text(
-                          widget.contact.tmid,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        // Percentage
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: progressColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: progressColor.withValues(alpha: 0.3),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                percentage >= 80
-                                    ? Icons.check_circle
-                                    : percentage >= 50
-                                    ? Icons.warning_amber_rounded
-                                    : Icons.error_outline,
-                                color: progressColor,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '$percentage% Complete',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  color: progressColor,
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF2196F3),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    widget.contact.name
+                                        .substring(0, 1)
+                                        .toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
 
-                        const SizedBox(height: 12),
+                          const SizedBox(width: 12),
 
-                        // Document count
-                        Text(
-                          '$completedDocs of $totalDocs documents completed',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade600,
+                          // Name and details
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  widget.contact.name,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1A1A1A),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  widget.contact.tmid,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      percentage >= 80
+                                          ? Icons.check_circle
+                                          : percentage >= 50
+                                          ? Icons.warning_amber_rounded
+                                          : Icons.error_outline,
+                                      color: progressColor,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$percentage% Complete',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: progressColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$completedDocs/$totalDocs docs',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
 
-                  // Completed Documents Section
-                  if (completedDocs > 0)
-                    Container(
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    // Completed Documents Section
+                    if (completedDocs > 0)
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
@@ -488,10 +476,10 @@ class _ProfileCompletionDetailsPageState
                       ),
                     ),
 
-                  // Missing Documents Section
-                  if (totalDocs - completedDocs > 0)
-                    Container(
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    // Missing Documents Section
+                    if (totalDocs - completedDocs > 0)
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
@@ -555,10 +543,11 @@ class _ProfileCompletionDetailsPageState
                               return _buildDocumentItem(missingDocsList[index]);
                             },
                           ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
     );

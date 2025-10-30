@@ -1,117 +1,83 @@
 <?php
 /**
  * Setup Automatic Telecaller Assignment Trigger
- * Creates a MySQL trigger that automatically assigns new users to telecallers
+ * This creates a MySQL trigger for automatic assignment on new registrations
  */
 
-header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+header('Content-Type: text/plain; charset=utf-8');
 
-require_once 'config.php';
-
-$response = [
-    'timestamp' => date('Y-m-d H:i:s'),
-    'operation' => 'Setup automatic telecaller assignment'
-];
+$host = 'localhost';
+$dbname = 'truckmitr';
+$username = 'truckmitr';
+$password = '825Redp&4';
 
 try {
-    // Step 1: Add assigned_to column if not exists
-    $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'assigned_to'");
-    if ($stmt->rowCount() == 0) {
-        $pdo->exec("ALTER TABLE users ADD COLUMN assigned_to INT(11) DEFAULT NULL AFTER id");
-        $pdo->exec("ALTER TABLE users ADD INDEX idx_assigned_to (assigned_to)");
-        $response['column_added'] = true;
-    }
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    // Step 2: Drop existing trigger if exists
-    $pdo->exec("DROP TRIGGER IF EXISTS auto_assign_telecaller");
+    echo "=================================================\n";
+    echo "   AUTO-ASSIGNMENT TRIGGER SETUP\n";
+    echo "=================================================\n\n";
     
-    // Step 3: Create trigger for automatic assignment
+    // Step 1: Drop existing trigger
+    echo "Step 1: Removing old trigger...\n";
+    $pdo->exec("DROP TRIGGER IF EXISTS auto_assign_telecaller_on_insert");
+    echo "✅ Done\n\n";
+    
+    // Step 2: Create new trigger
+    echo "Step 2: Creating trigger...\n";
+    
     $triggerSQL = "
-    CREATE TRIGGER auto_assign_telecaller
+    CREATE TRIGGER auto_assign_telecaller_on_insert
     BEFORE INSERT ON users
     FOR EACH ROW
     BEGIN
-        DECLARE next_telecaller INT;
-        DECLARE telecaller_count INT;
+        DECLARE telecaller_id INT;
         
-        -- Only assign if role is driver and assigned_to is NULL
-        IF NEW.role = 'driver' AND (NEW.assigned_to IS NULL OR NEW.assigned_to = 0) THEN
+        -- ONLY assign transporters (drivers are handled by existing system)
+        IF NEW.assigned_to IS NULL AND NEW.role = 'transporter' THEN
             
-            -- Get count of active telecallers
-            SELECT COUNT(*) INTO telecaller_count 
-            FROM admins 
-            WHERE role = 'telecaller';
+            -- Assign to Tarun or Gagan (round-robin)
+            SELECT a.id INTO telecaller_id
+            FROM admins a
+            LEFT JOIN users u ON a.id = u.assigned_to AND u.role = 'transporter'
+            WHERE a.role = 'telecaller' 
+            AND (a.name LIKE '%Tarun%' OR a.name LIKE '%Gagan%')
+            GROUP BY a.id
+            ORDER BY COUNT(u.id) ASC, a.id ASC
+            LIMIT 1;
             
-            -- Only proceed if telecallers exist
-            IF telecaller_count > 0 THEN
-                -- Get telecaller with least assignments using round-robin
-                SELECT a.id INTO next_telecaller
-                FROM admins a
-                LEFT JOIN (
-                    SELECT assigned_to, COUNT(*) as count 
-                    FROM users 
-                    WHERE role = 'driver' AND assigned_to IS NOT NULL
-                    GROUP BY assigned_to
-                ) u ON a.id = u.assigned_to
-                WHERE a.role = 'telecaller'
-                ORDER BY COALESCE(u.count, 0) ASC, a.id ASC
-                LIMIT 1;
-                
-                -- Assign the telecaller
-                SET NEW.assigned_to = next_telecaller;
+            IF telecaller_id IS NOT NULL THEN
+                SET NEW.assigned_to = telecaller_id;
             END IF;
+            
         END IF;
     END
     ";
     
     $pdo->exec($triggerSQL);
+    echo "✅ Trigger created!\n\n";
     
-    // Step 4: Test the trigger by checking if it exists
-    $stmt = $pdo->query("SHOW TRIGGERS LIKE 'users'");
-    $triggers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Step 3: Verify
+    echo "Step 3: Verifying...\n";
+    $stmt = $pdo->query("SHOW TRIGGERS WHERE `Trigger` = 'auto_assign_telecaller_on_insert'");
+    $trigger = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    $triggerExists = false;
-    foreach ($triggers as $trigger) {
-        if ($trigger['Trigger'] === 'auto_assign_telecaller') {
-            $triggerExists = true;
-            break;
-        }
+    if ($trigger) {
+        echo "✅ Trigger is active!\n\n";
     }
     
-    if ($triggerExists) {
-        $response['success'] = true;
-        $response['message'] = 'Automatic assignment trigger created successfully';
-        $response['trigger_name'] = 'auto_assign_telecaller';
-        $response['how_it_works'] = [
-            '1. When a new driver registers, trigger fires automatically',
-            '2. Finds telecaller with least assigned users',
-            '3. Assigns new user to that telecaller',
-            '4. Keeps distribution balanced across all telecallers'
-        ];
-    } else {
-        throw new Exception('Trigger creation failed');
-    }
+    echo "=================================================\n";
+    echo "✅ SETUP COMPLETE!\n";
+    echo "=================================================\n\n";
     
-    // Step 5: Get current distribution
-    $stmt = $pdo->query("
-        SELECT 
-            a.id as telecaller_id,
-            a.name as telecaller_name,
-            COUNT(u.id) as assigned_count
-        FROM admins a
-        LEFT JOIN users u ON a.id = u.assigned_to AND u.role = 'driver'
-        WHERE a.role = 'telecaller'
-        GROUP BY a.id, a.name
-        ORDER BY a.id
-    ");
-    $distribution = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    echo "HOW IT WORKS:\n";
+    echo "• When a new TRANSPORTER registers from ANY app\n";
+    echo "• Trigger runs automatically before insert\n";
+    echo "• Assigns to Tarun or Gagan (round-robin)\n";
+    echo "• Drivers use existing assignment system\n";
+    echo "• No code changes needed in your other app!\n\n";
     
-    $response['current_distribution'] = $distribution;
-    
-} catch (Exception $e) {
-    $response['success'] = false;
-    $response['error'] = $e->getMessage();
+} catch(PDOException $e) {
+    echo "❌ Error: " . $e->getMessage() . "\n";
 }
-
-echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

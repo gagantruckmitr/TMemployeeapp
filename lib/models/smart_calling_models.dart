@@ -229,6 +229,8 @@ enum NavigationSection {
   connectedCalls,
   callBacks,
   callBackLater,
+  pendingCalls,
+  callHistory,
   profile,
 }
 

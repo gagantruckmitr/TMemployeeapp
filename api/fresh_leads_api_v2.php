@@ -6,6 +6,7 @@ header('Access-Control-Allow-Methods: GET, POST');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 require_once 'config.php';
+require_once 'update_activity_middleware.php';
 
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);

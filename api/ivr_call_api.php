@@ -35,9 +35,12 @@ $password = '825Redp&4';
 $envFile = __DIR__ . '/../.env';
 $envVars = [];
 if (file_exists($envFile)) {
-    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    // Read all lines without skipping empty ones to ensure we get everything
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES);
     foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
+        $line = trim($line);
+        // Skip empty lines and comments
+        if (empty($line) || strpos($line, '#') === 0) continue;
         if (strpos($line, '=') === false) continue;
         list($key, $value) = explode('=', $line, 2);
         $envVars[trim($key)] = trim($value);
@@ -100,18 +103,23 @@ echo $output;
  * Initiate IVR call through MyOperator
  */
 function initiateCall($pdo) {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+    // Accept both POST and GET for flexibility (GET for testing, POST for production)
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        // Get raw POST data
+        $rawInput = file_get_contents('php://input');
+        $input = json_decode($rawInput, true);
+        
+        // Log for debugging
+        error_log('POST Raw input: ' . $rawInput);
+        error_log('POST Parsed input: ' . json_encode($input));
+    } else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // For testing via browser
+        $input = $_GET;
+        error_log('GET input: ' . json_encode($input));
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Method not allowed. Use POST or GET.']);
         return;
     }
-    
-    // Get raw POST data
-    $rawInput = file_get_contents('php://input');
-    $input = json_decode($rawInput, true);
-    
-    // Log for debugging
-    error_log('Raw input: ' . $rawInput);
-    error_log('Parsed input: ' . json_encode($input));
     
     $driverMobile = $input['driver_mobile'] ?? '';
     $callerId = (int)($input['caller_id'] ?? 0);
@@ -150,17 +158,17 @@ function initiateCall($pdo) {
             return;
         }
         
-        // Get driver info from database
-        $stmt = $pdo->prepare("SELECT id, name, mobile FROM users WHERE mobile = ? AND role = 'driver'");
+        // Get user info from database (driver or transporter)
+        $stmt = $pdo->prepare("SELECT id, name, mobile, role FROM users WHERE mobile = ? AND role IN ('driver', 'transporter')");
         $stmt->execute([$driverMobile]);
         $driver = $stmt->fetch();
         
         if (!$driver) {
             echo json_encode([
                 'success' => false,
-                'error' => 'Driver not found in database',
+                'error' => 'User not found in database',
                 'driver_mobile' => $driverMobile,
-                'debug' => 'Please ensure driver exists in users table with role=driver'
+                'debug' => 'Please ensure user exists in users table with role=driver or transporter'
             ]);
             return;
         }
@@ -210,7 +218,7 @@ function initiateCall($pdo) {
         $status = $apiResponse['success'] ? 'initiated' : 'failed';
         $isSimulation = isset($apiResponse['data']['simulation']) && $apiResponse['data']['simulation'];
         
-        // Save to call_logs
+        // Save to call_logs (using caller_id only)
         $sql = "INSERT INTO call_logs 
                 (caller_id, user_id, caller_number, user_number, driver_name, call_status, 
                  reference_id, api_response, call_time, created_at, updated_at) 
@@ -230,22 +238,22 @@ function initiateCall($pdo) {
         
         $callLogId = $pdo->lastInsertId();
         
-        // Prepare response message
-        if ($isSimulation) {
-            $message = 'SIMULATION MODE: Configure MyOperator in .env for real voice calls';
+        // Prepare response message based on call status
+        if ($apiResponse['success']) {
+            $message = '📞 REAL IVR call initiated successfully!';
             $instructions = [
-                'step1' => 'Sign up at myoperator.com',
-                'step2' => 'Get API credentials from dashboard',
-                'step3' => 'Update .env file with credentials',
-                'step4' => 'Restart server and try again'
+                'step1' => '📱 Driver phone (' . $driverNumber . ') rings FIRST',
+                'step2' => '🎵 When driver picks up, they hear IVR message',
+                'step3' => '📞 Your phone (' . $telecallerNumber . ') rings NEXT',
+                'step4' => '✅ When you pick up - INSTANT connection to driver!'
             ];
         } else {
-            $message = 'Call initiated! Driver will be called first.';
+            $message = '❌ Call initiation failed. Check MyOperator credentials.';
             $instructions = [
-                'step1' => 'Driver phone rings FIRST',
-                'step2' => 'When driver picks up, they hear IVR message',
-                'step3' => 'Your phone (telecaller) rings NEXT',
-                'step4' => 'When you pick up - INSTANT connection to driver!'
+                'step1' => 'Verify MyOperator credentials in .env file',
+                'step2' => 'Check MyOperator account balance',
+                'step3' => 'Ensure phone numbers are valid',
+                'step4' => 'Contact MyOperator support if issue persists'
             ];
         }
         
@@ -382,36 +390,47 @@ function updateCallFeedback($pdo) {
 /**
  * Call MyOperator Progressive Dialing API
  * This calls driver FIRST, then connects telecaller when driver picks up
+ * 
+ * WORKS ON BOTH LOCAL AND PRODUCTION - Makes REAL calls via MyOperator
  */
 function callMyOperatorAPI($payload) {
-    // Check if MyOperator is properly configured
-    if (MYOPERATOR_COMPANY_ID === 'your_company_id' || 
-        MYOPERATOR_SECRET_TOKEN === 'your_secret_token' ||
-        MYOPERATOR_API_KEY === 'your_api_key') {
-        
-        // Return simulated success for testing when MyOperator is not configured
-        error_log('⚠️ MyOperator not configured - returning simulated response');
-        error_log('📝 To enable real voice calls, update .env with MyOperator credentials');
+    // Check if MyOperator credentials are properly configured
+    $myOperatorConfigured = (
+        MYOPERATOR_COMPANY_ID !== 'your_company_id' && 
+        MYOPERATOR_SECRET_TOKEN !== 'your_secret_token' &&
+        MYOPERATOR_API_KEY !== 'your_api_key' &&
+        !empty(MYOPERATOR_COMPANY_ID) &&
+        !empty(MYOPERATOR_SECRET_TOKEN) &&
+        !empty(MYOPERATOR_API_KEY)
+    );
+    
+    // If MyOperator is not configured, return error
+    if (!$myOperatorConfigured) {
+        error_log('⚠️ MyOperator not configured properly');
+        error_log('📝 Please update .env with valid MyOperator credentials');
         
         return [
-            'success' => true,
-            'http_code' => 200,
+            'success' => false,
+            'http_code' => 500,
             'data' => [
-                'status' => 'success',
-                'message' => 'SIMULATION MODE - Configure MyOperator for real voice calls',
-                'call_id' => 'sim_' . uniqid(),
-                'call_duration' => rand(30, 180),
-                'simulation' => true,
-                'note' => 'Update .env file with MyOperator credentials to enable real calls'
+                'status' => 'error',
+                'message' => 'MyOperator not configured. Please contact administrator.',
+                'error' => 'Missing or invalid MyOperator credentials',
+                'simulation' => false,
+                'note' => 'Update .env file with valid MyOperator credentials from myoperator.com'
             ]
         ];
     }
     
-    // Log the API call
-    error_log('📞 Initiating MyOperator Progressive Dialing (Type 2)');
+    // Make REAL MyOperator API call (works on both local and production)
+    $environment = (DB_HOST === '127.0.0.1' || DB_HOST === 'localhost') ? 'LOCAL' : 'PRODUCTION';
+    error_log('🚀 ' . $environment . ' SERVER: Initiating REAL MyOperator call');
+    error_log('📞 MyOperator Progressive Dialing (Type 2)');
     error_log('Driver (called FIRST): ' . $payload['number']);
     error_log('Telecaller (connected when driver picks up): ' . $payload['agent_number']);
     error_log('Reference: ' . $payload['reference_id']);
+    error_log('API URL: ' . MYOPERATOR_API_URL);
+    error_log('Company ID: ' . MYOPERATOR_COMPANY_ID);
     error_log('Payload: ' . json_encode($payload));
     
     $ch = curl_init(MYOPERATOR_API_URL);

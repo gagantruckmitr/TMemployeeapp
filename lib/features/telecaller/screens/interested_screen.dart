@@ -14,10 +14,11 @@ class InterestedScreen extends StatefulWidget {
 }
 
 class _InterestedScreenState extends State<InterestedScreen>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   List<DriverContact>? _interestedContacts;
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = true;
+  bool _isRefreshing = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -25,17 +26,31 @@ class _InterestedScreenState extends State<InterestedScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadInterestedContactsAsync();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshData();
+    }
+  }
+
   Future<void> _loadInterestedContactsAsync() async {
+    if (!mounted) return;
+    
+    setState(() => _isLoading = true);
+    
     try {
+      // Force refresh to get latest data
       final contacts = await SmartCallingService.instance.getDriversByCategory(NavigationSection.interested);
       
       if (mounted) {
@@ -50,6 +65,36 @@ class _InterestedScreenState extends State<InterestedScreen>
           _interestedContacts = [];
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _refreshData() async {
+    if (_isRefreshing) return;
+    
+    setState(() => _isRefreshing = true);
+    
+    try {
+      // Clear cache and fetch fresh data
+      SmartCallingService.instance.clearCache();
+      final contacts = await SmartCallingService.instance.getDriversByCategory(NavigationSection.interested);
+      
+      if (mounted) {
+        setState(() {
+          _interestedContacts = contacts;
+          _isRefreshing = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to refresh: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
@@ -74,27 +119,98 @@ class _InterestedScreenState extends State<InterestedScreen>
     );
   }
 
-  void _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback) {
+  Future<void> _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback) async {
     if (_interestedContacts == null) return;
     
-    setState(() {
-      final index = _interestedContacts!.indexWhere((c) => c.id == contact.id);
-      if (index != -1) {
-        _interestedContacts![index] = contact.copyWith(
-          status: feedback.status,
-          lastFeedback: _getFeedbackText(feedback),
-          lastCallTime: DateTime.now(),
-        );
-        
-        // Remove from interested if status changed
-        if (feedback.status != CallStatus.connected ||
-            !_isInterestedFeedback(feedback)) {
-          _interestedContacts!.removeAt(index);
-        }
-      }
-    });
+    // Show loading indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Saving feedback...'),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // Build complete feedback text with all details
+    final feedbackText = _buildCompleteFeedbackText(feedback);
     
-    HapticFeedback.lightImpact();
+    // Update via API with complete feedback
+    final success = await SmartCallingService.instance.updateCallStatus(
+      driverId: contact.id,
+      status: feedback.status,
+      feedback: feedbackText,
+      remarks: feedback.remarks,
+    );
+
+    if (success) {
+      // Update local state
+      setState(() {
+        final index = _interestedContacts!.indexWhere((c) => c.id == contact.id);
+        if (index != -1) {
+          _interestedContacts![index] = contact.copyWith(
+            status: feedback.status,
+            lastFeedback: feedbackText,
+            lastCallTime: DateTime.now(),
+          );
+          
+          // Remove from interested if status changed
+          if (feedback.status != CallStatus.connected ||
+              !_isInterestedFeedback(feedback)) {
+            _interestedContacts!.removeAt(index);
+          }
+        }
+      });
+      
+      if (mounted) {
+        HapticFeedback.lightImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Updated ${contact.name}\n$feedbackText'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Failed to save feedback'),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   bool _isInterestedFeedback(CallFeedback feedback) {
@@ -106,15 +222,27 @@ class _InterestedScreenState extends State<InterestedScreen>
            feedbackText.contains('Subscribe');
   }
 
-  String _getFeedbackText(CallFeedback feedback) {
+  String _buildCompleteFeedbackText(CallFeedback feedback) {
+    final parts = <String>[];
+    
+    // Add status
+    parts.add('Status: ${feedback.status.name}');
+    
+    // Add specific feedback based on status
     if (feedback.connectedFeedback != null) {
-      return feedback.connectedFeedback!.displayName;
+      parts.add('Feedback: ${feedback.connectedFeedback!.displayName}');
     } else if (feedback.callBackReason != null) {
-      return feedback.callBackReason!.displayName;
+      parts.add('Reason: ${feedback.callBackReason!.displayName}');
     } else if (feedback.callBackTime != null) {
-      return feedback.callBackTime!.displayName;
+      parts.add('Time: ${feedback.callBackTime!.displayName}');
     }
-    return feedback.status.name;
+    
+    // Add remarks if present
+    if (feedback.remarks != null && feedback.remarks!.isNotEmpty) {
+      parts.add('Notes: ${feedback.remarks}');
+    }
+    
+    return parts.join(' | ');
   }
 
   @override
@@ -125,17 +253,24 @@ class _InterestedScreenState extends State<InterestedScreen>
       backgroundColor: Colors.grey.shade50,
       body: Column(
         children: [
-          _InterestedHeader(contactCount: _interestedContacts?.length ?? 0),
+          _InterestedHeader(
+            contactCount: _interestedContacts?.length ?? 0,
+            onRefresh: _refreshData,
+            isRefreshing: _isRefreshing,
+          ),
           Expanded(
             child: _isLoading
                 ? const _LoadingWidget()
-                : (_interestedContacts?.isEmpty ?? true)
-                    ? const _EmptyStateWidget()
-                    : _ContactsList(
-                        contacts: _interestedContacts!,
-                        scrollController: _scrollController,
-                        onCallPressed: _onCallPressed,
-                      ),
+                : RefreshIndicator(
+                    onRefresh: _refreshData,
+                    child: (_interestedContacts?.isEmpty ?? true)
+                        ? const _EmptyStateWidget()
+                        : _ContactsList(
+                            contacts: _interestedContacts!,
+                            scrollController: _scrollController,
+                            onCallPressed: _onCallPressed,
+                          ),
+                  ),
           ),
         ],
       ),
@@ -147,82 +282,82 @@ class _InterestedScreenState extends State<InterestedScreen>
 // Optimized separate widgets to prevent unnecessary rebuilds
 class _InterestedHeader extends StatelessWidget {
   final int contactCount;
+  final VoidCallback onRefresh;
+  final bool isRefreshing;
 
-  const _InterestedHeader({required this.contactCount});
+  const _InterestedHeader({
+    required this.contactCount,
+    required this.onRefresh,
+    required this.isRefreshing,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 THE FIX: Wrapping the entire header content in SafeArea 
-    // pushes it below the status bar, preventing overlap.
-    return SafeArea(
-      bottom: false, // Only apply padding to the top, not the bottom
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05), 
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // ⭐ Gradient Icon Container
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.amber.withValues(alpha: 0.25),
-                    Colors.orange.withValues(alpha: 0.15),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: const Icon(
-                Icons.star_rounded,
-                color: Colors.amber,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // 📝 Title + Subtitle
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Interested Contacts',
-                    style: AppTheme.headingMedium.copyWith(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black87,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$contactCount contacts showing interest',
-                    style: AppTheme.bodyLarge.copyWith(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
-                      height: 1.4,
-                    ),
-                  ),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.amber.withValues(alpha: 0.2),
+                  Colors.orange.withValues(alpha: 0.1),
                 ],
               ),
+              borderRadius: BorderRadius.circular(16),
             ),
-          ],
-        ),
+            child: const Icon(
+              Icons.star_rounded,
+              color: Colors.amber,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Interested Contacts',
+                  style: AppTheme.headingMedium.copyWith(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  '$contactCount showing interest',
+                  style: AppTheme.bodyLarge.copyWith(
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: isRefreshing ? null : onRefresh,
+            icon: isRefreshing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded),
+            color: Colors.amber,
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
     );
   }

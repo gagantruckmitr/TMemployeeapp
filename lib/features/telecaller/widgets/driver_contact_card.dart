@@ -259,6 +259,20 @@ class _DriverContactCardState extends State<DriverContactCard>
                       ),
                     ],
                   ),
+                  
+                  // Show feedback if available
+                  if (widget.contact.lastFeedback != null && 
+                      widget.contact.lastFeedback!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildFeedbackSection(),
+                  ],
+                  
+                  // Show remarks if available
+                  if (widget.contact.remarks != null && 
+                      widget.contact.remarks!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildRemarksSection(),
+                  ],
                 ],
               ),
             ),
@@ -360,6 +374,106 @@ class _DriverContactCardState extends State<DriverContactCard>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFeedbackSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.blue.shade200,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.feedback_outlined,
+            size: 16,
+            color: Colors.blue.shade700,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Last Feedback',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.blue.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.contact.lastFeedback!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.blue.shade900,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRemarksSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.amber.shade200,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.note_outlined,
+            size: 16,
+            color: Colors.amber.shade700,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Remarks',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.amber.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.contact.remarks!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.amber.shade900,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

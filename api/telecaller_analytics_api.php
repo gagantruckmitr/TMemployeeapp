@@ -6,6 +6,7 @@ header('Access-Control-Allow-Methods: GET');
 
 // Use config.php for database connection
 require_once 'config.php';
+require_once 'update_activity_middleware.php';
 
 $callerId = (int)($_GET['caller_id'] ?? $_GET['telecaller_id'] ?? 1);
 $period = $_GET['period'] ?? 'week';
@@ -66,7 +67,7 @@ function getOverviewStats($pdo, $callerId, $dateCondition) {
             SUM(CASE WHEN feedback LIKE '%interested%' OR feedback LIKE '%agree%' THEN 1 ELSE 0 END) as interested_count,
             AVG(CASE WHEN call_status = 'connected' THEN call_duration ELSE NULL END) as avg_duration
         FROM call_logs 
-        WHERE telecaller_id = ? AND $dateCondition
+        WHERE caller_id = ? AND $dateCondition
     ");
     $stmt->execute([$callerId]);
     $stats = $stmt->fetch();
@@ -118,7 +119,7 @@ function getCallTrends($pdo, $callerId, $period) {
             SUM(CASE WHEN call_status = 'connected' THEN 1 ELSE 0 END) as connected,
             SUM(CASE WHEN feedback LIKE '%interested%' OR feedback LIKE '%agree%' THEN 1 ELSE 0 END) as interested
         FROM call_logs 
-        WHERE telecaller_id = ? AND call_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        WHERE caller_id = ? AND call_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
         GROUP BY DATE(call_time)
         ORDER BY date ASC
     ");
@@ -128,19 +129,35 @@ function getCallTrends($pdo, $callerId, $period) {
 }
 
 function getCallDistribution($pdo, $callerId, $dateCondition) {
+    // First get total count
+    $totalStmt = $pdo->prepare("
+        SELECT COUNT(*) as total
+        FROM call_logs 
+        WHERE caller_id = ? AND $dateCondition
+    ");
+    $totalStmt->execute([$callerId]);
+    $total = (int)$totalStmt->fetchColumn();
+    
+    // Then get distribution
     $stmt = $pdo->prepare("
         SELECT 
             call_status,
-            COUNT(*) as count,
-            ROUND((COUNT(*) * 100.0 / (SELECT COUNT(*) FROM call_logs WHERE telecaller_id = ? AND $dateCondition)), 1) as percentage
+            COUNT(*) as count
         FROM call_logs 
-        WHERE telecaller_id = ? AND $dateCondition
+        WHERE caller_id = ? AND $dateCondition
         GROUP BY call_status
         ORDER BY count DESC
     ");
-    $stmt->execute([$callerId, $callerId]);
+    $stmt->execute([$callerId]);
     
-    return $stmt->fetchAll();
+    $results = $stmt->fetchAll();
+    
+    // Calculate percentages in PHP
+    foreach ($results as &$row) {
+        $row['percentage'] = $total > 0 ? round(($row['count'] * 100.0 / $total), 1) : 0;
+    }
+    
+    return $results;
 }
 
 function getRecentCalls($pdo, $callerId, $limit = 50) {
@@ -151,10 +168,12 @@ function getRecentCalls($pdo, $callerId, $limit = 50) {
         SELECT 
             cl.*,
             cl.driver_name,
-            cl.driver_mobile
+            cl.driver_mobile,
+            COALESCE(cl.call_initiated_at, cl.call_time) as actual_call_time,
+            TIMESTAMPDIFF(SECOND, COALESCE(cl.call_initiated_at, cl.call_time), NOW()) as seconds_ago
         FROM call_logs cl
-        WHERE cl.telecaller_id = ?
-        ORDER BY cl.call_time DESC
+        WHERE cl.caller_id = ?
+        ORDER BY COALESCE(cl.call_initiated_at, cl.call_time) DESC
         LIMIT $limit
     ");
     $stmt->execute([$callerId]);
@@ -164,9 +183,12 @@ function getRecentCalls($pdo, $callerId, $limit = 50) {
     foreach ($calls as &$call) {
         $duration = isset($call['call_duration']) ? (int)$call['call_duration'] : 0;
         $call['duration_formatted'] = formatDuration($duration);
-        $call['time_ago'] = timeAgo($call['call_time']);
-        $call['date'] = date('M d, Y', strtotime($call['call_time']));
-        $call['time'] = date('h:i A', strtotime($call['call_time']));
+        
+        // Use actual_call_time for accurate time display
+        $callTime = $call['actual_call_time'] ?? $call['call_time'];
+        $call['time_ago'] = timeAgo($callTime);
+        $call['date'] = date('M d, Y', strtotime($callTime));
+        $call['time'] = date('h:i A', strtotime($callTime));
     }
     
     return $calls;
@@ -181,7 +203,7 @@ function getPerformanceMetrics($pdo, $callerId, $dateCondition) {
             SUM(CASE WHEN call_status IN ('callback', 'callback_later') THEN 1 ELSE 0 END) as callbacks,
             AVG(CASE WHEN call_status = 'connected' THEN call_duration ELSE NULL END) as avg_duration
         FROM call_logs 
-        WHERE telecaller_id = ? AND $dateCondition
+        WHERE caller_id = ? AND $dateCondition
     ");
     $stmt->execute([$callerId]);
     $current = $stmt->fetch();
@@ -194,7 +216,7 @@ function getPerformanceMetrics($pdo, $callerId, $dateCondition) {
             SUM(CASE WHEN feedback LIKE '%interested%' OR feedback LIKE '%agree%' THEN 1 ELSE 0 END) as interested,
             AVG(CASE WHEN call_status = 'connected' THEN call_duration ELSE NULL END) as avg_duration
         FROM call_logs 
-        WHERE telecaller_id = ? AND $prevDateCondition
+        WHERE caller_id = ? AND $prevDateCondition
     ");
     $stmt->execute([$callerId]);
     $previous = $stmt->fetch();
@@ -230,7 +252,7 @@ function getHourlyActivity($pdo, $callerId) {
             HOUR(call_time) as hour,
             COUNT(*) as calls
         FROM call_logs 
-        WHERE telecaller_id = ? AND DATE(call_time) = CURDATE()
+        WHERE caller_id = ? AND DATE(call_time) = CURDATE()
         GROUP BY HOUR(call_time)
         ORDER BY hour ASC
     ");

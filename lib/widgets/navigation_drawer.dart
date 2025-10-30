@@ -217,6 +217,11 @@ class _NavigationDrawerWidgetState extends State<NavigationDrawerWidget>
         ),
         const Divider(height: 32),
         _buildNavigationItem(
+          NavigationSection.callHistory,
+          'Call History',
+          Icons.history_rounded,
+        ),
+        _buildNavigationItem(
           NavigationSection.profile,
           'My Profile',
           Icons.person_outline,

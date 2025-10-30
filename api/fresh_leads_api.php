@@ -8,6 +8,7 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 // Use config.php for database connection
 require_once 'config.php';
+require_once 'update_activity_middleware.php';
 
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
@@ -27,6 +28,9 @@ switch($action) {
         break;
     case 'mark_called':
         markAsCalled($pdo);
+        break;
+    case 'call_history':
+        getCallHistory($pdo);
         break;
     default:
         echo json_encode(['error' => 'Invalid action']);
@@ -89,11 +93,12 @@ function getFreshLeads($pdo) {
                     u.city,
                     u.states,
                     u.status,
+                    u.role,
                     u.assigned_to,
                     u.Created_at,
                     u.Updated_at
                 FROM users u
-                WHERE u.role = 'driver'
+                WHERE u.role IN ('driver', 'transporter')
                 AND u.assigned_to = :caller_id
                 AND u.id NOT IN (
                     SELECT DISTINCT user_id 
@@ -195,8 +200,8 @@ function markAsCalled($pdo) {
     }
     
     try {
-        // Get driver info
-        $stmt = $pdo->prepare("SELECT mobile FROM users WHERE id = ? AND role = 'driver'");
+        // Get user info (driver or transporter)
+        $stmt = $pdo->prepare("SELECT mobile FROM users WHERE id = ? AND role IN ('driver', 'transporter')");
         $stmt->execute([$driverId]);
         $driver = $stmt->fetch();
         
@@ -270,7 +275,7 @@ function getDriversByStatus($pdo, $callerId, $status, $limit) {
                 INNER JOIN users u ON cl.user_id = u.id
                 WHERE cl.caller_id = :caller_id
                 AND cl.call_status = :call_status
-                AND u.role = 'driver'
+                AND u.role IN ('driver', 'transporter')
                 ORDER BY cl.call_time DESC
                 LIMIT :limit";
         
@@ -421,11 +426,11 @@ function calculateProfileCompletion($pdo, $userId) {
         
         $role = $user['role'];
         
-        // Define required fields based on role
+        // Define required fields based on role (excluding system fields)
         $requiredFields = [];
         if ($role === 'driver') {
             $requiredFields = [
-                'name', 'email', 'city', 'status', 'sex', 'vehicle_type',
+                'name', 'email', 'city', 'sex', 'vehicle_type',
                 'father_name', 'images', 'address', 'dob',
                 'type_of_license', 'driving_experience', 'highest_education', 'license_number',
                 'expiry_date_of_license', 'expected_monthly_income', 'current_monthly_income',
@@ -470,6 +475,74 @@ function calculateProfileCompletion($pdo, $userId) {
         return 0;
     }
 }
+
+function getCallHistory($pdo) {
+    try {
+        $callerId = (int)($_GET['caller_id'] ?? 0);
+        $status = $_GET['status'] ?? null;
+        $limit = (int)($_GET['limit'] ?? 100);
+        $offset = (int)($_GET['offset'] ?? 0);
+        
+        if (!$callerId) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Caller ID is required'
+            ]);
+            return;
+        }
+        
+        // Build query
+        $query = "
+            SELECT 
+                cl.id,
+                cl.driver_id,
+                d.name as driver_name,
+                d.phoneNumber as phone_number,
+                cl.call_status as status,
+                cl.feedback,
+                cl.remarks,
+                cl.call_duration as duration,
+                cl.created_at as call_time
+            FROM call_logs cl
+            INNER JOIN drivers d ON cl.driver_id = d.id
+            WHERE cl.caller_id = :caller_id
+        ";
+        
+        $params = ['caller_id' => $callerId];
+        
+        // Add status filter if provided
+        if ($status && $status !== 'all') {
+            $query .= " AND cl.call_status = :status";
+            $params['status'] = $status;
+        }
+        
+        // Order by most recent first
+        $query .= " ORDER BY cl.created_at DESC LIMIT :limit OFFSET :offset";
+        
+        $stmt = $pdo->prepare($query);
+        
+        // Bind parameters
+        foreach ($params as $key => $value) {
+            $stmt->bindValue(':' . $key, $value);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        
+        $stmt->execute();
+        $history = $stmt->fetchAll();
+        
+        echo json_encode([
+            'success' => true,
+            'data' => $history,
+            'count' => count($history)
+        ]);
+        
+    } catch(Exception $e) {
+        error_log('Call history error: ' . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'error' => 'Failed to fetch call history: ' . $e->getMessage()
+        ]);
+    }
+}
 ?>
-
-

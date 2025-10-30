@@ -4,44 +4,52 @@ import 'package:go_router/go_router.dart';
 import '../../models/manager_models.dart';
 import '../../core/services/manager_service.dart';
 import '../../core/services/real_auth_service.dart';
-import '../../core/theme/app_theme.dart';
 import 'widgets/overview_cards.dart';
 import 'widgets/telecaller_list_view.dart';
-import 'widgets/real_time_monitor.dart';
 import 'widgets/performance_charts.dart';
 import 'widgets/leaderboard_widget.dart';
-import 'widgets/call_activity_widget.dart';
 import 'widgets/assignments_widget.dart';
+import 'widgets/live_telecaller_status_widget.dart';
+import 'screens/leave_approval_screen.dart';
 
 class ManagerDashboardPage extends StatefulWidget {
   final int managerId;
   final String managerName;
 
   const ManagerDashboardPage({
-    Key? key,
+    super.key,
     required this.managerId,
     required this.managerName,
-  }) : super(key: key);
+  });
 
   @override
   State<ManagerDashboardPage> createState() => _ManagerDashboardPageState();
 }
 
-class _ManagerDashboardPageState extends State<ManagerDashboardPage> with SingleTickerProviderStateMixin {
+class _ManagerDashboardPageState extends State<ManagerDashboardPage>
+    with SingleTickerProviderStateMixin {
   final ManagerService _managerService = ManagerService();
   late TabController _tabController;
   Timer? _refreshTimer;
-  
+
   bool _isLoading = true;
   String? _error;
-  
+
   Map<String, dynamic>? _managerDetails;
   ManagerOverview? _overview;
   TodayStats? _todayStats;
   List<WeekTrend> _weekTrend = [];
   List<TopPerformer> _topPerformers = [];
   List<TelecallerInfo> _telecallers = [];
-  Map<String, dynamic> _realTimeStatus = {};
+
+  // Modern teal green color scheme
+  static const Color _tealPrimary = Color(0xFF14B8A6);
+  static const Color _tealAccent = Color(0xFF2DD4BF);
+  static const Color _white = Color(0xFFFFFFFF);
+  static const Color _background = Color(0xFFF8FAFC);
+  static const Color _textPrimary = Color(0xFF0F172A);
+  static const Color _textSecondary = Color(0xFF64748B);
+  static const Color _borderColor = Color(0xFFE2E8F0);
 
   @override
   void initState() {
@@ -66,6 +74,15 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
     });
   }
 
+  void _navigateToLeaveApproval() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const LeaveApprovalScreen(),
+      ),
+    );
+  }
+
   Future<void> _loadData({bool silent = false}) async {
     if (!silent) {
       setState(() {
@@ -75,29 +92,22 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
     }
 
     try {
-      print('🔵 Loading manager dashboard data for manager ID: ${widget.managerId}');
-      
-      // Load manager details from admins table (optional - don't fail if this errors)
+      // Load manager details
       try {
-        final managerDetails = await _managerService.getManagerDetails(widget.managerId);
-        print('✅ Manager details loaded: ${managerDetails['manager']}');
+        final managerDetails = await _managerService.getManagerDetails(
+          widget.managerId,
+        );
         if (mounted) {
           setState(() {
             _managerDetails = managerDetails;
           });
         }
       } catch (e) {
-        print('⚠️ Could not load manager details (non-critical): $e');
+        debugPrint('Could not load manager details: $e');
       }
-      
+
       final overviewData = await _managerService.getOverview(widget.managerId);
-      print('✅ Overview data loaded: ${overviewData['overview']}');
-      
       final telecallers = await _managerService.getTelecallers();
-      print('✅ Telecallers loaded: ${telecallers.length} telecallers');
-      
-      final realTimeStatus = await _managerService.getRealTimeStatus();
-      print('✅ Real-time status loaded');
 
       if (mounted) {
         setState(() {
@@ -106,15 +116,11 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
           _weekTrend = overviewData['weekTrend'];
           _topPerformers = overviewData['topPerformers'];
           _telecallers = telecallers;
-          _realTimeStatus = realTimeStatus;
           _isLoading = false;
         });
-        print('✅ Manager dashboard state updated successfully');
-        print('📊 Manager: ${_managerDetails?['manager']?['name'] ?? widget.managerName}');
-        print('📊 Overview: Total Telecallers=${_overview?.totalTelecallers}, Calls Today=${_overview?.totalCallsToday}');
       }
     } catch (e) {
-      print('❌ Error loading manager dashboard: $e');
+      debugPrint('Error loading manager dashboard: $e');
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -128,17 +134,21 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Logout'),
-        content: Text('Are you sure you want to logout?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text('Logout'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: _white,
+            ),
+            child: const Text('Logout'),
           ),
         ],
       ),
@@ -155,75 +165,62 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.primaryColor.withOpacity(0.1),
-              AppTheme.accentColor.withOpacity(0.05),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(),
-              _buildTabBar(),
-              Expanded(
-                child: _isLoading && _overview == null
-                    ? _buildLoadingState()
-                    : _error != null && _overview == null
-                        ? _buildErrorState()
-                        : _buildContent(),
-              ),
-            ],
-          ),
+      backgroundColor: _background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildModernHeader(),
+            _buildModernTabBar(),
+            Expanded(
+              child: _isLoading && _overview == null
+                  ? _buildLoadingState()
+                  : _error != null && _overview == null
+                  ? _buildErrorState()
+                  : _buildContent(),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    final managerName = _managerDetails?['manager']?['name'] ?? widget.managerName;
+  Widget _buildModernHeader() {
+    final managerName =
+        _managerDetails?['manager']?['name'] ?? widget.managerName;
     final managerEmail = _managerDetails?['manager']?['email'] ?? '';
     final teamStats = _managerDetails?['teamStats'];
-    
+
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: _white,
+        border: Border(bottom: BorderSide(color: _borderColor, width: 1)),
       ),
       child: Column(
         children: [
           Row(
             children: [
+              // Teal gradient icon
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppTheme.primaryColor, AppTheme.accentColor],
+                  gradient: const LinearGradient(
+                    colors: [_tealPrimary, _tealAccent],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.primaryColor.withOpacity(0.3),
-                      blurRadius: 10,
+                      color: _tealPrimary.withValues(alpha: 0.3),
+                      blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
                   ],
                 ),
                 child: const Icon(
                   Icons.dashboard_rounded,
-                  color: Colors.white,
+                  color: _white,
                   size: 28,
                 ),
               ),
@@ -232,49 +229,76 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Manager Dashboard',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
+                        color: _textPrimary,
+                        letterSpacing: -0.5,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       'Welcome, $managerName',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 14,
-                        color: AppTheme.textSecondary,
+                        color: _textSecondary,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    if (managerEmail.isNotEmpty)
-                      Text(
-                        managerEmail,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () => _loadData(),
-                icon: Icon(
-                  Icons.refresh_rounded,
-                  color: AppTheme.primaryColor,
+              // Leave Approval button
+              Container(
+                decoration: BoxDecoration(
+                  color: _tealPrimary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                tooltip: 'Refresh',
+                child: IconButton(
+                  onPressed: _navigateToLeaveApproval,
+                  icon: const Icon(Icons.event_available),
+                  color: _tealPrimary,
+                  tooltip: 'Leave Approvals',
+                ),
               ),
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.account_circle,
-                  color: AppTheme.primaryColor,
-                  size: 28,
+              const SizedBox(width: 8),
+              // Refresh button
+              Container(
+                decoration: BoxDecoration(
+                  color: _tealPrimary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                tooltip: 'Profile',
+                child: IconButton(
+                  onPressed: () => _loadData(),
+                  icon: const Icon(Icons.refresh_rounded, color: _tealPrimary),
+                  tooltip: 'Refresh',
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Profile menu
+              PopupMenuButton<String>(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _tealPrimary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.account_circle,
+                    color: _tealPrimary,
+                    size: 24,
+                  ),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                offset: const Offset(0, 50),
                 onSelected: (value) async {
-                  if (value == 'logout') {
+                  if (value == 'profile') {
+                    _showManagerProfile();
+                  } else if (value == 'logout') {
                     await _handleLogout();
                   }
                 },
@@ -286,62 +310,94 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
                       children: [
                         Text(
                           managerName,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
+                            color: _textPrimary,
                           ),
                         ),
                         if (managerEmail.isNotEmpty)
                           Text(
                             managerEmail,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 12,
-                              color: Colors.grey,
+                              color: _textSecondary,
                             ),
                           ),
-                        Divider(),
+                        const Divider(height: 16),
                       ],
                     ),
                   ),
-                  PopupMenuItem(
+                  const PopupMenuItem(
+                    value: 'profile',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.person_outline,
+                          color: _tealPrimary,
+                          size: 20,
+                        ),
+                        SizedBox(width: 12),
+                        Text('View Profile'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
                     value: 'logout',
                     child: Row(
                       children: [
-                        Icon(Icons.logout, color: Colors.red),
+                        Icon(Icons.logout_rounded, color: Colors.red, size: 20),
                         SizedBox(width: 12),
-                        Text('Logout'),
+                        Text('Logout', style: TextStyle(color: Colors.red)),
                       ],
                     ),
                   ),
                 ],
               ),
-              IconButton(
-                onPressed: () {
-                  _showManagerProfile();
-                },
-                icon: Icon(
-                  Icons.account_circle,
-                  color: AppTheme.textSecondary,
-                ),
-                tooltip: 'Profile',
-              ),
             ],
           ),
           if (teamStats != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(
+                  colors: [
+                    _tealPrimary.withValues(alpha: 0.08),
+                    _tealAccent.withValues(alpha: 0.05),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _tealPrimary.withValues(alpha: 0.2)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildQuickStat('Team', '${teamStats['total_telecallers'] ?? 0}', Icons.people),
-                  _buildQuickStat('Online', '${teamStats['online_telecallers'] ?? 0}', Icons.online_prediction),
-                  _buildQuickStat('Calls Today', '${teamStats['total_calls_today'] ?? 0}', Icons.phone),
-                  _buildQuickStat('Conversions', '${teamStats['conversions_today'] ?? 0}', Icons.check_circle),
+                  _buildQuickStat(
+                    'Team',
+                    '${teamStats['total_telecallers'] ?? 0}',
+                    Icons.people_outline,
+                  ),
+                  _buildDivider(),
+                  _buildQuickStat(
+                    'Online',
+                    '${teamStats['online_telecallers'] ?? 0}',
+                    Icons.online_prediction_outlined,
+                  ),
+                  _buildDivider(),
+                  _buildQuickStat(
+                    'Calls',
+                    '${teamStats['total_calls_today'] ?? 0}',
+                    Icons.phone_outlined,
+                  ),
+                  _buildDivider(),
+                  _buildQuickStat(
+                    'Conversions',
+                    '${teamStats['conversions_today'] ?? 0}',
+                    Icons.check_circle_outline,
+                  ),
                 ],
               ),
             ),
@@ -351,24 +407,34 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
     );
   }
 
+  Widget _buildDivider() {
+    return Container(
+      height: 40,
+      width: 1,
+      color: _tealPrimary.withValues(alpha: 0.2),
+    );
+  }
+
   Widget _buildQuickStat(String label, String value, IconData icon) {
     return Column(
       children: [
-        Icon(icon, size: 20, color: AppTheme.primaryColor),
-        const SizedBox(height: 4),
+        Icon(icon, size: 24, color: _tealPrimary),
+        const SizedBox(height: 6),
         Text(
           value,
-          style: TextStyle(
-            fontSize: 18,
+          style: const TextStyle(
+            fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+            color: _textPrimary,
+            letterSpacing: -0.5,
           ),
         ),
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 11,
-            color: AppTheme.textSecondary,
+            color: _textSecondary,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -377,18 +443,30 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
 
   void _showManagerProfile() {
     if (_managerDetails == null) return;
-    
+
     final manager = _managerDetails!['manager'];
     final recentActivity = _managerDetails!['recentActivity'] as List? ?? [];
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Row(
           children: [
-            Icon(Icons.account_circle, color: AppTheme.primaryColor),
-            const SizedBox(width: 8),
-            const Text('Manager Profile'),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _tealPrimary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.account_circle,
+                color: _tealPrimary,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('Manager Profile', style: TextStyle(fontSize: 20)),
           ],
         ),
         content: SingleChildScrollView(
@@ -400,43 +478,71 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
               _buildProfileRow('Mobile', manager['mobile']),
               _buildProfileRow('Email', manager['email'] ?? 'N/A'),
               _buildProfileRow('Role', manager['role']),
-              _buildProfileRow('Member Since', manager['created_at']?.toString().split(' ')[0] ?? 'N/A'),
-              const SizedBox(height: 16),
-              Text(
+              _buildProfileRow(
+                'Member Since',
+                manager['created_at']?.toString().split(' ')[0] ?? 'N/A',
+              ),
+              const SizedBox(height: 20),
+              const Text(
                 'Recent Activity',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+                  color: _textPrimary,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               if (recentActivity.isEmpty)
-                Text('No recent activity', style: TextStyle(color: AppTheme.textSecondary))
+                const Text(
+                  'No recent activity',
+                  style: TextStyle(color: _textSecondary),
+                )
               else
-                ...recentActivity.take(5).map((activity) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.circle, size: 8, color: AppTheme.primaryColor),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          activity['description'] ?? '',
-                          style: const TextStyle(fontSize: 12),
+                ...recentActivity
+                    .take(5)
+                    .map(
+                      (activity) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(top: 6),
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: _tealPrimary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                activity['description'] ?? '',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: _textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                )),
+                    ),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            style: TextButton.styleFrom(
+              foregroundColor: _tealPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text(
+              'Close',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -445,24 +551,25 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
 
   Widget _buildProfileRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 110,
             child: Text(
               '$label:',
-              style: TextStyle(
+              style: const TextStyle(
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondary,
+                color: _textSecondary,
+                fontSize: 13,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(color: AppTheme.textPrimary),
+              style: const TextStyle(color: _textPrimary, fontSize: 13),
             ),
           ),
         ],
@@ -470,34 +577,30 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
     );
   }
 
-  Widget _buildTabBar() {
+  Widget _buildModernTabBar() {
     return Container(
-      color: Colors.white,
+      decoration: BoxDecoration(
+        color: _white,
+        border: Border(bottom: BorderSide(color: _borderColor, width: 1)),
+      ),
       child: TabBar(
         controller: _tabController,
-        labelColor: AppTheme.primaryColor,
-        unselectedLabelColor: AppTheme.textSecondary,
-        indicatorColor: AppTheme.primaryColor,
+        labelColor: _tealPrimary,
+        unselectedLabelColor: _textSecondary,
+        indicatorColor: _tealPrimary,
         indicatorWeight: 3,
+        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
         tabs: const [
+          Tab(icon: Icon(Icons.dashboard_outlined, size: 20), text: 'Overview'),
+          Tab(icon: Icon(Icons.timeline_outlined, size: 20), text: 'Activity'),
+          Tab(icon: Icon(Icons.people_outline, size: 20), text: 'Team'),
+          Tab(icon: Icon(Icons.monitor_heart_outlined, size: 20), text: 'Live'),
           Tab(
-            icon: Icon(Icons.dashboard_outlined),
-            text: 'Overview',
-          ),
-          Tab(
-            icon: Icon(Icons.timeline),
-            text: 'Activity',
-          ),
-          Tab(
-            icon: Icon(Icons.people_outline),
-            text: 'Telecallers',
-          ),
-          Tab(
-            icon: Icon(Icons.monitor_heart_outlined),
-            text: 'Live Monitor',
-          ),
-          Tab(
-            icon: Icon(Icons.leaderboard_outlined),
+            icon: Icon(Icons.leaderboard_outlined, size: 20),
             text: 'Leaderboard',
           ),
         ],
@@ -518,30 +621,6 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
     );
   }
 
-  Widget _buildActivityTab() {
-    return RefreshIndicator(
-      onRefresh: () => _loadData(),
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              height: 400,
-              child: CallActivityWidget(managerId: widget.managerId),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 400,
-              child: AssignmentsWidget(managerId: widget.managerId),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildOverviewTab() {
     if (_overview == null || _todayStats == null) {
       return const Center(child: Text('No data available'));
@@ -549,26 +628,28 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
 
     return RefreshIndicator(
       onRefresh: () => _loadData(),
+      color: _tealPrimary,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            OverviewCards(
-              overview: _overview!,
-              todayStats: _todayStats!,
-            ),
+            OverviewCards(overview: _overview!, todayStats: _todayStats!),
             const SizedBox(height: 24),
-            PerformanceCharts(
-              weekTrend: _weekTrend,
-              todayStats: _todayStats!,
-            ),
+            PerformanceCharts(weekTrend: _weekTrend, todayStats: _todayStats!),
             const SizedBox(height: 24),
             _buildTopPerformersSection(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildActivityTab() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: AssignmentsWidget(managerId: widget.managerId),
     );
   }
 
@@ -581,28 +662,32 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
   }
 
   Widget _buildLiveMonitorTab() {
-    return RealTimeMonitor(
-      realTimeStatus: _realTimeStatus,
-      onRefresh: _loadData,
+    return RefreshIndicator(
+      onRefresh: () => _loadData(),
+      color: _tealPrimary,
+      child: const SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.all(20),
+        child: LiveTelecallerStatusWidget(),
+      ),
     );
   }
 
   Widget _buildLeaderboardTab() {
-    return LeaderboardWidget(
-      managerId: widget.managerId,
-    );
+    return LeaderboardWidget(managerId: widget.managerId);
   }
 
   Widget _buildTopPerformersSection() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: _tealPrimary.withValues(alpha: 0.05),
+            blurRadius: 20,
             offset: const Offset(0, 4),
           ),
         ],
@@ -612,14 +697,28 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
         children: [
           Row(
             children: [
-              Icon(Icons.emoji_events, color: Colors.amber[700], size: 28),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  color: _white,
+                  size: 24,
+                ),
+              ),
               const SizedBox(width: 12),
-              Text(
+              const Text(
                 'Top Performers Today',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+                  color: _textPrimary,
+                  letterSpacing: -0.5,
                 ),
               ),
             ],
@@ -628,10 +727,20 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
           if (_topPerformers.isEmpty)
             Center(
               child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Text(
-                  'No performance data yet',
-                  style: TextStyle(color: AppTheme.textSecondary),
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.emoji_events_outlined,
+                      size: 48,
+                      color: _textSecondary.withValues(alpha: 0.3),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No performance data yet',
+                      style: TextStyle(color: _textSecondary, fontSize: 14),
+                    ),
+                  ],
                 ),
               ),
             )
@@ -640,7 +749,7 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
               final index = entry.key;
               final performer = entry.value;
               return _buildPerformerCard(performer, index + 1);
-            }).toList(),
+            }),
         ],
       ),
     );
@@ -648,41 +757,47 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
 
   Widget _buildPerformerCard(TopPerformer performer, int rank) {
     final rankColors = [
-      Colors.amber[700]!,
-      Colors.grey[400]!,
-      Colors.brown[400]!,
+      const Color(0xFFFBBF24), // Gold
+      const Color(0xFF94A3B8), // Silver
+      const Color(0xFFD97706), // Bronze
     ];
-    final rankColor = rank <= 3 ? rankColors[rank - 1] : AppTheme.primaryColor;
+    final rankColor = rank <= 3 ? rankColors[rank - 1] : _tealPrimary;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            rankColor.withOpacity(0.1),
-            rankColor.withOpacity(0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: rankColor.withOpacity(0.3)),
+        color: rankColor.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: rankColor.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: rankColor,
-              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [rankColor, rankColor.withValues(alpha: 0.8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: rankColor.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Center(
               child: Text(
                 '#$rank',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: _white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 18,
                 ),
               ),
             ),
@@ -697,14 +812,13 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: _textPrimary,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   performer.mobile,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                  ),
+                  style: const TextStyle(fontSize: 12, color: _textSecondary),
                 ),
               ],
             ),
@@ -712,20 +826,28 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                '${performer.conversions} conversions',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: rankColor,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: rankColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${performer.conversions}',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: rankColor,
+                  ),
                 ),
               ),
+              const SizedBox(height: 4),
               Text(
                 '${performer.callsMade} calls',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                ),
+                style: const TextStyle(fontSize: 12, color: _textSecondary),
               ),
             ],
           ),
@@ -739,11 +861,32 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: AppTheme.primaryColor),
-          const SizedBox(height: 16),
-          Text(
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: _tealPrimary.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const CircularProgressIndicator(
+              color: _tealPrimary,
+              strokeWidth: 3,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
             'Loading dashboard...',
-            style: TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(
+              color: _textSecondary,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
@@ -752,36 +895,71 @@ class _ManagerDashboardPageState extends State<ManagerDashboardPage> with Single
 
   Widget _buildErrorState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-          const SizedBox(height: 16),
-          Text(
-            'Failed to load dashboard',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+      child: Container(
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: _white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withValues(alpha: 0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _error ?? 'Unknown error',
-            style: TextStyle(color: AppTheme.textSecondary),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _loadData,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_outline,
+                size: 48,
+                color: Colors.red,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 20),
+            const Text(
+              'Failed to load dashboard',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: _textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _error ?? 'Unknown error',
+              style: const TextStyle(color: _textSecondary, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _tealPrimary,
+                foregroundColor: _white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:intl/intl.dart';
 import '../../models/manager_models.dart';
 import '../../core/services/manager_service.dart';
-import '../../core/theme/app_theme.dart';
 
 class TelecallerDetailPageModern extends StatefulWidget {
   final int telecallerId;
@@ -34,10 +33,19 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
   Map<String, dynamic>? _performance;
   String? _error;
 
+  // Modern teal green color scheme
+  static const Color _tealPrimary = Color(0xFF14B8A6);
+  static const Color _tealAccent = Color(0xFF2DD4BF);
+  static const Color _white = Color(0xFFFFFFFF);
+  static const Color _background = Color(0xFFF8FAFC);
+  static const Color _textPrimary = Color(0xFF0F172A);
+  static const Color _textSecondary = Color(0xFF64748B);
+  static const Color _borderColor = Color(0xFFE2E8F0);
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadAllData();
     _startAutoRefresh();
   }
@@ -59,9 +67,7 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
     if (!silent) setState(() => _isLoading = true);
 
     try {
-      final details = await _managerService.getTelecallerDetails(
-        widget.telecallerId,
-      );
+      final details = await _managerService.getTelecallerDetails(widget.telecallerId);
       if (mounted) setState(() => _details = details);
 
       try {
@@ -77,17 +83,13 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
         final assignments = await _managerService.getDriverAssignments(
           telecallerId: widget.telecallerId,
         );
-        debugPrint('📋 Assignments response: $assignments');
-        debugPrint('📋 Assignments count: ${assignments['assignments']?.length ?? 0}');
         if (mounted) setState(() => _assignments = assignments);
       } catch (e) {
-        debugPrint('❌ Assignments error: $e');
+        debugPrint('Assignments error: $e');
       }
 
       try {
-        final performance = await _managerService.getTelecallerPerformance(
-          widget.telecallerId,
-        );
+        final performance = await _managerService.getTelecallerPerformance(widget.telecallerId);
         if (mounted) setState(() => _performance = performance);
       } catch (e) {
         debugPrint('Performance error: $e');
@@ -107,43 +109,36 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _background,
       body: _isLoading && _details == null
           ? _buildLoadingState()
           : _error != null && _details == null
-          ? _buildErrorState()
-          : _buildContent(),
+              ? _buildErrorState()
+              : _buildContent(),
     );
   }
 
   Widget _buildContent() {
     final telecaller = _details!.telecaller;
     final stats = _details!.todayStats;
-    // Use assignments from details first (from getTelecallerDetails API), then from separate API call
-    final assignmentsCount = _details!.assignments.length > 0 
-        ? _details!.assignments.length 
+    final assignmentsCount = _details!.assignments.isNotEmpty
+        ? _details!.assignments.length
         : (_assignments?['assignments']?.length ?? 0);
     final summary = _callDetails?['summary'] ?? {};
-    
-    debugPrint('📊 Build Content - Assignments from details: ${_details!.assignments.length}, from API: ${_assignments?['assignments']?.length ?? 0}');
 
     return CustomScrollView(
       slivers: [
-        _buildAppBar(telecaller),
-        SliverToBoxAdapter(child: _buildProfileSection(telecaller)),
-        SliverToBoxAdapter(
-          child: _buildQuickStats(telecaller, stats, assignmentsCount, summary),
-        ),
+        _buildModernAppBar(telecaller),
+        SliverToBoxAdapter(child: _buildQuickStatsCard(telecaller, stats, assignmentsCount, summary)),
         SliverToBoxAdapter(child: _buildTabBar()),
         SliverFillRemaining(
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildOverviewTab(telecaller, stats, summary),
-              _buildPerformanceTab(stats, summary),
+              _buildOverviewTab(telecaller, stats, summary, assignmentsCount),
+              _buildPerformanceTab(stats),
               _buildAssignmentsTab(),
               _buildCallsTab(),
-              _buildAnalyticsTab(),
             ],
           ),
         ),
@@ -151,463 +146,213 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
     );
   }
 
-  Widget _buildAppBar(TelecallerInfo telecaller) {
+  Widget _buildModernAppBar(TelecallerInfo telecaller) {
     return SliverAppBar(
-      expandedHeight: 220,
+      expandedHeight: 200,
       pinned: true,
-      backgroundColor: AppTheme.primaryColor,
+      backgroundColor: _tealPrimary,
+      elevation: 0,
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                AppTheme.primaryColor,
-                AppTheme.accentColor,
-                AppTheme.primaryColor.withValues(alpha: 0.8),
-              ],
+              colors: [_tealPrimary, _tealAccent],
             ),
           ),
           child: SafeArea(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 40),
-                Hero(
-                  tag: 'telecaller_${telecaller.id}',
-                  child: Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                      border: Border.all(color: Colors.white, width: 4),
-                    ),
-                    child: Center(
-                      child: Text(
-                        telecaller.name[0].toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryColor,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 60, left: 20, right: 20),
+              child: Column(
+                children: [
+                  Hero(
+                    tag: 'telecaller_${telecaller.id}',
+                    child: Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        color: _white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          telecaller.name[0].toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: _tealPrimary,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  telecaller.name,
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.phone, color: Colors.white70, size: 16),
-                    const SizedBox(width: 6),
-                    Text(
-                      telecaller.mobile,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Colors.white70,
-                        letterSpacing: 0.5,
-                      ),
+                  const SizedBox(height: 12),
+                  Text(
+                    telecaller.name,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: _white,
+                      letterSpacing: -0.5,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _buildStatusBadge(telecaller.currentStatus),
-              ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.phone_rounded, color: Colors.white70, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        telecaller.mobile,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.white),
+          icon: const Icon(Icons.refresh_rounded, color: _white),
           onPressed: () => _loadAllData(),
           tooltip: 'Refresh',
         ),
-        IconButton(
-          icon: const Icon(Icons.more_vert, color: Colors.white),
-          onPressed: () => _showMoreOptions(telecaller),
-          tooltip: 'More options',
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert_rounded, color: _white),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          onSelected: (value) {
+            if (value == 'call') {
+              Clipboard.setData(ClipboardData(text: telecaller.mobile));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Mobile number copied!')),
+              );
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'call',
+              child: Row(
+                children: [
+                  Icon(Icons.copy_rounded, size: 20),
+                  SizedBox(width: 12),
+                  Text('Copy Number'),
+                ],
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  void _showMoreOptions(TelecallerInfo telecaller) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.phone, color: Colors.green),
-              title: const Text('Call Telecaller'),
-              onTap: () {
-                Navigator.pop(context);
-                _makeCall(telecaller.mobile);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.message, color: Colors.blue),
-              title: const Text('Send Message'),
-              onTap: () {
-                Navigator.pop(context);
-                _sendMessage(telecaller.mobile);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.email, color: Colors.orange),
-              title: const Text('Send Email'),
-              onTap: () {
-                Navigator.pop(context);
-                if (telecaller.email != null) {
-                  _sendEmail(telecaller.email!);
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.copy, color: Colors.purple),
-              title: const Text('Copy Mobile Number'),
-              onTap: () {
-                Navigator.pop(context);
-                Clipboard.setData(ClipboardData(text: telecaller.mobile));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Mobile number copied!')),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _makeCall(String mobile) {
-    // Implement call functionality
-  }
-
-  void _sendMessage(String mobile) {
-    // Implement SMS functionality
-  }
-
-  void _sendEmail(String email) {
-    // Implement email functionality
-  }
-
-  Widget _buildProfileSection(TelecallerInfo telecaller) {
-    final loginTime = telecaller.loginTime;
-    final lastActivity = telecaller.lastActivity;
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Profile Information',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          _buildInfoRow(Icons.badge, 'ID', '#${telecaller.id}'),
-          if (telecaller.email != null)
-            _buildInfoRow(Icons.email, 'Email', telecaller.email!),
-          if (loginTime != null)
-            _buildInfoRow(
-              Icons.login,
-              'Login Time',
-              DateFormat('hh:mm a').format(loginTime),
-            ),
-          if (lastActivity != null)
-            _buildInfoRow(
-              Icons.access_time,
-              'Last Activity',
-              _formatTimeAgo(lastActivity),
-            ),
-          _buildInfoRow(
-            Icons.timer,
-            'Session Duration',
-            _calculateSessionDuration(loginTime),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: AppTheme.primaryColor, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inMinutes < 1) return 'Just now';
-    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
-    if (difference.inHours < 24) return '${difference.inHours}h ago';
-    return DateFormat('MMM dd, hh:mm a').format(dateTime);
-  }
-
-  String _calculateSessionDuration(DateTime? loginTime) {
-    if (loginTime == null) return 'N/A';
-    final duration = DateTime.now().difference(loginTime);
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes % 60;
-    return '${hours}h ${minutes}m';
-  }
-
-  Widget _buildStatusBadge(TelecallerStatus status) {
-    Color color;
-    String text;
-    IconData icon;
-
-    switch (status) {
-      case TelecallerStatus.online:
-        color = Colors.green;
-        text = 'Online';
-        icon = Icons.circle;
-        break;
-      case TelecallerStatus.onCall:
-        color = Colors.blue;
-        text = 'On Call';
-        icon = Icons.phone_in_talk;
-        break;
-      case TelecallerStatus.break_:
-        color = Colors.orange;
-        text = 'Break';
-        icon = Icons.coffee;
-        break;
-      case TelecallerStatus.busy:
-        color = Colors.amber;
-        text = 'Busy';
-        icon = Icons.work;
-        break;
-      default:
-        color = Colors.grey;
-        text = 'Offline';
-        icon = Icons.circle_outlined;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.25),
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.4),
-          width: 2,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickStats(
+  Widget _buildQuickStatsCard(
     TelecallerInfo telecaller,
     TodayStats stats,
     int assignmentsCount,
     Map<String, dynamic> summary,
   ) {
-    debugPrint('📊 Quick Stats - Received assignmentsCount: $assignmentsCount');
-    final totalCalled =
-        int.tryParse(summary['unique_drivers']?.toString() ?? '0') ?? 0;
-    final remaining = assignmentsCount > totalCalled
-        ? assignmentsCount - totalCalled
-        : 0;
-    final avgDuration = stats.totalCalls > 0
-        ? (stats.totalDuration / stats.totalCalls).round()
-        : 0;
+    final totalCalled = int.tryParse(summary['unique_drivers']?.toString() ?? '0') ?? 0;
+    final remaining = assignmentsCount > totalCalled ? assignmentsCount - totalCalled : 0;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryColor.withValues(alpha: 0.1),
-            AppTheme.accentColor.withValues(alpha: 0.1),
-          ],
-        ),
+        color: _white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+        border: Border.all(color: _borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: _tealPrimary.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildStatItem(
-                  Icons.assignment_outlined,
-                  'Assigned',
-                  assignmentsCount.toString(),
-                  Colors.blue,
+          Row(
+            children: [
+              _buildStatusBadge(telecaller.currentStatus),
+              const Spacer(),
+              if (telecaller.loginTime != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _tealPrimary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.access_time_rounded, size: 14, color: _tealPrimary),
+                      const SizedBox(width: 6),
+                      Text(
+                        _calculateSessionDuration(telecaller.loginTime),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _tealPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                _buildStatItem(
-                  Icons.phone_outlined,
-                  'Called',
-                  totalCalled.toString(),
-                  Colors.green,
-                ),
-                _buildStatItem(
-                  Icons.pending_outlined,
-                  'Remaining',
-                  remaining.toString(),
-                  Colors.orange,
-                ),
-                _buildStatItem(
-                  Icons.check_circle_outline,
-                  'Connected',
-                  stats.connected.toString(),
-                  Colors.purple,
-                ),
-              ],
-            ),
+            ],
           ),
-          const Divider(height: 24),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildStatItem(
-                  Icons.star_outline,
-                  'Interested',
-                  stats.interested.toString(),
-                  Colors.amber,
-                ),
-                _buildStatItem(
-                  Icons.trending_up,
-                  'Conv. Rate',
-                  '${stats.conversionRate.toStringAsFixed(1)}%',
-                  Colors.teal,
-                ),
-                _buildStatItem(
-                  Icons.timer_outlined,
-                  'Avg Duration',
-                  '${avgDuration}s',
-                  Colors.indigo,
-                ),
-                _buildStatItem(
-                  Icons.access_time,
-                  'Total Time',
-                  _formatDuration(stats.totalDuration),
-                  Colors.pink,
-                ),
-              ],
-            ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(child: _buildStatBox('Assigned', assignmentsCount.toString(), Icons.assignment_outlined, const Color(0xFF3B82F6))),
+              const SizedBox(width: 12),
+              Expanded(child: _buildStatBox('Called', totalCalled.toString(), Icons.phone_outlined, const Color(0xFF10B981))),
+              const SizedBox(width: 12),
+              Expanded(child: _buildStatBox('Remaining', remaining.toString(), Icons.pending_outlined, const Color(0xFFF59E0B))),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _buildStatBox('Connected', stats.connected.toString(), Icons.check_circle_outline, const Color(0xFF8B5CF6))),
+              const SizedBox(width: 12),
+              Expanded(child: _buildStatBox('Interested', stats.interested.toString(), Icons.star_outline, const Color(0xFFFBBF24))),
+              const SizedBox(width: 12),
+              Expanded(child: _buildStatBox('Conv. Rate', '${stats.conversionRate.toStringAsFixed(1)}%', Icons.trending_up, _tealPrimary)),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(
-    IconData icon,
-    String label,
-    String value,
-    Color color,
-  ) {
+  Widget _buildStatBox(String label, String value, IconData icon, Color color) {
     return Container(
-      width: 85,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(height: 8),
+          Icon(icon, size: 20, color: color),
+          const SizedBox(height: 6),
           Text(
             value,
             style: TextStyle(
@@ -621,7 +366,11 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(fontSize: 10, color: Colors.grey),
+            style: const TextStyle(
+              fontSize: 10,
+              color: _textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -631,46 +380,95 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
     );
   }
 
-  String _formatDuration(int seconds) {
-    final hours = seconds ~/ 3600;
-    final minutes = (seconds % 3600) ~/ 60;
-    if (hours > 0) return '${hours}h ${minutes}m';
-    if (minutes > 0) return '${minutes}m';
-    return '${seconds}s';
+  Widget _buildStatusBadge(TelecallerStatus status) {
+    Color color;
+    String text;
+    IconData icon;
+
+    switch (status) {
+      case TelecallerStatus.online:
+        color = const Color(0xFF10B981);
+        text = 'Online';
+        icon = Icons.circle;
+        break;
+      case TelecallerStatus.onCall:
+        color = const Color(0xFF3B82F6);
+        text = 'On Call';
+        icon = Icons.phone_in_talk_rounded;
+        break;
+      case TelecallerStatus.break_:
+        color = const Color(0xFFF59E0B);
+        text = 'Break';
+        icon = Icons.coffee_rounded;
+        break;
+      case TelecallerStatus.busy:
+        color = const Color(0xFFFBBF24);
+        text = 'Busy';
+        icon = Icons.work_outline;
+        break;
+      default:
+        color = const Color(0xFF6B7280);
+        text = 'Offline';
+        icon = Icons.circle_outlined;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _calculateSessionDuration(DateTime? loginTime) {
+    if (loginTime == null) return 'N/A';
+    final duration = DateTime.now().difference(loginTime);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    return '${hours}h ${minutes}m';
   }
 
   Widget _buildTabBar() {
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-          ),
-        ],
+        color: _white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
       ),
       child: TabBar(
         controller: _tabController,
-        labelColor: AppTheme.primaryColor,
-        unselectedLabelColor: Colors.grey,
+        labelColor: _tealPrimary,
+        unselectedLabelColor: _textSecondary,
         indicatorSize: TabBarIndicatorSize.tab,
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
         indicator: BoxDecoration(
-          color: AppTheme.primaryColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(15),
+          color: _tealPrimary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
         ),
-        labelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-        labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+        dividerColor: Colors.transparent,
         tabs: const [
-          Tab(icon: Icon(Icons.dashboard, size: 18), text: 'Overview'),
-          Tab(icon: Icon(Icons.analytics, size: 18), text: 'Performance'),
-          Tab(icon: Icon(Icons.assignment, size: 18), text: 'Assignments'),
-          Tab(icon: Icon(Icons.history, size: 18), text: 'Calls'),
-          Tab(icon: Icon(Icons.insights, size: 18), text: 'Analytics'),
+          Tab(icon: Icon(Icons.dashboard_outlined, size: 20), text: 'Overview'),
+          Tab(icon: Icon(Icons.analytics_outlined, size: 20), text: 'Performance'),
+          Tab(icon: Icon(Icons.assignment_outlined, size: 20), text: 'Assignments'),
+          Tab(icon: Icon(Icons.history_rounded, size: 20), text: 'Calls'),
         ],
       ),
     );
@@ -680,57 +478,57 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
     TelecallerInfo telecaller,
     TodayStats stats,
     Map<String, dynamic> summary,
+    int assignmentsCount,
   ) {
-    // Use assignments from details first (from getTelecallerDetails API), then from separate API call
-    final assignmentsCount = _details?.assignments.length ?? _assignments?['assignments']?.length ?? 0;
-    final totalCalled =
-        int.tryParse(summary['unique_drivers']?.toString() ?? '0') ?? 0;
-    final remaining = assignmentsCount > totalCalled
-        ? assignmentsCount - totalCalled
-        : 0;
-    
-    debugPrint('📊 Overview Tab - Assignments: $assignmentsCount, Called: $totalCalled, Remaining: $remaining');
+    final totalCalled = int.tryParse(summary['unique_drivers']?.toString() ?? '0') ?? 0;
+    final remaining = assignmentsCount > totalCalled ? assignmentsCount - totalCalled : 0;
+    final progress = assignmentsCount > 0 ? (totalCalled / assignmentsCount) : 0.0;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('Lead Assignment Summary'),
+          _buildSectionTitle('Lead Progress'),
           const SizedBox(height: 12),
-          _buildLeadSummaryCard(assignmentsCount, totalCalled, remaining),
-          const SizedBox(height: 20),
-          _buildSectionTitle('Today\'s Summary'),
-          const SizedBox(height: 12),
-          _buildSummaryCard(stats),
+          _buildProgressCard(assignmentsCount, totalCalled, remaining, progress),
           const SizedBox(height: 20),
           _buildSectionTitle('Call Breakdown'),
           const SizedBox(height: 12),
           _buildCallBreakdownCard(stats),
           const SizedBox(height: 20),
-          _buildSectionTitle('Performance Metrics'),
+          _buildSectionTitle('Profile Information'),
           const SizedBox(height: 12),
-          _buildMetricsGrid(stats),
+          _buildProfileCard(telecaller),
         ],
       ),
     );
   }
 
-  Widget _buildLeadSummaryCard(int total, int called, int remaining) {
-    final progress = total > 0 ? (called / total) : 0.0;
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: _textPrimary,
+      ),
+    );
+  }
 
+  Widget _buildProgressCard(int total, int called, int remaining, double progress) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blue.shade600, Colors.blue.shade400],
+        gradient: const LinearGradient(
+          colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withValues(alpha: 0.3),
+            color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
             blurRadius: 15,
-            offset: const Offset(0, 5),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -739,19 +537,11 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildLeadStatItem('Total Leads', total.toString(), Icons.people),
-              Container(width: 1, height: 50, color: Colors.white30),
-              _buildLeadStatItem(
-                'Called',
-                called.toString(),
-                Icons.phone_forwarded,
-              ),
-              Container(width: 1, height: 50, color: Colors.white30),
-              _buildLeadStatItem(
-                'Remaining',
-                remaining.toString(),
-                Icons.pending_actions,
-              ),
+              _buildProgressStat('Total', total.toString(), Icons.people_outline),
+              Container(width: 1, height: 40, color: Colors.white30),
+              _buildProgressStat('Called', called.toString(), Icons.phone_forwarded_rounded),
+              Container(width: 1, height: 40, color: Colors.white30),
+              _buildProgressStat('Pending', remaining.toString(), Icons.pending_actions_rounded),
             ],
           ),
           const SizedBox(height: 20),
@@ -796,107 +586,23 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
     );
   }
 
-  Widget _buildLeadStatItem(String label, String value, IconData icon) {
+  Widget _buildProgressStat(String label, String value, IconData icon) {
     return Column(
       children: [
-        Icon(icon, color: Colors.white, size: 28),
-        const SizedBox(height: 8),
+        Icon(icon, color: Colors.white, size: 24),
+        const SizedBox(height: 6),
         Text(
           value,
           style: const TextStyle(
-            fontSize: 28,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: Colors.white70),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-    );
-  }
-
-  Widget _buildSummaryCard(TodayStats stats) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppTheme.primaryColor, AppTheme.accentColor],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryColor.withValues(alpha: 0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildSummaryItem('Total Calls', stats.totalCalls.toString()),
-              Container(width: 1, height: 40, color: Colors.white30),
-              _buildSummaryItem('Connected', stats.connected.toString()),
-              Container(width: 1, height: 40, color: Colors.white30),
-              _buildSummaryItem('Interested', stats.interested.toString()),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.trending_up, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Conversion Rate: ${stats.conversionRate.toStringAsFixed(1)}%',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryItem(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, color: Colors.white70),
+          style: const TextStyle(fontSize: 11, color: Colors.white70),
         ),
       ],
     );
@@ -904,24 +610,13 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
 
   Widget _buildCallBreakdownCard(TodayStats stats) {
     final total = stats.totalCalls;
-    final connectedPercent = total > 0
-        ? (stats.connected / total * 100).toDouble()
-        : 0.0;
-    final interestedPercent = total > 0
-        ? (stats.interested / total * 100).toDouble()
-        : 0.0;
-    final notInterestedPercent = total > 0
-        ? (stats.notInterested / total * 100).toDouble()
-        : 0.0;
-    final callbacksPercent = total > 0
-        ? (stats.callbacks / total * 100).toDouble()
-        : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _borderColor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -931,44 +626,21 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
       ),
       child: Column(
         children: [
-          _buildBreakdownRow(
-            'Connected',
-            stats.connected,
-            connectedPercent,
-            Colors.green,
-          ),
+          _buildBreakdownRow('Connected', stats.connected, total, const Color(0xFF10B981)),
           const SizedBox(height: 12),
-          _buildBreakdownRow(
-            'Interested',
-            stats.interested,
-            interestedPercent,
-            Colors.orange,
-          ),
+          _buildBreakdownRow('Interested', stats.interested, total, const Color(0xFFF59E0B)),
           const SizedBox(height: 12),
-          _buildBreakdownRow(
-            'Not Interested',
-            stats.notInterested,
-            notInterestedPercent,
-            Colors.red,
-          ),
+          _buildBreakdownRow('Not Interested', stats.notInterested, total, const Color(0xFFEF4444)),
           const SizedBox(height: 12),
-          _buildBreakdownRow(
-            'Callbacks',
-            stats.callbacks,
-            callbacksPercent,
-            Colors.blue,
-          ),
+          _buildBreakdownRow('Callbacks', stats.callbacks, total, const Color(0xFF3B82F6)),
         ],
       ),
     );
   }
 
-  Widget _buildBreakdownRow(
-    String label,
-    int value,
-    double percent,
-    Color color,
-  ) {
+  Widget _buildBreakdownRow(String label, int value, int total, Color color) {
+    final percent = total > 0 ? (value / total * 100) : 0.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -977,15 +649,11 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
           children: [
             Text(
               label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textPrimary),
             ),
             Text(
               '$value (${percent.toStringAsFixed(1)}%)',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
             ),
           ],
         ),
@@ -994,12 +662,104 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
           borderRadius: BorderRadius.circular(10),
           child: LinearProgressIndicator(
             value: percent / 100,
-            backgroundColor: Colors.grey[200],
+            backgroundColor: color.withValues(alpha: 0.1),
             valueColor: AlwaysStoppedAnimation<Color>(color),
             minHeight: 8,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildProfileCard(TelecallerInfo telecaller) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _buildInfoRow(Icons.badge_outlined, 'ID', '#${telecaller.id}'),
+          if (telecaller.email != null) _buildInfoRow(Icons.email_outlined, 'Email', telecaller.email!),
+          if (telecaller.loginTime != null)
+            _buildInfoRow(Icons.login_rounded, 'Login Time', DateFormat('hh:mm a').format(telecaller.loginTime!)),
+          if (telecaller.lastActivity != null)
+            _buildInfoRow(Icons.access_time_rounded, 'Last Activity', _formatTimeAgo(telecaller.lastActivity!)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: _tealPrimary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: _tealPrimary, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 11, color: _textSecondary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inMinutes < 1) return 'Just now';
+    if (difference.inMinutes < 60) return '${difference.inMinutes}m ago';
+    if (difference.inHours < 24) return '${difference.inHours}h ago';
+    return DateFormat('MMM dd, hh:mm a').format(dateTime);
+  }
+
+  Widget _buildPerformanceTab(TodayStats stats) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('Performance Metrics'),
+          const SizedBox(height: 12),
+          _buildMetricsGrid(stats),
+          const SizedBox(height: 20),
+          _buildSectionTitle('Call Distribution'),
+          const SizedBox(height: 12),
+          _buildPerformanceChart(stats),
+        ],
+      ),
     );
   }
 
@@ -1010,48 +770,21 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
-      childAspectRatio: 1.5,
+      childAspectRatio: 1.4,
       children: [
-        _buildMetricCard(
-          'Connection Rate',
-          '${stats.connectionRate.toStringAsFixed(1)}%',
-          Icons.link,
-          Colors.blue,
-        ),
-        _buildMetricCard(
-          'Conversion Rate',
-          '${stats.conversionRate.toStringAsFixed(1)}%',
-          Icons.trending_up,
-          Colors.green,
-        ),
-        _buildMetricCard(
-          'Total Duration',
-          _formatDuration(stats.totalDuration),
-          Icons.timer,
-          Colors.purple,
-        ),
-        _buildMetricCard(
-          'Avg Duration',
-          stats.totalCalls > 0
-              ? '${(stats.totalDuration / stats.totalCalls).round()}s'
-              : '0s',
-          Icons.access_time,
-          Colors.orange,
-        ),
+        _buildMetricCard('Connection Rate', '${stats.connectionRate.toStringAsFixed(1)}%', Icons.link_rounded, const Color(0xFF3B82F6)),
+        _buildMetricCard('Conversion Rate', '${stats.conversionRate.toStringAsFixed(1)}%', Icons.trending_up_rounded, const Color(0xFF10B981)),
+        _buildMetricCard('Total Duration', _formatDuration(stats.totalDuration), Icons.timer_outlined, const Color(0xFF8B5CF6)),
+        _buildMetricCard('Avg Duration', stats.totalCalls > 0 ? '${(stats.totalDuration / stats.totalCalls).round()}s' : '0s', Icons.access_time_rounded, const Color(0xFFF59E0B)),
       ],
     );
   }
 
-  Widget _buildMetricCard(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildMetricCard(String label, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withValues(alpha: 0.3)),
         boxShadow: [
@@ -1064,51 +797,46 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 32),
+          Icon(icon, color: color, size: 28),
           const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: color,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+            style: const TextStyle(fontSize: 11, color: _textSecondary),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPerformanceTab(TodayStats stats, Map<String, dynamic> summary) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionTitle('Performance Overview'),
-          const SizedBox(height: 12),
-          _buildPerformanceChart(stats),
-          const SizedBox(height: 20),
-          _buildSectionTitle('Key Metrics'),
-          const SizedBox(height: 12),
-          _buildMetricsGrid(stats),
-        ],
-      ),
-    );
+  String _formatDuration(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    if (hours > 0) return '${hours}h ${minutes}m';
+    if (minutes > 0) return '${minutes}m';
+    return '${seconds}s';
   }
 
   Widget _buildPerformanceChart(TodayStats stats) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _borderColor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -1118,21 +846,16 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
       ),
       child: Column(
         children: [
-          const Text(
-            'Call Distribution',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
           SizedBox(
-            height: 200,
+            height: 180,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _buildBar('Connected', stats.connected, Colors.green),
-                _buildBar('Interested', stats.interested, Colors.orange),
-                _buildBar('Not Int.', stats.notInterested, Colors.red),
-                _buildBar('Callbacks', stats.callbacks, Colors.blue),
+                _buildBar('Connected', stats.connected, const Color(0xFF10B981)),
+                _buildBar('Interested', stats.interested, const Color(0xFFF59E0B)),
+                _buildBar('Not Int.', stats.notInterested, const Color(0xFFEF4444)),
+                _buildBar('Callbacks', stats.callbacks, const Color(0xFF3B82F6)),
               ],
             ),
           ),
@@ -1143,7 +866,7 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
 
   Widget _buildBar(String label, int value, Color color) {
     final maxValue = _details?.todayStats.totalCalls ?? 1;
-    final height = maxValue > 0 ? (value / maxValue * 150) : 0.0;
+    final height = maxValue > 0 ? (value / maxValue * 120).clamp(10.0, 120.0) : 10.0;
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
@@ -1158,7 +881,7 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
         ),
         const SizedBox(height: 8),
         Container(
-          width: 60,
+          width: 50,
           height: height,
           decoration: BoxDecoration(
             color: color,
@@ -1166,71 +889,61 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: _textSecondary),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
       ],
     );
   }
 
   Widget _buildAssignmentsTab() {
-    // Try to get assignments from details first, then from separate API call
     List<dynamic> assignments = [];
-    
-    if (_details?.assignments != null && _details!.assignments.isNotEmpty) {
-      // Convert DriverAssignment objects to maps for display
-      assignments = _details!.assignments.map((a) => {
-        'driver_id': a.driverId,
-        'driver_name': a.driverName,
-        'driver_mobile': a.driverMobile,
-        'assigned_at': a.assignedAt.toIso8601String(),
-        'status': a.status,
-        'priority': a.priority,
-        'total_calls': 0,
-        'connected_calls': 0,
-        'interested_calls': 0,
-      }).toList();
+
+    if (_details?.assignments.isNotEmpty ?? false) {
+      assignments = _details!.assignments
+          .map((a) => {
+                'driver_id': a.driverId,
+                'driver_name': a.driverName,
+                'driver_mobile': a.driverMobile,
+                'assigned_at': a.assignedAt.toIso8601String(),
+                'status': a.status,
+                'priority': a.priority,
+              })
+          .toList();
     } else if (_assignments != null) {
       assignments = _assignments!['assignments'] as List? ?? [];
     }
-    
-    debugPrint('📋 Assignments Tab - Count: ${assignments.length}');
-    
+
     if (assignments.isEmpty && _details == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: _tealPrimary));
     }
-    
+
     if (assignments.isEmpty) {
       return _buildEmptyState('No assignments yet', Icons.assignment_outlined);
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       itemCount: assignments.length,
-      itemBuilder: (context, index) {
-        final assignment = assignments[index];
-        return _buildAssignmentCard(assignment);
-      },
+      itemBuilder: (context, index) => _buildAssignmentCard(assignments[index]),
     );
   }
 
   Widget _buildAssignmentCard(Map<String, dynamic> assignment) {
     final driverName = assignment['driver_name'] ?? 'Unknown';
     final mobile = assignment['driver_mobile'] ?? assignment['mobile'] ?? '';
-    final assignedAt = assignment['assigned_at'] != null
-        ? DateTime.parse(assignment['assigned_at'])
-        : null;
-    final totalCalls =
-        int.tryParse(assignment['total_calls']?.toString() ?? '0') ?? 0;
-    final connectedCalls =
-        int.tryParse(assignment['connected_calls']?.toString() ?? '0') ?? 0;
-    final interestedCalls =
-        int.tryParse(assignment['interested_calls']?.toString() ?? '0') ?? 0;
+    final assignedAt = assignment['assigned_at'] != null ? DateTime.parse(assignment['assigned_at']) : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -1238,120 +951,68 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: _tealPrimary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                driverName.isNotEmpty ? driverName[0].toUpperCase() : 'D',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: _tealPrimary,
                 ),
-                child: Center(
-                  child: Text(
-                    driverName.isNotEmpty ? driverName[0].toUpperCase() : 'D',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryColor,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      driverName,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      mobile,
-                      style: const TextStyle(fontSize: 13, color: Colors.grey),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (assignedAt != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Assigned ${_formatTimeAgo(assignedAt)}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (totalCalls > 0) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildCallStat('Calls', totalCalls, Icons.phone, Colors.blue),
-                  _buildCallStat(
-                    'Connected',
-                    connectedCalls,
-                    Icons.check_circle,
-                    Colors.green,
-                  ),
-                  _buildCallStat(
-                    'Interested',
-                    interestedCalls,
-                    Icons.star,
-                    Colors.orange,
-                  ),
-                ],
               ),
             ),
-          ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  driverName,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: _textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  mobile,
+                  style: const TextStyle(fontSize: 13, color: _textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (assignedAt != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Assigned ${_formatTimeAgo(assignedAt)}',
+                    style: const TextStyle(fontSize: 11, color: _textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCallStat(String label, int value, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(height: 4),
-        Text(
-          value.toString(),
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-      ],
-    );
-  }
-
   Widget _buildCallsTab() {
     if (_callDetails == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: _tealPrimary));
     }
 
     final calls = _callDetails!['calls'] as List? ?? [];
@@ -1361,35 +1022,30 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       itemCount: calls.length,
-      itemBuilder: (context, index) {
-        final call = calls[index];
-        return _buildCallCard(call);
-      },
+      itemBuilder: (context, index) => _buildCallCard(calls[index]),
     );
   }
 
   Widget _buildCallCard(Map<String, dynamic> call) {
     final driverName = call['driver_name'] ?? 'Unknown';
     final mobile = call['driver_mobile'] ?? call['mobile'] ?? '';
-    final callTime = call['call_time'] != null
-        ? DateTime.parse(call['call_time'])
-        : null;
+    final callTime = call['call_time'] != null ? DateTime.parse(call['call_time']) : null;
     final duration = call['call_duration'] ?? call['duration'] ?? 0;
-    final feedback = call['feedback'] ?? 'No feedback';
+    final feedback = call['feedback'] ?? '';
     final callStatus = call['call_status'] ?? '';
 
-    Color statusColor = Colors.grey;
-    if (callStatus == 'connected') statusColor = Colors.green;
-    if (callStatus == 'interested') statusColor = Colors.orange;
-    if (callStatus == 'not_interested') statusColor = Colors.red;
+    Color statusColor = const Color(0xFF6B7280);
+    if (callStatus == 'connected') statusColor = const Color(0xFF10B981);
+    if (callStatus == 'interested') statusColor = const Color(0xFFF59E0B);
+    if (callStatus == 'not_interested') statusColor = const Color(0xFFEF4444);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: statusColor.withValues(alpha: 0.3)),
         boxShadow: [
@@ -1410,7 +1066,7 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
                   color: statusColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.phone, color: statusColor, size: 20),
+                child: Icon(Icons.phone_rounded, color: statusColor, size: 18),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1422,6 +1078,7 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
+                        color: _textPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1429,7 +1086,7 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
                     const SizedBox(height: 2),
                     Text(
                       mobile,
-                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                      style: const TextStyle(fontSize: 13, color: _textSecondary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1451,30 +1108,30 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
                     const SizedBox(height: 2),
                     Text(
                       DateFormat('hh:mm a').format(callTime),
-                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      style: const TextStyle(fontSize: 11, color: _textSecondary),
                     ),
                   ],
                 ],
               ),
             ],
           ),
-          if (feedback.isNotEmpty && feedback != 'No feedback') ...[
+          if (feedback.isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: statusColor.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.comment, size: 16, color: Colors.grey),
+                  Icon(Icons.comment_outlined, size: 16, color: statusColor),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       feedback,
-                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                      style: const TextStyle(fontSize: 13, color: _textSecondary),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1488,67 +1145,26 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
     );
   }
 
-  Widget _buildAnalyticsTab() {
-    if (_performance == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+  Widget _buildEmptyState(String message, IconData icon) {
+    return Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _buildSectionTitle('Performance Trends'),
-          const SizedBox(height: 12),
-          _buildTrendCard(
-            'Daily Average',
-            '${_performance!['daily_avg'] ?? 0} calls',
-          ),
-          const SizedBox(height: 12),
-          _buildTrendCard(
-            'Weekly Total',
-            '${_performance!['weekly_total'] ?? 0} calls',
-          ),
-          const SizedBox(height: 12),
-          _buildTrendCard(
-            'Monthly Total',
-            '${_performance!['monthly_total'] ?? 0} calls',
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _tealPrimary.withValues(alpha: 0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 64, color: _tealPrimary.withValues(alpha: 0.3)),
           ),
           const SizedBox(height: 20),
-          _buildSectionTitle('Insights'),
-          const SizedBox(height: 12),
-          _buildInsightsCard(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTrendCard(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
           Text(
-            label,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-          Text(
-            value,
-            style: TextStyle(
+            message,
+            style: const TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
+              fontWeight: FontWeight.w600,
+              color: _textPrimary,
             ),
           ),
         ],
@@ -1556,81 +1172,16 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
     );
   }
 
-  Widget _buildInsightsCard() {
-    final stats = _details?.todayStats;
-    if (stats == null) return const SizedBox();
-
-    final insights = <String>[];
-
-    if (stats.conversionRate > 20) {
-      insights.add('🎯 Excellent conversion rate!');
-    }
-    if (stats.totalCalls > 50) {
-      insights.add('🔥 High call volume today!');
-    }
-    if (stats.connectionRate > 70) {
-      insights.add('📞 Great connection rate!');
-    }
-    if (insights.isEmpty) {
-      insights.add('Keep up the good work!');
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blue.shade50, Colors.purple.shade50],
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: insights
-            .map(
-              (insight) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  insight,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(String message, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildLoadingState() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-          ),
-          const SizedBox(height: 16),
-          const Text(
+          CircularProgressIndicator(color: _tealPrimary, strokeWidth: 3),
+          SizedBox(height: 16),
+          Text(
             'Loading telecaller details...',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
+            style: TextStyle(fontSize: 16, color: _textSecondary),
           ),
         ],
       ),
@@ -1639,40 +1190,64 @@ class _TelecallerDetailPageModernState extends State<TelecallerDetailPageModern>
 
   Widget _buildErrorState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 80, color: Colors.red[300]),
-          const SizedBox(height: 16),
-          Text(
-            'Error loading data',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.red[700],
+      child: Container(
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: _white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withValues(alpha: 0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _error ?? 'Unknown error',
-            style: const TextStyle(fontSize: 14, color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _loadAllData,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Error loading data',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: _textPrimary,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              _error ?? 'Unknown error',
+              style: const TextStyle(fontSize: 14, color: _textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadAllData,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _tealPrimary,
+                foregroundColor: _white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
