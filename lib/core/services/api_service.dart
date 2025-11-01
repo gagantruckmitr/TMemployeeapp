@@ -59,14 +59,16 @@ class ApiService {
   }) async {
     try {
       // Use fresh_leads_api for status-based queries
-      final apiEndpoint = status != null ? 'fresh_leads_api.php' : 'simple_drivers_api.php';
+      final apiEndpoint = status != null
+          ? 'fresh_leads_api.php'
+          : 'simple_drivers_api.php';
       final action = status != null ? 'fresh_leads' : 'drivers';
-      
+
       final queryParams = <String, String>{
         'action': action,
         'limit': limit.toString(),
       };
-      
+
       if (status != null) {
         queryParams['status'] = status;
         queryParams['caller_id'] = callerId ?? _currentCallerId ?? '1';
@@ -74,10 +76,10 @@ class ApiService {
         queryParams['offset'] = offset.toString();
         if (search != null && search.isNotEmpty) queryParams['search'] = search;
       }
-      
-      final uri = Uri.parse('$baseUrl/$apiEndpoint').replace(
-        queryParameters: queryParams,
-      );
+
+      final uri = Uri.parse(
+        '$baseUrl/$apiEndpoint',
+      ).replace(queryParameters: queryParams);
 
       print('🔵 Fetching drivers from: $uri');
       final response = await http.get(uri).timeout(timeout);
@@ -199,7 +201,7 @@ class ApiService {
       throw Exception('Failed to log call: $e');
     }
   }
-  
+
   // Update telecaller status (online, offline, on_call, break, busy)
   static Future<bool> updateTelecallerStatus({
     required String telecallerId,
@@ -207,20 +209,22 @@ class ApiService {
     String? currentCallId,
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl/manager_dashboard_api.php').replace(
-        queryParameters: {'action': 'update_telecaller_status'},
-      );
-      
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'telecaller_id': int.parse(telecallerId),
-          'status': status,
-          'current_call_id': currentCallId,
-        }),
-      ).timeout(timeout);
-      
+      final uri = Uri.parse(
+        '$baseUrl/manager_dashboard_api.php',
+      ).replace(queryParameters: {'action': 'update_telecaller_status'});
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'telecaller_id': int.parse(telecallerId),
+              'status': status,
+              'current_call_id': currentCallId,
+            }),
+          )
+          .timeout(timeout);
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         print('✅ Telecaller status updated to: $status');
@@ -253,8 +257,10 @@ class ApiService {
       if (response.statusCode == 200) {
         final dynamic rawData = json.decode(response.body);
         // Convert to Map<String, dynamic> explicitly
-        final Map<String, dynamic> data = Map<String, dynamic>.from(rawData as Map);
-        
+        final Map<String, dynamic> data = Map<String, dynamic>.from(
+          rawData as Map,
+        );
+
         if (data['success'] == true) {
           print('✅ Analytics data fetched successfully');
           return data;
@@ -292,7 +298,7 @@ class ApiService {
     } else if (json['createdAt'] != null) {
       regDate = DateTime.tryParse(json['createdAt']);
     }
-    
+
     return DriverContact(
       id: json['id']?.toString() ?? '',
       tmid: json['tmid'] ?? 'TM000000',
@@ -311,48 +317,47 @@ class ApiService {
       remarks: json['remarks'],
       paymentInfo: _mapJsonToPaymentInfo(json['paymentInfo']),
       registrationDate: regDate,
-      profileCompletion: _mapJsonToProfileCompletion(json['profile_completion']),
+      profileCompletion: _mapJsonToProfileCompletion(
+        json['profile_completion'],
+      ),
     );
   }
 
   // Helper method to map JSON to ProfileCompletion
   static ProfileCompletion? _mapJsonToProfileCompletion(dynamic json) {
     if (json == null) return null;
-    
+
     // If it's a string like "75%", parse it
     if (json is String) {
       return ProfileCompletion.fromPercentageString(json);
     }
-    
+
     // If it's a number, use it directly
     if (json is int) {
-      return ProfileCompletion(
-        percentage: json,
-        documentStatus: {},
-      );
+      return ProfileCompletion(percentage: json, documentStatus: {});
     }
-    
+
     return null;
   }
 
   // Helper method to map JSON to PaymentInfo
   static PaymentInfo? _mapJsonToPaymentInfo(dynamic json) {
     if (json == null) return PaymentInfo.none();
-    
+
     if (json is Map<String, dynamic>) {
       return PaymentInfo(
         subscriptionType: json['subscriptionType'],
         paymentStatus: _mapStringToPaymentStatus(json['paymentStatus']),
-        paymentDate: json['paymentDate'] != null 
-            ? DateTime.tryParse(json['paymentDate']) 
+        paymentDate: json['paymentDate'] != null
+            ? DateTime.tryParse(json['paymentDate'])
             : null,
         amount: json['amount']?.toString(),
-        expiryDate: json['expiryDate'] != null 
-            ? DateTime.tryParse(json['expiryDate']) 
+        expiryDate: json['expiryDate'] != null
+            ? DateTime.tryParse(json['expiryDate'])
             : null,
       );
     }
-    
+
     return PaymentInfo.none();
   }
 
@@ -445,9 +450,9 @@ class ApiService {
     required String driverId,
   }) async {
     try {
-      final uri = Uri.parse(ApiConfig.ivrCallApi).replace(
-        queryParameters: {'action': 'initiate_call'},
-      );
+      final uri = Uri.parse(
+        ApiConfig.ivrCallApi,
+      ).replace(queryParameters: {'action': 'initiate_call'});
 
       final requestBody = {
         'driver_mobile': driverMobile,
@@ -458,12 +463,14 @@ class ApiService {
       print('🔵 IVR Call API Request:');
       print('   URL: $uri');
       print('   Body: ${json.encode(requestBody)}');
-      
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestBody),
-      ).timeout(timeout);
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(requestBody),
+          )
+          .timeout(timeout);
 
       print('🔵 IVR Call API Response:');
       print('   Status: ${response.statusCode}');
@@ -483,17 +490,11 @@ class ApiService {
       } else {
         final errorMsg = 'HTTP ${response.statusCode}: ${response.body}';
         print('❌ HTTP Error: $errorMsg');
-        return {
-          'success': false,
-          'error': errorMsg,
-        };
+        return {'success': false, 'error': errorMsg};
       }
     } catch (e) {
       print('❌ Exception in initiateIVRCall: $e');
-      return {
-        'success': false,
-        'error': 'Connection error: $e',
-      };
+      return {'success': false, 'error': 'Connection error: $e'};
     }
   }
 
@@ -504,9 +505,9 @@ class ApiService {
     required String driverId,
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl/manual_call_api.php').replace(
-        queryParameters: {'action': 'initiate_call'},
-      );
+      final uri = Uri.parse(
+        '$baseUrl/manual_call_api.php',
+      ).replace(queryParameters: {'action': 'initiate_call'});
 
       final requestBody = {
         'driver_mobile': driverMobile,
@@ -517,12 +518,14 @@ class ApiService {
       print('🔵 Manual Call API Request:');
       print('   URL: $uri');
       print('   Body: ${json.encode(requestBody)}');
-      
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestBody),
-      ).timeout(timeout);
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(requestBody),
+          )
+          .timeout(timeout);
 
       print('🔵 Manual Call API Response:');
       print('   Status: ${response.statusCode}');
@@ -541,17 +544,11 @@ class ApiService {
       } else {
         final errorMsg = 'HTTP ${response.statusCode}: ${response.body}';
         print('❌ HTTP Error: $errorMsg');
-        return {
-          'success': false,
-          'error': errorMsg,
-        };
+        return {'success': false, 'error': errorMsg};
       }
     } catch (e) {
       print('❌ Exception in initiateManualCall: $e');
-      return {
-        'success': false,
-        'error': 'Connection error: $e',
-      };
+      return {'success': false, 'error': 'Connection error: $e'};
     }
   }
 
@@ -559,10 +556,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getCallStatus(String referenceId) async {
     try {
       final uri = Uri.parse(ApiConfig.ivrCallApi).replace(
-        queryParameters: {
-          'action': 'call_status',
-          'reference_id': referenceId,
-        },
+        queryParameters: {'action': 'call_status', 'reference_id': referenceId},
       );
 
       final response = await http.get(uri).timeout(timeout);
@@ -575,10 +569,7 @@ class ApiService {
       }
     } catch (e) {
       print('❌ Failed to get call status: $e');
-      return {
-        'success': false,
-        'error': e.toString(),
-      };
+      return {'success': false, 'error': e.toString()};
     }
   }
 
@@ -591,21 +582,23 @@ class ApiService {
     int? callDuration,
   }) async {
     try {
-      final uri = Uri.parse(ApiConfig.ivrCallApi).replace(
-        queryParameters: {'action': 'update_feedback'},
-      );
+      final uri = Uri.parse(
+        ApiConfig.ivrCallApi,
+      ).replace(queryParameters: {'action': 'update_feedback'});
 
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'reference_id': referenceId,
-          'call_status': callStatus,
-          'feedback': feedback,
-          'remarks': remarks,
-          'call_duration': callDuration,
-        }),
-      ).timeout(timeout);
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'reference_id': referenceId,
+              'call_status': callStatus,
+              'feedback': feedback,
+              'remarks': remarks,
+              'call_duration': callDuration,
+            }),
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -620,18 +613,17 @@ class ApiService {
   }
 
   // Get detailed profile completion data
-  static Future<ProfileCompletion?> getProfileCompletionDetails(String userId) async {
+  static Future<ProfileCompletion?> getProfileCompletionDetails(
+    String userId,
+  ) async {
     try {
       final uri = Uri.parse('$baseUrl/profile_completion_api.php').replace(
-        queryParameters: {
-          'action': 'get_profile_details',
-          'user_id': userId,
-        },
+        queryParameters: {'action': 'get_profile_details', 'user_id': userId},
       );
 
       print('🔵 Fetching profile completion details for user: $userId');
       print('🔵 URL: $uri');
-      
+
       final response = await http.get(uri).timeout(timeout);
 
       print('🔵 Response status: ${response.statusCode}');
@@ -643,11 +635,11 @@ class ApiService {
           final profileData = data['data']['profile_completion'];
           final docStatus = profileData['document_status'] ?? {};
           final docValues = profileData['document_values'] ?? {};
-          
+
           print('✅ Profile completion: ${profileData['percentage']}%');
           print('✅ Document status count: ${docStatus.length}');
           print('✅ Document values count: ${docValues.length}');
-          
+
           // Convert all values to strings, handling different types
           final Map<String, String?> convertedValues = {};
           docValues.forEach((key, value) {
@@ -661,7 +653,7 @@ class ApiService {
               convertedValues[key] = value.toString();
             }
           });
-          
+
           return ProfileCompletion(
             percentage: profileData['percentage'] ?? 0,
             documentStatus: Map<String, bool>.from(docStatus),
@@ -686,14 +678,14 @@ class ApiService {
         'caller_id': _currentCallerId ?? '1',
         'limit': '100',
       };
-      
+
       if (status != null && status != 'all') {
         queryParams['status'] = status;
       }
-      
-      final uri = Uri.parse('$baseUrl/call_history_api.php').replace(
-        queryParameters: queryParams,
-      );
+
+      final uri = Uri.parse(
+        '$baseUrl/call_history_api.php',
+      ).replace(queryParameters: queryParams);
 
       print('🔵 Fetching call history from: $uri');
       final response = await http.get(uri).timeout(timeout);
@@ -718,6 +710,103 @@ class ApiService {
     }
   }
 
+  // Update call history feedback
+  static Future<bool> updateCallHistoryFeedback({
+    required String callLogId,
+    required String callStatus,
+    String? feedback,
+    String? remarks,
+  }) async {
+    try {
+      final uri = Uri.parse(
+        '$baseUrl/call_history_api.php',
+      ).replace(queryParameters: {'action': 'update_feedback'});
+
+      final requestBody = {
+        'call_log_id': callLogId,
+        'call_status': callStatus,
+        if (feedback != null) 'feedback': feedback,
+        if (remarks != null) 'remarks': remarks,
+      };
+
+      print('🔵 Update Feedback Request: ${json.encode(requestBody)}');
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(requestBody),
+          )
+          .timeout(timeout);
+
+      print('🔵 Update Feedback Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      print('❌ Failed to update feedback: $e');
+      return false;
+    }
+  }
+
+  // Upload call recording
+  static Future<Map<String, dynamic>> uploadCallRecording({
+    required dynamic recordingFile,
+    required String tmid,
+    required String callerId,
+    String? callLogId,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/upload_recording_api.php');
+
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add form fields
+      request.fields['tmid'] = tmid;
+      request.fields['caller_id'] = callerId;
+      if (callLogId != null) {
+        request.fields['call_log_id'] = callLogId;
+      }
+
+      // Add file
+      if (recordingFile != null) {
+        final file = recordingFile as dynamic;
+        request.files.add(
+          await http.MultipartFile.fromPath('recording', file.path),
+        );
+      }
+
+      print('🔵 Uploading recording: $tmid\_$callerId');
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(minutes: 5), // Longer timeout for file upload
+      );
+
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('🔵 Upload Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ Recording uploaded: ${data['url']}');
+        }
+        return data;
+      } else {
+        return {
+          'success': false,
+          'error': 'HTTP ${response.statusCode}: ${response.body}',
+        };
+      }
+    } catch (e) {
+      print('❌ Failed to upload recording: $e');
+      return {'success': false, 'error': 'Upload error: $e'};
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // LEAVE MANAGEMENT METHODS
   // ═══════════════════════════════════════════════════════════════
@@ -732,9 +821,9 @@ class ApiService {
     required String reason,
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl/enhanced_leave_management_api.php').replace(
-        queryParameters: {'action': 'apply_leave'},
-      );
+      final uri = Uri.parse(
+        '$baseUrl/enhanced_leave_management_api.php',
+      ).replace(queryParameters: {'action': 'apply_leave'});
 
       final requestBody = {
         'telecaller_id': telecallerId,
@@ -747,11 +836,13 @@ class ApiService {
 
       print('🔵 Apply Leave Request: ${json.encode(requestBody)}');
 
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestBody),
-      ).timeout(timeout);
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(requestBody),
+          )
+          .timeout(timeout);
 
       print('🔵 Apply Leave Response: ${response.body}');
 
@@ -771,12 +862,13 @@ class ApiService {
     required String telecallerId,
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl/enhanced_leave_management_api.php').replace(
-        queryParameters: {
-          'action': 'get_my_leaves',
-          'telecaller_id': telecallerId,
-        },
-      );
+      final uri = Uri.parse('$baseUrl/enhanced_leave_management_api.php')
+          .replace(
+            queryParameters: {
+              'action': 'get_my_leaves',
+              'telecaller_id': telecallerId,
+            },
+          );
 
       final response = await http.get(uri).timeout(timeout);
 
@@ -803,13 +895,13 @@ class ApiService {
       final queryParams = <String, String>{
         'action': 'get_leave_requests_for_approval',
       };
-      
+
       if (managerId != null) queryParams['manager_id'] = managerId;
       if (status != null) queryParams['status'] = status;
 
-      final uri = Uri.parse('$baseUrl/enhanced_leave_management_api.php').replace(
-        queryParameters: queryParams,
-      );
+      final uri = Uri.parse(
+        '$baseUrl/enhanced_leave_management_api.php',
+      ).replace(queryParameters: queryParams);
 
       final response = await http.get(uri).timeout(timeout);
 
@@ -835,30 +927,31 @@ class ApiService {
     String? managerRemarks,
   }) async {
     try {
-      final action = status == 'approved' 
-          ? 'manager_approve_leave' 
+      final action = status == 'approved'
+          ? 'manager_approve_leave'
           : 'reject_leave';
-      
-      final uri = Uri.parse('$baseUrl/enhanced_leave_management_api.php').replace(
-        queryParameters: {'action': action},
-      );
+
+      final uri = Uri.parse(
+        '$baseUrl/enhanced_leave_management_api.php',
+      ).replace(queryParameters: {'action': action});
 
       final requestBody = {
         'leave_request_id': leaveId,
         'manager_id': managerId,
         if (managerRemarks != null && managerRemarks.isNotEmpty)
           'manager_remarks': managerRemarks,
-        if (status == 'rejected')
-          'rejected_by': managerId,
+        if (status == 'rejected') 'rejected_by': managerId,
       };
 
       print('🔵 Update Leave Status Request: ${json.encode(requestBody)}');
 
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestBody),
-      ).timeout(timeout);
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(requestBody),
+          )
+          .timeout(timeout);
 
       print('🔵 Update Leave Status Response: ${response.body}');
 

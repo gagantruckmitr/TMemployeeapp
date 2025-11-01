@@ -12,6 +12,8 @@ const TelecallerModal = ({ telecaller, onClose }) => {
     password: '',
     location: telecaller?.location || '',
     status: telecaller?.status || 'active',
+    telecaller_type: telecaller?.telecaller_type || 'driver',
+    calling_level: telecaller?.calling_level || 1,
   });
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();
@@ -115,6 +117,34 @@ const TelecallerModal = ({ telecaller, onClose }) => {
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Telecaller Type</label>
+              <select
+                value={formData.telecaller_type}
+                onChange={(e) => setFormData({ ...formData, telecaller_type: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="driver">Driver</option>
+                <option value="transporter">Transporter</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Calling Level</label>
+              <select
+                value={formData.calling_level}
+                onChange={(e) => setFormData({ ...formData, calling_level: parseInt(e.target.value) })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="1">Level 1 - Fresh Leads</option>
+                <option value="2">Level 2 - Follow-up</option>
+                <option value="3">Level 3 - Re-engagement</option>
+                <option value="4">Level 4 - Final Attempt</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex space-x-3 pt-4">

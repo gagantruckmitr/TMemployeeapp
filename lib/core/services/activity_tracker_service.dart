@@ -14,7 +14,7 @@ class ActivityTrackerService {
   DateTime _lastActivity = DateTime.now();
   bool _isTracking = false;
   
-  static const Duration _inactivityTimeout = Duration(minutes: 10);
+  static const Duration _inactivityTimeout = Duration(minutes: 30);
   static const Duration _heartbeatInterval = Duration(seconds: 30);
 
   void startTracking() {
@@ -93,8 +93,8 @@ class ActivityTrackerService {
     
     stopTracking();
     
-    // Call logout
-    await RealAuthService.instance.logout();
+    // Call logout but keep credentials saved
+    await RealAuthService.instance.logout(keepCredentials: true);
     
     // The app will automatically navigate to login screen
     // because RealAuthService will clear the user session

@@ -12,6 +12,7 @@ import 'widgets/smart_call_button.dart';
 import '../../core/services/real_auth_service.dart';
 import '../../core/services/telecaller_service.dart';
 import '../../core/services/activity_tracker_service.dart';
+import 'screens/search_users_screen.dart';
 
 class DashboardPage extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
@@ -335,42 +336,42 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Widget _buildSearchBar() {
-    return Container(
-          height: 44,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.grey.shade200, width: 1),
-          ),
-          child: TextField(
-            style: AppTheme.bodyLarge.copyWith(
-              color: Colors.grey.shade900,
-              fontWeight: FontWeight.w500,
-              fontSize: 15,
+    return GestureDetector(
+      onTap: _navigateToSearch,
+      child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade200, width: 1),
             ),
-            decoration: InputDecoration(
-              hintText: 'Search leads, contacts...',
-              hintStyle: AppTheme.bodyLarge.copyWith(
-                color: Colors.grey.shade500,
-                fontSize: 15,
-                fontWeight: FontWeight.w400,
-              ),
-              prefixIcon: Icon(
-                Icons.search_rounded,
-                color: Colors.grey.shade500,
-                size: 20,
-              ),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Icon(
+                    Icons.search_rounded,
+                    color: Colors.grey.shade500,
+                    size: 20,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Search leads, contacts...',
+                    style: AppTheme.bodyLarge.copyWith(
+                      color: Colors.grey.shade500,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        )
-        .animate()
-        .fadeIn(duration: 600.ms, delay: 800.ms)
-        .slideY(begin: 0.3, end: 0);
+          )
+          .animate()
+          .fadeIn(duration: 600.ms, delay: 800.ms)
+          .slideY(begin: 0.3, end: 0),
+    );
   }
 
   Widget _buildKPISection() {
@@ -1321,6 +1322,16 @@ class _DashboardPageState extends State<DashboardPage>
       // Fallback to GoRouter if callback is not available
       context.go(AppRouter.profile);
     }
+  }
+
+  void _navigateToSearch() {
+    HapticFeedback.lightImpact();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SearchUsersScreen(),
+      ),
+    );
   }
 
   String _getGreeting() {

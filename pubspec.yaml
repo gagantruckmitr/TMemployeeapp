@@ -48,6 +48,9 @@ dependencies:
   # Icons
   cupertino_icons: ^1.0.8
   
+  # File Picker
+  file_picker: ^8.0.0+1
+  
   # Screenshot functionality
   screenshot: ^3.0.0
   path_provider: ^2.1.4
@@ -55,6 +58,9 @@ dependencies:
   
   # URL launcher for phone calls
   url_launcher: ^6.3.0
+  
+  # Audio player for call recordings
+  audioplayers: ^6.0.0
   flutter_phone_direct_caller: ^2.1.1
   
   # Database connectivity

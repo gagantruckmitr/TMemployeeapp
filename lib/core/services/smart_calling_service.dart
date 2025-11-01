@@ -337,4 +337,48 @@ class SmartCallingService {
       return [];
     }
   }
+
+  // Update call history feedback
+  Future<bool> updateCallHistoryFeedback({
+    required String callLogId,
+    required CallStatus status,
+    String? feedback,
+    String? remarks,
+  }) async {
+    try {
+      final statusString = _mapCallStatusToString(status);
+      return await ApiService.updateCallHistoryFeedback(
+        callLogId: callLogId,
+        callStatus: statusString,
+        feedback: feedback,
+        remarks: remarks,
+      );
+    } catch (e) {
+      print('Failed to update call history feedback: $e');
+      return false;
+    }
+  }
+
+  // Upload call recording
+  Future<Map<String, dynamic>> uploadCallRecording({
+    required dynamic recordingFile,
+    required String tmid,
+    required String callerId,
+    String? callLogId,
+  }) async {
+    try {
+      return await ApiService.uploadCallRecording(
+        recordingFile: recordingFile,
+        tmid: tmid,
+        callerId: callerId,
+        callLogId: callLogId,
+      );
+    } catch (e) {
+      print('Failed to upload call recording: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
 }

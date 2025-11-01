@@ -47,6 +47,19 @@ class AppRouter {
 
   static final GoRouter router = GoRouter(
     initialLocation: splash,
+    redirect: (context, state) async {
+      final isLoggedIn = await RealAuthService.instance.isLoggedIn();
+      final isOnLoginPage = state.matchedLocation == login;
+      final isOnSplashPage = state.matchedLocation == splash;
+      final isOnOnboardingPage = state.matchedLocation == onboarding;
+      
+      // If not logged in and trying to access protected routes, redirect to login
+      if (!isLoggedIn && !isOnLoginPage && !isOnSplashPage && !isOnOnboardingPage) {
+        return login;
+      }
+      
+      return null; // No redirect needed
+    },
     routes: [
       GoRoute(
         path: splash,

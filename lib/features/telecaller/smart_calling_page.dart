@@ -146,7 +146,10 @@ class _SmartCallingPageState extends State<SmartCallingPage>
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(Icons.phone_forwarded, color: AppTheme.primaryBlue),
+                  leading: const Icon(
+                    Icons.phone_forwarded,
+                    color: AppTheme.primaryBlue,
+                  ),
                   title: const Text('IVR Call'),
                   subtitle: const Text('MyOperator progressive dialing'),
                   onTap: () => Navigator.pop(context, 'ivr'),
@@ -192,7 +195,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
 
         // IVR call flow continues below
         if (!mounted) return;
-        
+
         final proceed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -228,7 +231,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
         }
 
         if (!mounted) return;
-        
+
         // Show loading indicator
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -397,8 +400,10 @@ class _SmartCallingPageState extends State<SmartCallingPage>
         RegExp(r'[^\d]'),
         '',
       );
-      
-      debugPrint('📱 Manual Call - Driver: ${contact.name}, Mobile: $cleanDriverMobile');
+
+      debugPrint(
+        '📱 Manual Call - Driver: ${contact.name}, Mobile: $cleanDriverMobile',
+      );
 
       // Log manual call to database
       final result = await SmartCallingService.instance.initiateManualCall(
@@ -411,7 +416,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
         if (result['success'] == true) {
           final referenceId = result['data']?['reference_id'];
           final driverMobileRaw = result['data']?['driver_mobile_raw'];
-          
+
           debugPrint('✅ Manual call logged - Ref: $referenceId');
 
           // Show success message
@@ -427,15 +432,15 @@ class _SmartCallingPageState extends State<SmartCallingPage>
           // This will automatically return to app when call ends
           try {
             await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
-            
+
             debugPrint('📞 Direct call initiated to $driverMobileRaw');
-            
+
             // Show feedback modal immediately after call is initiated
             // The modal will appear when user returns to app after call ends
             if (mounted) {
               // Small delay to ensure call screen has appeared
               await Future.delayed(const Duration(milliseconds: 500));
-              
+
               if (mounted) {
                 _showFeedbackModal(
                   contact,
@@ -472,10 +477,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
       debugPrint('❌ Manual call error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -822,7 +824,8 @@ class _SmartCallingPageState extends State<SmartCallingPage>
                 contact: contact,
                 onCallPressed: () => _startCall(contact),
                 isCallInProgress:
-                    _isCallInProgress && _currentCallingContact?.id == contact.id,
+                    _isCallInProgress &&
+                    _currentCallingContact?.id == contact.id,
               ),
             );
           },

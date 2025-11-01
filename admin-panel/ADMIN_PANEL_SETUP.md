@@ -1,259 +1,154 @@
-# TruckMitr Admin Panel - Complete Setup Guide
+# TruckMitr Admin Panel - Setup Guide
 
-## 🚀 Features
+## 🚀 Quick Start
 
-### Complete Management System
-- **Dashboard**: Real-time statistics, charts, and KPIs
-- **Telecaller Management**: Add, edit, delete telecallers with performance metrics
-- **Manager Management**: Manage team leaders and their teams
-- **Lead Management**: Assign/reassign leads, bulk operations, filtering
-- **Call Monitoring**: Real-time call tracking with detailed logs
-- **Analytics**: Comprehensive reports with charts and insights
+The admin panel is now ready! Here's what you have:
 
-### UI/UX Features
-- Modern, responsive design with Tailwind CSS
-- Real-time data updates (auto-refresh)
-- Interactive charts (Recharts)
-- Smooth animations and transitions
-- Mobile-friendly interface
-- Dark mode ready
+### Features Implemented
 
-## 📦 Installation
+✅ **Dashboard** - Real-time stats, charts, and activity monitoring
+✅ **Telecaller Management** - Add, edit, delete telecallers with performance metrics
+✅ **Manager Management** - Manage team leaders and their teams
+✅ **Leads Management** - View, filter, and reassign leads to telecallers
+✅ **Call Monitoring** - Real-time call tracking with detailed logs
+✅ **Analytics** - Comprehensive reports with charts and trends
 
-### 1. Dependencies Already Installed
+### Tech Stack
+
+- React 18 + Vite
+- TailwindCSS for styling
+- React Router for navigation
+- TanStack Query for data fetching
+- Recharts for data visualization
+- Axios for API calls
+
+### Running the Admin Panel
+
 ```bash
-npm install axios recharts lucide-react react-router-dom @tanstack/react-query date-fns
-```
-
-### 2. Install Tailwind CSS
-```bash
-npm install -D tailwindcss postcss autoprefixer
-```
-
-### 3. Start Development Server
-```bash
+cd admin-panel
 npm run dev
 ```
 
-The admin panel will be available at: http://localhost:5173
+The panel will be available at: http://localhost:5173
 
-## 🔧 Configuration
+### Default Login Credentials
+
+- **Username:** admin
+- **Password:** admin123
+
+(Update these in your database)
 
 ### API Configuration
-Update `src/config/api.js` with your backend URL:
 
-```javascript
-export const API_BASE_URL = 'http://localhost/tmemployeeapp/api';
-```
+The admin panel connects to your PHP backend at:
+`http://localhost/tmemployeeapp/api`
 
-For production:
-```javascript
-export const API_BASE_URL = 'https://yourdomain.com/api';
-```
+Update this in `admin-panel/src/config/api.js` if needed.
 
-## 🔐 Default Login Credentials
+### Backend APIs Created
 
-```
-Username: admin
-Password: admin123
-```
+All PHP APIs are in the `/api` folder:
 
-**Important**: Change these credentials in production!
+- `admin_telecallers_api.php` - CRUD for telecallers
+- `admin_managers_api.php` - CRUD for managers
+- `admin_leads_api.php` - Lead listing and filtering
+- `admin_assign_leads_api.php` - Reassign leads
+- `admin_analytics_api.php` - Analytics data
+- `call_monitoring_api.php` - Call logs and monitoring
+- `dashboard_stats_api.php` - Dashboard statistics
 
-## 📁 Project Structure
+### Database Requirements
 
-```
-admin-panel/
-├── src/
-│   ├── components/
-│   │   ├── Layout.jsx              # Main layout with sidebar
-│   │   ├── ProtectedRoute.jsx      # Route protection
-│   │   ├── TelecallerModal.jsx     # Add/Edit telecaller
-│   │   ├── ManagerModal.jsx        # Add/Edit manager
-│   │   └── AssignLeadsModal.jsx    # Assign leads to telecaller
-│   ├── pages/
-│   │   ├── Login.jsx               # Login page
-│   │   ├── Dashboard.jsx           # Main dashboard
-│   │   ├── Telecallers.jsx         # Telecaller management
-│   │   ├── Managers.jsx            # Manager management
-│   │   ├── Leads.jsx               # Lead management
-│   │   ├── CallMonitoring.jsx      # Call tracking
-│   │   └── Analytics.jsx           # Reports & analytics
-│   ├── context/
-│   │   └── AuthContext.jsx         # Authentication context
-│   ├── config/
-│   │   └── api.js                  # API configuration
-│   ├── App.jsx                     # Main app component
-│   └── main.jsx                    # Entry point
-├── public/
-└── package.json
-```
+Make sure your database has these tables:
+- `users` (with role: admin, manager, telecaller)
+- `drivers` (leads)
+- `call_logs`
 
-## 🎨 Key Features Breakdown
+### Features Overview
 
-### 1. Dashboard
+#### 1. Dashboard
 - Live statistics cards
 - Call trends chart (7 days)
-- Call status distribution (pie chart)
-- Top performers (bar chart)
+- Call status distribution pie chart
+- Top performers bar chart
 - Recent activity feed
-- Auto-refresh every 30 seconds
+- Auto-refreshes every 30 seconds
 
-### 2. Telecaller Management
-- Grid view with cards
+#### 2. Telecallers Page
+- Grid view of all telecallers
 - Search functionality
 - Add/Edit/Delete operations
 - Performance metrics per telecaller
 - Status management (active/inactive)
 
-### 3. Manager Management
+#### 3. Managers Page
 - Manager cards with team info
 - Team size and performance metrics
-- CRUD operations
-- Team performance tracking
+- Add/Edit/Delete managers
+- Search and filter
 
-### 4. Lead Management
-- Searchable table view
-- Status filtering
-- Bulk selection
-- Assign/Reassign to telecallers
+#### 4. Leads Management
+- Comprehensive lead table
+- Multi-select for bulk assignment
+- Filter by status (fresh, interested, callback, etc.)
+- Search by name or phone
+- Reassign leads to telecallers
 - Last contact tracking
-- Status badges
 
-### 5. Call Monitoring
+#### 5. Call Monitoring
 - Real-time call logs
-- Date filtering (today, yesterday, week, month)
-- Call statistics
-- Status color coding
-- Duration tracking
-- Telecaller identification
+- Filter by date (today, yesterday, week, month)
+- Call statistics cards
+- Detailed call information
+- Status tracking
+- Auto-refreshes every 10 seconds
 
-### 6. Analytics
+#### 6. Analytics
 - Revenue tracking
 - Conversion rate metrics
 - Performance trends (30 days)
 - Telecaller comparison charts
-- KPI cards with growth indicators
+- Average call duration
 
-## 🔌 Backend APIs Required
+### UI/UX Features
 
-The following PHP APIs are created in the `api/` folder:
+- Modern gradient design
+- Responsive layout (mobile, tablet, desktop)
+- Smooth animations and transitions
+- Loading states
+- Error handling
+- Toast notifications
+- Modal dialogs
+- Real-time updates
 
-1. `auth_api.php` - Authentication
-2. `dashboard_stats_api.php` - Dashboard statistics
-3. `admin_telecallers_api.php` - Telecaller CRUD
-4. `admin_managers_api.php` - Manager CRUD
-5. `admin_leads_api.php` - Lead listing
-6. `admin_assign_leads_api.php` - Lead assignment
-7. `call_monitoring_api.php` - Call logs
-8. `admin_analytics_api.php` - Analytics data
+### Next Steps
 
-## 🚀 Deployment
+1. **Test the APIs** - Make sure your PHP backend is running
+2. **Update credentials** - Change default admin password
+3. **Customize branding** - Update colors in tailwind.config.js
+4. **Add more features** - Extend as needed
 
-### Development
-```bash
-npm run dev
-```
+### Troubleshooting
 
-### Production Build
+If you see API errors:
+1. Check that XAMPP/Apache is running
+2. Verify database connection in `api/config.php`
+3. Check CORS headers are enabled
+4. Ensure all API files are in the `/api` folder
+
+### Production Deployment
+
+1. Build the admin panel:
 ```bash
 npm run build
 ```
 
-The build files will be in the `dist/` folder. Upload to your web server.
+2. Deploy the `dist` folder to your web server
+3. Update API_BASE_URL in production
+4. Enable authentication and security measures
 
-### Environment Variables
-Create `.env` file:
-```
-VITE_API_URL=https://yourdomain.com/api
-```
+---
 
-## 🎯 Usage Guide
+**Admin Panel is ready to use! 🎉**
 
-### Adding a Telecaller
-1. Go to Telecallers page
-2. Click "Add Telecaller"
-3. Fill in details (name, email, phone, password, location)
-4. Click "Save"
-
-### Assigning Leads
-1. Go to Leads page
-2. Select leads using checkboxes
-3. Click "Assign" button
-4. Choose telecaller from dropdown
-5. Confirm assignment
-
-### Monitoring Calls
-1. Go to Call Monitoring
-2. Select date filter
-3. View real-time call logs
-4. Check statistics
-
-### Viewing Analytics
-1. Go to Analytics page
-2. View KPIs and charts
-3. Compare telecaller performance
-4. Track trends
-
-## 🔒 Security Features
-
-- JWT-based authentication (ready for implementation)
-- Protected routes
-- Input validation
-- SQL injection prevention
-- XSS protection
-- CORS configuration
-
-## 📱 Responsive Design
-
-- Desktop: Full sidebar navigation
-- Tablet: Collapsible sidebar
-- Mobile: Hamburger menu
-- Touch-friendly buttons
-- Optimized charts for small screens
-
-## 🎨 Customization
-
-### Colors
-Edit `tailwind.config.js`:
-```javascript
-theme: {
-  extend: {
-    colors: {
-      primary: { ... }
-    }
-  }
-}
-```
-
-### Branding
-Update logo in `src/components/Layout.jsx`
-
-## 🐛 Troubleshooting
-
-### API Connection Issues
-- Check `src/config/api.js` URL
-- Verify CORS headers in PHP
-- Check browser console for errors
-
-### Build Errors
-```bash
-npm install
-npm run build
-```
-
-### Styling Issues
-```bash
-npm install -D tailwindcss postcss autoprefixer
-```
-
-## 📞 Support
-
-For issues or questions, check:
-- Browser console for errors
-- Network tab for API responses
-- PHP error logs
-
-## 🎉 You're All Set!
-
-Your admin panel is ready to use. Access it at http://localhost:5173 and start managing your TruckMitr system!
+Access it at http://localhost:5173 and start managing your TruckMitr system.

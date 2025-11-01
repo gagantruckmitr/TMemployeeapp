@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/smart_calling_models.dart';
 import '../../../core/services/smart_calling_service.dart';
+import '../../../core/services/real_auth_service.dart';
+import '../../../core/services/pending_feedback_service.dart';
+import '../widgets/call_feedback_modal.dart';
 
 class CallHistoryScreen extends StatefulWidget {
   final String? initialFilter;
@@ -87,6 +91,8 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           timeAgo: item['time_ago'],
           feedback: item['feedback'],
           remarks: item['remarks'],
+          recordingUrl: item['recording_url'],
+          manualCallRecordingUrl: item['manual_call_recording_url'],
         );
       }).toList();
 
@@ -130,6 +136,8 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           timeAgo: item['time_ago'],
           feedback: item['feedback'],
           remarks: item['remarks'],
+          recordingUrl: item['recording_url'],
+          manualCallRecordingUrl: item['manual_call_recording_url'],
         );
       }).toList();
 
@@ -208,6 +216,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                         : _CallHistoryList(
                             history: _callHistory!,
                             scrollController: _scrollController,
+                            onUpdate: _refreshData,
                           ),
                   ),
           ),
@@ -393,10 +402,12 @@ class _FilterChips extends StatelessWidget {
 class _CallHistoryList extends StatelessWidget {
   final List<CallHistoryEntry> history;
   final ScrollController scrollController;
+  final VoidCallback? onUpdate;
 
   const _CallHistoryList({
     required this.history,
     required this.scrollController,
+    this.onUpdate,
   });
 
   @override
@@ -410,22 +421,95 @@ class _CallHistoryList extends StatelessWidget {
         return _CallHistoryCard(
           key: ValueKey(entry.id),
           entry: entry,
+          onUpdate: onUpdate,
         );
       },
     );
   }
 }
 
-class _CallHistoryCard extends StatelessWidget {
+class _CallHistoryCard extends StatefulWidget {
   final CallHistoryEntry entry;
+  final VoidCallback? onUpdate;
 
   const _CallHistoryCard({
     super.key,
     required this.entry,
+    this.onUpdate,
   });
 
+  @override
+  State<_CallHistoryCard> createState() => _CallHistoryCardState();
+}
+
+class _CallHistoryCardState extends State<_CallHistoryCard> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+  bool _isLoading = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+        });
+      }
+    });
+    
+    _audioPlayer.onDurationChanged.listen((duration) {
+      if (mounted) {
+        setState(() {
+          _duration = duration;
+        });
+      }
+    });
+    
+    _audioPlayer.onPositionChanged.listen((position) {
+      if (mounted) {
+        setState(() {
+          _position = position;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlayRecording() async {
+    final recordingUrl = widget.entry.anyRecordingUrl;
+    if (recordingUrl == null) return;
+
+    try {
+      if (_isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        setState(() => _isLoading = true);
+        await _audioPlayer.play(UrlSource(recordingUrl));
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to play recording: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Color _getStatusColor() {
-    switch (entry.status) {
+    switch (widget.entry.status) {
       case CallStatus.connected:
         return Colors.green;
       case CallStatus.callBack:
@@ -442,7 +526,7 @@ class _CallHistoryCard extends StatelessWidget {
   }
 
   IconData _getStatusIcon() {
-    switch (entry.status) {
+    switch (widget.entry.status) {
       case CallStatus.connected:
         return Icons.check_circle;
       case CallStatus.callBack:
@@ -455,6 +539,184 @@ class _CallHistoryCard extends StatelessWidget {
         return Icons.cancel;
       default:
         return Icons.phone;
+    }
+  }
+
+  Future<void> _makeCall() async {
+    try {
+      final currentUser = RealAuthService.instance.currentUser;
+      if (currentUser == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ User not logged in'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final callerId = int.tryParse(currentUser.id) ?? 1;
+      final cleanPhone = widget.entry.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+
+      // Log manual call
+      final result = await SmartCallingService.instance.initiateManualCall(
+        driverMobile: cleanPhone,
+        callerId: callerId,
+        driverId: widget.entry.driverId,
+      );
+
+      if (result['success'] == true && mounted) {
+        final referenceId = result['data']?['reference_id'];
+        final driverMobileRaw = result['data']?['driver_mobile_raw'];
+
+        // Save pending feedback
+        await PendingFeedbackService.instance.savePendingFeedback(
+          referenceId: referenceId,
+          driverId: widget.entry.driverId,
+          driverName: widget.entry.driverName,
+          driverPhone: widget.entry.phoneNumber,
+          driverCompany: 'Unknown',
+          callerId: callerId,
+        );
+
+        // Make the call
+        await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to make call: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showUpdateFeedbackModal() {
+    final contact = DriverContact(
+      id: widget.entry.driverId,
+      tmid: 'TM${widget.entry.driverId}',
+      name: widget.entry.driverName,
+      phoneNumber: widget.entry.phoneNumber,
+      company: 'Unknown',
+      state: 'Unknown',
+      subscriptionStatus: SubscriptionStatus.inactive,
+      status: widget.entry.status,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: true, // Allow dismissing by tapping outside
+      enableDrag: true, // Allow dragging to dismiss
+      builder: (context) => CallFeedbackModal(
+        contact: contact,
+        referenceId: widget.entry.id,
+        callDuration: widget.entry.duration,
+        allowDismiss: true, // Allow close button in call history
+        onFeedbackSubmitted: (feedback) async {
+          await _updateFeedback(feedback);
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+
+  Future<void> _updateFeedback(CallFeedback feedback) async {
+    String feedbackText = '';
+
+    switch (feedback.status) {
+      case CallStatus.connected:
+        feedbackText = feedback.connectedFeedback?.displayName ?? 'Connected';
+        break;
+      case CallStatus.callBack:
+        feedbackText = feedback.callBackReason?.displayName ?? 'Call Back';
+        break;
+      case CallStatus.callBackLater:
+        feedbackText = feedback.callBackTime?.displayName ?? 'Call Back Later';
+        break;
+      case CallStatus.notReachable:
+        feedbackText = 'Not Reachable';
+        break;
+      case CallStatus.notInterested:
+        feedbackText = 'Not Interested';
+        break;
+      case CallStatus.invalid:
+        feedbackText = 'Invalid Number';
+        break;
+      case CallStatus.pending:
+        feedbackText = 'Pending';
+        break;
+    }
+
+    try {
+      // Upload recording if provided
+      if (feedback.recordingFile != null) {
+        final user = RealAuthService.instance.currentUser;
+        final uploadResult = await SmartCallingService.instance.uploadCallRecording(
+          recordingFile: feedback.recordingFile,
+          tmid: widget.entry.driverId, // Using driver ID as TMID
+          callerId: user?.id ?? '1',
+          callLogId: widget.entry.id,
+        );
+        
+        if (!uploadResult['success']) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('⚠️ Recording upload failed: ${uploadResult['error']}'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+      }
+
+      final success = await SmartCallingService.instance.updateCallHistoryFeedback(
+        callLogId: widget.entry.id,
+        status: feedback.status,
+        feedback: feedbackText,
+        remarks: feedback.remarks,
+      );
+
+      if (success && mounted) {
+        HapticFeedback.lightImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Feedback updated for ${widget.entry.driverName}'),
+            backgroundColor: AppTheme.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        
+        // Notify parent to refresh
+        if (widget.onUpdate != null) {
+          widget.onUpdate!();
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Failed to update feedback'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -494,14 +756,7 @@ class _CallHistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusColor = _getStatusColor();
 
-    return GestureDetector(
-      onTap: () {
-        // Navigate to driver detail page
-        context.push(
-          '/dashboard/driver-detail/${entry.driverId}/${Uri.encodeComponent(entry.driverName)}',
-        );
-      },
-      child: Container(
+    return Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -550,14 +805,14 @@ class _CallHistoryCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        entry.driverName,
+                        widget.entry.driverName,
                         style: AppTheme.titleMedium.copyWith(
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
                         ),
                       ),
                       Text(
-                        entry.phoneNumber,
+                        widget.entry.phoneNumber,
                         style: AppTheme.bodyMedium.copyWith(
                           color: Colors.grey.shade600,
                           fontSize: 13,
@@ -574,7 +829,7 @@ class _CallHistoryCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    entry.status.name.toUpperCase(),
+                    widget.entry.status.name.toUpperCase(),
                     style: AppTheme.bodySmall.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -602,7 +857,7 @@ class _CallHistoryCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _formatDateTime(entry.callTime, entry.timeAgo),
+                      _formatDateTime(widget.entry.callTime, widget.entry.timeAgo),
                       style: AppTheme.bodyMedium.copyWith(
                         color: Colors.grey.shade700,
                         fontSize: 13,
@@ -616,7 +871,7 @@ class _CallHistoryCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _formatDuration(entry.duration, entry.durationFormatted),
+                      _formatDuration(widget.entry.duration, widget.entry.durationFormatted),
                       style: AppTheme.bodyMedium.copyWith(
                         color: Colors.grey.shade700,
                         fontSize: 13,
@@ -626,7 +881,7 @@ class _CallHistoryCard extends StatelessWidget {
                 ),
 
                 // Feedback Section
-                if (entry.feedback != null && entry.feedback!.isNotEmpty) ...[
+                if (widget.entry.feedback != null && widget.entry.feedback!.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -660,7 +915,7 @@ class _CallHistoryCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                entry.feedback!,
+                                widget.entry.feedback!,
                                 style: AppTheme.bodyMedium.copyWith(
                                   color: Colors.blue.shade900,
                                   fontSize: 13,
@@ -675,7 +930,7 @@ class _CallHistoryCard extends StatelessWidget {
                 ],
 
                 // Remarks Section
-                if (entry.remarks != null && entry.remarks!.isNotEmpty) ...[
+                if (widget.entry.remarks != null && widget.entry.remarks!.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -709,7 +964,7 @@ class _CallHistoryCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                entry.remarks!,
+                                widget.entry.remarks!,
                                 style: AppTheme.bodyMedium.copyWith(
                                   color: Colors.amber.shade900,
                                   fontSize: 13,
@@ -722,11 +977,72 @@ class _CallHistoryCard extends StatelessWidget {
                     ),
                   ),
                 ],
+
+                // Action Buttons
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _makeCall,
+                        icon: const Icon(Icons.phone, size: 18),
+                        label: const Text('Call'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.success,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _showUpdateFeedbackModal,
+                        icon: const Icon(Icons.edit, size: 18),
+                        label: const Text('Update'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.primaryBlue,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(color: AppTheme.primaryBlue),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (widget.entry.hasRecording) ...[
+                      const SizedBox(width: 12),
+                      IconButton(
+                        onPressed: _isLoading ? null : _togglePlayRecording,
+                        icon: _isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Icon(
+                                _isPlaying ? Icons.pause_circle : Icons.play_circle,
+                                size: 32,
+                              ),
+                        color: Colors.purple,
+                        tooltip: _isPlaying ? 'Pause Recording' : 'Play Recording',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.purple.withValues(alpha: 0.1),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
         ],
-      ),
       ),
     );
   }
@@ -800,6 +1116,8 @@ class CallHistoryEntry {
   final String? timeAgo;
   final String? feedback;
   final String? remarks;
+  final String? recordingUrl;
+  final String? manualCallRecordingUrl;
 
   CallHistoryEntry({
     required this.id,
@@ -813,5 +1131,11 @@ class CallHistoryEntry {
     this.timeAgo,
     this.feedback,
     this.remarks,
+    this.recordingUrl,
+    this.manualCallRecordingUrl,
   });
+  
+  // Helper to get any available recording URL
+  String? get anyRecordingUrl => manualCallRecordingUrl ?? recordingUrl;
+  bool get hasRecording => anyRecordingUrl != null && anyRecordingUrl!.isNotEmpty;
 }

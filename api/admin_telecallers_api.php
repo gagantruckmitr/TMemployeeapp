@@ -24,21 +24,23 @@ function getTelecallers() {
     global $conn;
     
     $query = "SELECT 
-        u.id,
-        u.name,
-        u.email,
-        u.phone,
-        u.location,
-        u.status,
-        u.created_at,
+        a.id,
+        a.name,
+        a.email,
+        a.mobile as phone,
+        '' as location,
+        'active' as status,
+        a.telecaller_type,
+        a.calling_level,
+        a.created_at,
         COUNT(DISTINCT cl.id) as total_calls,
         COUNT(DISTINCT CASE WHEN cl.call_status = 'connected' THEN cl.id END) as connected_calls,
         ROUND(COUNT(DISTINCT CASE WHEN cl.call_status = 'connected' THEN cl.id END) * 100.0 / NULLIF(COUNT(DISTINCT cl.id), 0), 1) as conversion_rate
-    FROM users u
-    LEFT JOIN call_logs cl ON u.id = cl.telecaller_id
-    WHERE u.role = 'telecaller'
-    GROUP BY u.id
-    ORDER BY u.created_at DESC";
+    FROM admins a
+    LEFT JOIN call_logs cl ON a.id = cl.telecaller_id
+    WHERE a.role = 'telecaller'
+    GROUP BY a.id
+    ORDER BY a.created_at DESC";
     
     $result = $conn->query($query);
     $telecallers = [];
@@ -62,12 +64,14 @@ function createTelecaller() {
     $password = password_hash($data['password'], PASSWORD_DEFAULT);
     $location = sanitizeInput($conn, $data['location'] ?? '');
     $status = sanitizeInput($conn, $data['status'] ?? 'active');
+    $telecaller_type = sanitizeInput($conn, $data['telecaller_type'] ?? 'driver');
+    $calling_level = (int)($data['calling_level'] ?? 1);
     
-    $query = "INSERT INTO users (name, email, phone, password, role, location, status) 
+    $query = "INSERT INTO admins (name, email, mobile, password, role, telecaller_type, calling_level) 
               VALUES (?, ?, ?, ?, 'telecaller', ?, ?)";
     
     $stmt = $conn->prepare($query);
-    $stmt->bind_param('ssssss', $name, $email, $phone, $password, $location, $status);
+    $stmt->bind_param('sssssi', $name, $email, $phone, $password, $telecaller_type, $calling_level);
     
     if ($stmt->execute()) {
         sendSuccess(['id' => $conn->insert_id], 'Telecaller created successfully');
@@ -88,11 +92,13 @@ function updateTelecaller() {
     $phone = sanitizeInput($conn, $data['phone']);
     $location = sanitizeInput($conn, $data['location'] ?? '');
     $status = sanitizeInput($conn, $data['status'] ?? 'active');
+    $telecaller_type = sanitizeInput($conn, $data['telecaller_type'] ?? 'driver');
+    $calling_level = (int)($data['calling_level'] ?? 1);
     
-    $query = "UPDATE users SET name = ?, email = ?, phone = ?, location = ?, status = ? WHERE id = ? AND role = 'telecaller'";
+    $query = "UPDATE admins SET name = ?, email = ?, mobile = ?, telecaller_type = ?, calling_level = ? WHERE id = ? AND role = 'telecaller'";
     
     $stmt = $conn->prepare($query);
-    $stmt->bind_param('sssssi', $name, $email, $phone, $location, $status, $id);
+    $stmt->bind_param('sssii', $name, $email, $phone, $telecaller_type, $calling_level, $id);
     
     if ($stmt->execute()) {
         sendSuccess(null, 'Telecaller updated successfully');
@@ -106,7 +112,7 @@ function deleteTelecaller() {
     
     $id = (int)$_GET['id'];
     
-    $query = "DELETE FROM users WHERE id = ? AND role = 'telecaller'";
+    $query = "DELETE FROM admins WHERE id = ? AND role = 'telecaller'";
     $stmt = $conn->prepare($query);
     $stmt->bind_param('i', $id);
     

@@ -19,6 +19,9 @@ try {
         case 'call_history':
             getCallHistory($conn);
             break;
+        case 'update_feedback':
+            updateCallFeedback($conn);
+            break;
         default:
             echo json_encode([
                 'success' => false,
@@ -57,6 +60,8 @@ function getCallHistory($conn) {
             cl.feedback,
             cl.remarks,
             cl.call_duration as duration,
+            cl.recording_url,
+            cl.manual_call_recording_url,
             COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at) as call_time,
             cl.call_initiated_at,
             cl.call_completed_at,
@@ -118,7 +123,9 @@ function getCallHistory($conn) {
             'call_initiated_at' => $row['call_initiated_at'],
             'call_completed_at' => $row['call_completed_at'],
             'time_ago' => $row['time_ago'] ?? 'Unknown',
-            'seconds_ago' => (int)($row['seconds_ago'] ?? 0)
+            'seconds_ago' => (int)($row['seconds_ago'] ?? 0),
+            'recording_url' => $row['recording_url'],
+            'manual_call_recording_url' => $row['manual_call_recording_url']
         ];
     }
     
@@ -127,6 +134,87 @@ function getCallHistory($conn) {
         'data' => $history,
         'count' => count($history)
     ]);
+}
+
+function updateCallFeedback($conn) {
+    // Get POST data
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    $callLogId = $input['call_log_id'] ?? null;
+    $callStatus = $input['call_status'] ?? null;
+    $feedback = $input['feedback'] ?? null;
+    $remarks = $input['remarks'] ?? null;
+    
+    if (!$callLogId) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Call log ID is required'
+        ]);
+        return;
+    }
+    
+    // Build update query
+    $updates = [];
+    $params = [];
+    $types = '';
+    
+    if ($callStatus !== null) {
+        $updates[] = "call_status = ?";
+        $params[] = $callStatus;
+        $types .= 's';
+    }
+    
+    if ($feedback !== null) {
+        $updates[] = "feedback = ?";
+        $params[] = $feedback;
+        $types .= 's';
+    }
+    
+    if ($remarks !== null) {
+        $updates[] = "remarks = ?";
+        $params[] = $remarks;
+        $types .= 's';
+    }
+    
+    if (empty($updates)) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'No fields to update'
+        ]);
+        return;
+    }
+    
+    // Add updated_at timestamp
+    $updates[] = "updated_at = NOW()";
+    
+    // Add call_log_id to params
+    $params[] = $callLogId;
+    $types .= 'i';
+    
+    $query = "UPDATE call_logs SET " . implode(', ', $updates) . " WHERE id = ?";
+    
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Failed to prepare statement: ' . $conn->error
+        ]);
+        return;
+    }
+    
+    $stmt->bind_param($types, ...$params);
+    
+    if ($stmt->execute()) {
+        echo json_encode([
+            'success' => true,
+            'message' => 'Feedback updated successfully'
+        ]);
+    } else {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Failed to update feedback: ' . $stmt->error
+        ]);
+    }
 }
 
 $conn->close();

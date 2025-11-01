@@ -17,6 +17,9 @@ class RealAuthService {
   static const String _keyUserRole = 'user_role';
   static const String _keyUserMobile = 'user_mobile';
   static const String _keyAuthToken = 'auth_token';
+  static const String _keySavedMobile = 'saved_mobile';
+  static const String _keySavedPassword = 'saved_password';
+  static const String _keyRememberMe = 'remember_me';
 
   static RealAuthService? _instance;
   RealAuthService._();
@@ -161,7 +164,13 @@ class RealAuthService {
   }
 
   // Logout
-  Future<void> logout() async {
+  Future<void> logout({bool keepCredentials = true}) async {
+    // Save credentials before clearing if needed
+    Map<String, String?>? savedCreds;
+    if (keepCredentials) {
+      savedCreds = await getSavedCredentials();
+    }
+    
     try {
       // Update telecaller status to offline if role is telecaller
       if (_currentUser?.role == 'telecaller') {
@@ -186,6 +195,15 @@ class RealAuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     _currentUser = null;
+    
+    // Restore saved credentials if needed
+    if (keepCredentials && savedCreds != null) {
+      final mobile = savedCreds['mobile'];
+      final password = savedCreds['password'];
+      if (mobile != null && password != null) {
+        await saveCredentials(mobile, password);
+      }
+    }
   }
   
   // Update telecaller status
@@ -258,6 +276,37 @@ class RealAuthService {
     await prefs.setString(_keyUserRole, user.role);
     await prefs.setString(_keyUserMobile, user.mobile);
     await prefs.setString(_keyAuthToken, token);
+  }
+  
+  // Save credentials for auto-fill
+  Future<void> saveCredentials(String mobile, String password) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keySavedMobile, mobile);
+    await prefs.setString(_keySavedPassword, password);
+    await prefs.setBool(_keyRememberMe, true);
+  }
+  
+  // Get saved credentials
+  Future<Map<String, String?>> getSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rememberMe = prefs.getBool(_keyRememberMe) ?? false;
+    
+    if (rememberMe) {
+      return {
+        'mobile': prefs.getString(_keySavedMobile),
+        'password': prefs.getString(_keySavedPassword),
+      };
+    }
+    
+    return {'mobile': null, 'password': null};
+  }
+  
+  // Clear saved credentials
+  Future<void> clearSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keySavedMobile);
+    await prefs.remove(_keySavedPassword);
+    await prefs.setBool(_keyRememberMe, false);
   }
 
   // Update user session

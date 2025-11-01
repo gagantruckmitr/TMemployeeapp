@@ -14,6 +14,7 @@ class Assets {
   
   // Images
   static const String truckmitrLogo = 'assets/images/truckmitr_logo.png';
+  static const String truckmitrLogoBlue = 'assets/images/image-removebg-preview (1).png';
   static const String loginBackground = 'assets/images/login_bg.png';
   static const String dashboardBackground = 'assets/images/dashboard_bg.png';
   static const String profilePlaceholder = 'assets/images/profile_placeholder.png';

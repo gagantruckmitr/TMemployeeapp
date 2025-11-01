@@ -11,6 +11,7 @@ enum CallStatus {
 enum ConnectedFeedback {
   agreeForSubscriptionToday('Agree for Subscription (Today)'),
   agreeForSubscriptionTomorrow('Agree for Subscription (Tomorrow)'),
+  alreadySubscribed('Already Subscribed'),
   appIssue('App Issue'),
   doesntUnderstandApp('Doesn\'t Understand App'),
   languageBarrier('Language Barrier'),
@@ -19,6 +20,7 @@ enum ConnectedFeedback {
   noMoney('No Money'),
   notATruckDriver('Not a Truck Driver'),
   needsHelpInProfile('Needs Help in Profile'),
+  notInterested('Not Interested'),
   others('Others'),
   willSubscribeLater('Will Subscribe Later (Not sure when)'),
   willSubscribeWhenNeedJob('Will Subscribe when I need Job'),
@@ -183,6 +185,7 @@ class CallFeedback {
   final CallBackReason? callBackReason;
   final CallBackTime? callBackTime;
   final String? remarks;
+  final dynamic recordingFile; // File object for recording upload
 
   CallFeedback({
     required this.status,
@@ -190,6 +193,7 @@ class CallFeedback {
     this.callBackReason,
     this.callBackTime,
     this.remarks,
+    this.recordingFile,
   });
 }
 

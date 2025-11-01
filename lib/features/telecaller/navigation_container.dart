@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/smart_calling_models.dart';
 import '../../widgets/navigation_drawer.dart';
+import '../../core/services/pending_feedback_service.dart';
 import 'dashboard_page.dart';
 import 'screens/interested_screen.dart';
 import 'screens/connected_calls_screen.dart';
@@ -18,7 +20,7 @@ class NavigationContainer extends StatefulWidget {
   State<NavigationContainer> createState() => _NavigationContainerState();
 }
 
-class _NavigationContainerState extends State<NavigationContainer> {
+class _NavigationContainerState extends State<NavigationContainer> with WidgetsBindingObserver {
   NavigationSection _currentSection = NavigationSection.home;
   bool _isDrawerOpen = false;
   late PageController _pageController;
@@ -28,10 +30,52 @@ class _NavigationContainerState extends State<NavigationContainer> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    WidgetsBinding.instance.addObserver(this);
+    _checkPendingFeedbackOnStart();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Check for pending feedback when app resumes
+    if (state == AppLifecycleState.resumed) {
+      print('📱 App resumed - checking for pending feedback');
+      _checkAndShowPendingFeedback();
+    }
+  }
+
+  /// Check for pending feedback on app start
+  Future<void> _checkPendingFeedbackOnStart() async {
+    await Future.delayed(const Duration(milliseconds: 1000));
+    _checkAndShowPendingFeedback();
+  }
+
+  /// Check and show pending feedback modal
+  Future<void> _checkAndShowPendingFeedback() async {
+    final hasPending = await PendingFeedbackService.instance.hasPendingFeedback();
+    
+    if (hasPending && mounted) {
+      final pendingData = await PendingFeedbackService.instance.getPendingFeedback();
+      
+      if (pendingData != null) {
+        final timeSince = DateTime.now().difference(
+          DateTime.parse(pendingData['timestamp'] as String),
+        );
+        
+        print('⏰ Pending feedback found - Time since call: ${timeSince.inMinutes}m');
+        
+        // Navigate to smart calling page with pending feedback
+        if (mounted) {
+          context.push('/smart-calling');
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     super.dispose();
   }

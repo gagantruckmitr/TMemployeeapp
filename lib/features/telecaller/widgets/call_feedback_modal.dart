@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/smart_calling_models.dart';
 
@@ -8,6 +10,8 @@ class CallFeedbackModal extends StatefulWidget {
   final Function(CallFeedback) onFeedbackSubmitted;
   final String? referenceId;
   final int? callDuration;
+  final bool allowDismiss; // Allow closing without feedback (for call history)
+  final bool requireRecording; // Require recording upload (for smart calling)
 
   const CallFeedbackModal({
     super.key,
@@ -15,6 +19,8 @@ class CallFeedbackModal extends StatefulWidget {
     required this.onFeedbackSubmitted,
     this.referenceId,
     this.callDuration,
+    this.allowDismiss = false, // Default to false (smart calling behavior)
+    this.requireRecording = false, // Default to false (call history behavior)
   });
 
   @override
@@ -38,6 +44,11 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   bool _showConnectedOptions = false;
   bool _showCallBackReasons = false;
   bool _showCallBackTimes = false;
+  
+  // Recording upload state
+  File? _selectedRecording;
+  String? _recordingFileName;
+  bool _isPickingFile = false;
 
   @override
   void initState() {
@@ -167,6 +178,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
       switch (feedback) {
         case ConnectedFeedback.agreeForSubscriptionToday:
         case ConnectedFeedback.agreeForSubscriptionTomorrow:
+        case ConnectedFeedback.alreadySubscribed:
           return Colors.green;
         case ConnectedFeedback.needsHelpInProfile:
         case ConnectedFeedback.doesntUnderstandApp:
@@ -189,8 +201,74 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     return Colors.grey;
   }
 
+  Future<void> _pickRecording() async {
+    if (_isPickingFile) return;
+    
+    setState(() {
+      _isPickingFile = true;
+    });
+    
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: false,
+      );
+      
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final fileSize = await file.length();
+        
+        // Check file size (max 50MB)
+        if (fileSize > 50 * 1024 * 1024) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('File size must be less than 50MB'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+        
+        setState(() {
+          _selectedRecording = file;
+          _recordingFileName = result.files.single.name;
+        });
+        
+        HapticFeedback.mediumImpact();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking file: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isPickingFile = false;
+      });
+    }
+  }
+  
+  void _removeRecording() {
+    setState(() {
+      _selectedRecording = null;
+      _recordingFileName = null;
+    });
+    HapticFeedback.lightImpact();
+  }
+  
   bool _canSubmit() {
     if (_selectedStatus == null) return false;
+    
+    // If recording is required and not uploaded, can't submit
+    if (widget.requireRecording && _selectedRecording == null) {
+      return false;
+    }
     
     switch (_selectedStatus!) {
       case CallStatus.connected:
@@ -218,6 +296,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
       remarks: _remarksController.text.trim().isEmpty 
           ? null 
           : _remarksController.text.trim(),
+      recordingFile: _selectedRecording,
     );
     
     HapticFeedback.mediumImpact();
@@ -242,13 +321,20 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             _buildHeader(),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 20,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildContactInfo(),
                     const SizedBox(height: 24),
                     _buildCallStatusSection(),
+                    const SizedBox(height: 24),
+                    _buildRecordingUploadSection(),
                     const SizedBox(height: 24),
                     _buildRemarksSection(),
                     const SizedBox(height: 32),
@@ -316,6 +402,14 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
               ],
             ),
           ),
+          // Close button (only shown if allowDismiss is true)
+          if (widget.allowDismiss)
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.close),
+              color: AppTheme.gray,
+              tooltip: 'Close',
+            ),
         ],
       ),
     );
@@ -610,6 +704,163 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     );
   }
 
+  Widget _buildRecordingUploadSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.mic,
+              size: 18,
+              color: AppTheme.primaryBlue,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Call Recording',
+              style: AppTheme.titleMedium.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: widget.requireRecording 
+                    ? Colors.red.withValues(alpha: 0.1)
+                    : AppTheme.gray.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                widget.requireRecording ? 'Required' : 'Optional',
+                style: AppTheme.bodySmall.copyWith(
+                  color: widget.requireRecording ? Colors.red : AppTheme.gray,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_selectedRecording == null)
+          GestureDetector(
+            onTap: _isPickingFile ? null : _pickRecording,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppTheme.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: widget.requireRecording 
+                      ? Colors.red.withValues(alpha: 0.3)
+                      : AppTheme.primaryBlue.withValues(alpha: 0.2),
+                  width: 1.5,
+                  style: BorderStyle.solid,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withValues(alpha: 0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  if (_isPickingFile)
+                    const CircularProgressIndicator()
+                  else ...[
+                    Icon(
+                      Icons.cloud_upload_outlined,
+                      size: 40,
+                      color: AppTheme.primaryBlue.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Upload Call Recording',
+                      style: AppTheme.titleMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tap to select audio file (Max 50MB)',
+                      style: AppTheme.bodySmall.copyWith(
+                        color: AppTheme.gray,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.green.withValues(alpha: 0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.audio_file,
+                    color: Colors.green,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _recordingFileName ?? 'Recording',
+                        style: AppTheme.bodyLarge.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Ready to upload',
+                        style: AppTheme.bodySmall.copyWith(
+                          color: Colors.green,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _removeRecording,
+                  icon: const Icon(Icons.close),
+                  color: Colors.red,
+                  tooltip: 'Remove',
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildRemarksSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -617,13 +868,13 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
         Row(
           children: [
             Icon(
-              Icons.note_add_outlined,
+              Icons.notes,
               size: 18,
               color: AppTheme.primaryBlue,
             ),
             const SizedBox(width: 8),
             Text(
-              'Additional Notes',
+              'Remarks',
               style: AppTheme.titleMedium.copyWith(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -647,6 +898,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             ),
           ],
         ),
+              
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(

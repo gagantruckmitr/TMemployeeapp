@@ -231,9 +231,17 @@ const Telecallers = () => {
                         </div>
                         <div>
                           <h3 className="font-bold text-gray-900 text-lg">{telecaller.name}</h3>
-                          <div className={`inline-flex items-center gap-1.5 ${status.bg} ${status.text} px-2.5 py-1 rounded-lg border ${status.border} text-xs font-semibold mt-1`}>
-                            <div className={`w-1.5 h-1.5 ${status.dot} rounded-full animate-pulse`}></div>
-                            {telecaller.status}
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <div className={`inline-flex items-center gap-1.5 ${status.bg} ${status.text} px-2.5 py-1 rounded-lg border ${status.border} text-xs font-semibold`}>
+                              <div className={`w-1.5 h-1.5 ${status.dot} rounded-full animate-pulse`}></div>
+                              {telecaller.status}
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-200 text-xs font-semibold">
+                              {telecaller.telecaller_type === 'driver' ? '🚗 Driver' : '🚛 Transporter'}
+                            </div>
+                            <div className="inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 px-2.5 py-1 rounded-lg border border-purple-200 text-xs font-semibold">
+                              L{telecaller.calling_level}
+                            </div>
                           </div>
                         </div>
                       </div>
