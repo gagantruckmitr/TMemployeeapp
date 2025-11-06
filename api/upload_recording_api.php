@@ -31,7 +31,17 @@ try {
     $file = $_FILES['recording'];
     
     // Validate file type (audio files only)
-    $allowedTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'audio/aac', 'audio/ogg'];
+    $allowedTypes = [
+        'audio/mpeg', 
+        'audio/mp3', 
+        'audio/wav', 
+        'audio/x-wav',      // Common WAV MIME type
+        'audio/wave',       // Alternative WAV MIME type
+        'audio/vnd.wave',   // Standard WAV MIME type
+        'audio/m4a', 
+        'audio/aac', 
+        'audio/ogg'
+    ];
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
     $mimeType = finfo_file($finfo, $file['tmp_name']);
     finfo_close($finfo);

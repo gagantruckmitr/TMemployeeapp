@@ -242,87 +242,46 @@ class _CallHistoryHeader extends StatelessWidget {
     final topPadding = MediaQuery.of(context).padding.top;
     
     return Container(
-      padding: EdgeInsets.fromLTRB(16, topPadding + 8, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, topPadding + 4, 16, 8),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         children: [
-          // Back button row
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back),
-                color: Colors.grey.shade700,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: isRefreshing ? null : onRefresh,
-                icon: isRefreshing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded),
-                color: Colors.indigo,
-                tooltip: 'Refresh',
-              ),
-            ],
+          const Icon(
+            Icons.history_rounded,
+            color: Colors.indigo,
+            size: 20,
           ),
-          const SizedBox(height: 12),
-          // Title row
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.indigo.withValues(alpha: 0.2),
-                      Colors.purple.withValues(alpha: 0.1),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.history_rounded,
-                  color: Colors.indigo,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Call History',
-                      style: AppTheme.headingMedium.copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      '$totalCalls total calls logged',
-                      style: AppTheme.bodyLarge.copyWith(
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          const SizedBox(width: 8),
+          Text(
+            'Call History',
+            style: AppTheme.headingMedium.copyWith(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            onPressed: isRefreshing ? null : onRefresh,
+            icon: isRefreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded, size: 20),
+            color: Colors.indigo,
+            tooltip: 'Refresh',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
         ],
       ),
@@ -353,7 +312,7 @@ class _FilterChips extends StatelessWidget {
     ];
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: Colors.white,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -361,7 +320,7 @@ class _FilterChips extends StatelessWidget {
           children: filters.map((filter) {
             final isSelected = selectedFilter == filter['value'];
             return Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: 6),
               child: FilterChip(
                 selected: isSelected,
                 label: Row(
@@ -369,10 +328,10 @@ class _FilterChips extends StatelessWidget {
                   children: [
                     Icon(
                       filter['icon'] as IconData,
-                      size: 16,
+                      size: 14,
                       color: isSelected ? Colors.white : Colors.grey.shade700,
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
                     Text(filter['label'] as String),
                   ],
                 ),
@@ -387,9 +346,9 @@ class _FilterChips extends StatelessWidget {
                 labelStyle: TextStyle(
                   color: isSelected ? Colors.white : Colors.grey.shade700,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  fontSize: 13,
+                  fontSize: 12,
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               ),
             );
           }).toList(),
