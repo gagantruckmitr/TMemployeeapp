@@ -150,6 +150,38 @@ class JobModel {
       'isExpired': isExpired,
     };
   }
+
+  // Check if job is expired based on application deadline
+  bool get isExpiredByDeadline {
+    if (applicationDeadline.isEmpty) return false;
+    
+    try {
+      DateTime deadline;
+      
+      // Try different date formats
+      if (applicationDeadline.contains('T')) {
+        // ISO format: 2024-01-15T23:59:59
+        deadline = DateTime.parse(applicationDeadline);
+      } else if (applicationDeadline.contains('-')) {
+        // Date only format: 2024-01-15
+        deadline = DateTime.parse('${applicationDeadline}T23:59:59');
+      } else {
+        // Other formats, try direct parsing
+        deadline = DateTime.parse(applicationDeadline);
+      }
+      
+      final now = DateTime.now();
+      final isExpired = now.isAfter(deadline);
+      
+      // Debug print to help troubleshoot
+      print('📅 Job: $jobTitle - Deadline: $applicationDeadline -> Parsed: $deadline, Now: $now, Expired: $isExpired');
+      
+      return isExpired;
+    } catch (e) {
+      print('❌ Error parsing deadline for job $jobTitle: $applicationDeadline - Error: $e');
+      return false;
+    }
+  }
 }
 
 class DashboardStats {

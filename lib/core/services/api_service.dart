@@ -303,7 +303,7 @@ class ApiService {
       id: json['id']?.toString() ?? '',
       tmid: json['tmid'] ?? 'TM000000',
       name: json['name'] ?? 'Unknown Driver',
-      company: json['company'] ?? 'Unknown Company',
+      company: json['company'] ?? '',
       phoneNumber: json['phoneNumber'] ?? '',
       state: json['state'] ?? 'Unknown',
       subscriptionStatus: _mapStringToSubscriptionStatus(

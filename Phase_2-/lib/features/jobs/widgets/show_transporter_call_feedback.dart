@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'transporter_call_feedback_modal.dart';
 
 Future<void> showTransporterCallFeedback({
@@ -6,7 +7,7 @@ Future<void> showTransporterCallFeedback({
   required String transporterTmid,
   required String transporterName,
   required String jobId,
-  required Function(String callStatus, String? notes) onSubmit,
+  required Function(String callStatus, String? notes, File? recordingFile) onSubmit,
 }) async {
   return showModalBottomSheet(
     context: context,

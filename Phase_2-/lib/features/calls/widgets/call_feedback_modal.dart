@@ -227,6 +227,9 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
                     [
                       'Interview Done',
                       'Not Selected',
+                      'Not Interested',
+                      'Interview Fixed',
+                      'Ready for Interview',
                       'Will Confirm Later',
                       'Match Making Done',
                     ],

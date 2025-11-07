@@ -291,7 +291,7 @@ function searchUsers($pdo) {
             $profileCompletion = calculateProfileCompletionFast($user);
             
             // Build company name (simplified)
-            $company = ($user['city'] ?? 'Unknown') . ' Transport';
+            $company = $user['city'] ? $user['city'] . ' Transport' : '';
             
             return [
                 'id' => (string)$user['id'],

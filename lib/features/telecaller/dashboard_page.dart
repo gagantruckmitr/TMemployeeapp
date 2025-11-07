@@ -13,11 +13,13 @@ import '../../core/services/real_auth_service.dart';
 import '../../core/services/telecaller_service.dart';
 import '../../core/services/activity_tracker_service.dart';
 import 'screens/search_users_screen.dart';
+import 'screens/pending_calls_screen.dart';
 
 class DashboardPage extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
   final VoidCallback? onOpenDrawer;
-  final Function(NavigationSection section, {String? filter})? onNavigateToSection;
+  final Function(NavigationSection section, {String? filter})?
+  onNavigateToSection;
 
   const DashboardPage({
     super.key,
@@ -155,6 +157,24 @@ class _DashboardPageState extends State<DashboardPage>
     return '$rate%';
   }
 
+  // Calculate dynamic max Y value for chart
+  double _getMaxYValue() {
+    final totalCalls = (_dashboardStats['total_calls'] ?? 35).toDouble();
+    final connectedCalls = (_dashboardStats['connected_calls'] ?? 28)
+        .toDouble();
+    final callbacks = (_dashboardStats['callbacks_scheduled'] ?? 22).toDouble();
+
+    final maxValue = [
+      totalCalls,
+      connectedCalls,
+      callbacks,
+    ].reduce((a, b) => a > b ? a : b);
+
+    // Add 20% padding to the max value and round up to nearest 10
+    final paddedMax = maxValue * 1.2;
+    return ((paddedMax / 10).ceil() * 10).toDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
@@ -182,25 +202,25 @@ class _DashboardPageState extends State<DashboardPage>
                     SliverToBoxAdapter(child: _buildKPISection()),
 
                     // Smart Calling Section
-                  SliverToBoxAdapter(child: _buildSmartCallingSection()),
+                    SliverToBoxAdapter(child: _buildSmartCallingSection()),
 
-                  // Performance Section with Charts
-                  SliverToBoxAdapter(child: _buildPerformanceSection()),
+                    // Performance Section with Charts
+                    SliverToBoxAdapter(child: _buildPerformanceSection()),
 
-                  // Upcoming Follow-ups Section
-                  SliverToBoxAdapter(child: _buildFollowupsSection()),
+                    // Upcoming Follow-ups Section
+                    SliverToBoxAdapter(child: _buildFollowupsSection()),
 
-                  // Bottom padding for bottom navigation
-                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                ],
+                    // Bottom padding for bottom navigation
+                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                  ],
+                ),
               ),
-            ),
 
-            // Floating KPI Summary (when scrolled)
-            if (!_isKPIVisible) _buildFloatingKPISummary(),
-          ],
+              // Floating KPI Summary (when scrolled)
+              if (!_isKPIVisible) _buildFloatingKPISummary(),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -212,6 +232,13 @@ class _DashboardPageState extends State<DashboardPage>
       pinned: true,
       elevation: 0,
       backgroundColor: Colors.white,
+      automaticallyImplyLeading: false,
+      leading: widget.onOpenDrawer != null
+          ? IconButton(
+              icon: const Icon(Icons.menu, color: Colors.black87),
+              onPressed: widget.onOpenDrawer,
+            )
+          : null,
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           decoration: BoxDecoration(
@@ -226,7 +253,7 @@ class _DashboardPageState extends State<DashboardPage>
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(76, 16, 24, 20),
+              padding: const EdgeInsets.fromLTRB(60, 16, 24, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -338,39 +365,40 @@ class _DashboardPageState extends State<DashboardPage>
   Widget _buildSearchBar() {
     return GestureDetector(
       onTap: _navigateToSearch,
-      child: Container(
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.grey.shade200, width: 1),
-            ),
-            child: Row(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Icon(
-                    Icons.search_rounded,
-                    color: Colors.grey.shade500,
-                    size: 20,
-                  ),
+      child:
+          Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.grey.shade200, width: 1),
                 ),
-                Expanded(
-                  child: Text(
-                    'Search leads, contacts...',
-                    style: AppTheme.bodyLarge.copyWith(
-                      color: Colors.grey.shade500,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
+                child: Row(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Icon(
+                        Icons.search_rounded,
+                        color: Colors.grey.shade500,
+                        size: 20,
+                      ),
                     ),
-                  ),
+                    Expanded(
+                      child: Text(
+                        'Search leads, contacts...',
+                        style: AppTheme.bodyLarge.copyWith(
+                          color: Colors.grey.shade500,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )
-          .animate()
-          .fadeIn(duration: 600.ms, delay: 800.ms)
-          .slideY(begin: 0.3, end: 0),
+              )
+              .animate()
+              .fadeIn(duration: 600.ms, delay: 800.ms)
+              .slideY(begin: 0.3, end: 0),
     );
   }
 
@@ -799,12 +827,18 @@ class _DashboardPageState extends State<DashboardPage>
             const SizedBox(height: 24),
             // Optimized Bar Chart with RepaintBoundary
             RepaintBoundary(
-              child: SizedBox(
+              child: Container(
                 height: 200,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 16,
+                ),
                 child: BarChart(
                   BarChartData(
-                    alignment: BarChartAlignment.spaceAround,
-                    maxY: 50,
+                    alignment: BarChartAlignment.spaceEvenly,
+                    maxY: _getMaxYValue(),
+                    minY: 0,
+                    groupsSpace: 20,
                     barTouchData: BarTouchData(
                       enabled: true,
                       touchTooltipData: BarTouchTooltipData(
@@ -852,14 +886,18 @@ class _DashboardPageState extends State<DashboardPage>
                       leftTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
-                          reservedSize: 30,
+                          reservedSize: 40,
+                          interval: _getMaxYValue() / 5,
                           getTitlesWidget: (value, meta) {
-                            return Text(
-                              value.toInt().toString(),
-                              style: AppTheme.bodyMedium.copyWith(
-                                color: AppTheme.gray.withOpacity(0.7),
-                                fontWeight: FontWeight.w400,
-                                fontSize: 10,
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Text(
+                                value.toInt().toString(),
+                                style: AppTheme.bodyMedium.copyWith(
+                                  color: AppTheme.gray.withOpacity(0.7),
+                                  fontWeight: FontWeight.w400,
+                                  fontSize: 10,
+                                ),
                               ),
                             );
                           },
@@ -888,7 +926,7 @@ class _DashboardPageState extends State<DashboardPage>
                               begin: Alignment.bottomCenter,
                               end: Alignment.topCenter,
                             ),
-                            width: 20,
+                            width: 16,
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(6),
                               topRight: Radius.circular(6),
@@ -910,7 +948,7 @@ class _DashboardPageState extends State<DashboardPage>
                               begin: Alignment.bottomCenter,
                               end: Alignment.topCenter,
                             ),
-                            width: 20,
+                            width: 16,
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(6),
                               topRight: Radius.circular(6),
@@ -929,7 +967,7 @@ class _DashboardPageState extends State<DashboardPage>
                               begin: Alignment.bottomCenter,
                               end: Alignment.topCenter,
                             ),
-                            width: 20,
+                            width: 16,
                             borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(6),
                               topRight: Radius.circular(6),
@@ -941,7 +979,7 @@ class _DashboardPageState extends State<DashboardPage>
                     gridData: FlGridData(
                       show: true,
                       drawVerticalLine: false,
-                      horizontalInterval: 10,
+                      horizontalInterval: _getMaxYValue() / 5,
                       getDrawingHorizontalLine: (value) {
                         return FlLine(
                           color: AppTheme.gray.withOpacity(0.1),
@@ -1086,7 +1124,13 @@ class _DashboardPageState extends State<DashboardPage>
                 ),
                 TextButton(
                   onPressed: () {
-                    // Navigate to full follow-ups list
+                    // Navigate to pending calls screen to show all follow-ups
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PendingCallsScreen(),
+                      ),
+                    );
                   },
                   child: Text(
                     'View All →',
@@ -1187,116 +1231,139 @@ class _DashboardPageState extends State<DashboardPage>
                         borderRadius: BorderRadius.circular(16),
                         onTap: () => _initiateCall(followup),
                         child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
+                          padding: const EdgeInsets.all(8),
+                          child: Stack(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(
-                                    followup.status,
-                                  ).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  Icons.business_center_rounded,
-                                  color: _getStatusColor(followup.status),
-                                  size: 16,
+                              // Status badge positioned at top-right
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _getStatusColor(followup.status),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    _getStatusText(followup.status),
+                                    style: AppTheme.bodyMedium.copyWith(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              // Call button positioned at bottom-right
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryBlue.withOpacity(
+                                      0.1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.phone_rounded,
+                                    color: AppTheme.primaryBlue,
+                                    size: 14,
+                                  ),
+                                ),
+                              ),
+                              // Main content with proper padding to avoid overlap
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 16,
+                                  right: 70,
+                                  bottom: 8,
+                                ),
+                                child: Row(
                                   children: [
-                                    Text(
-                                      followup.companyName,
-                                      style: AppTheme.titleMedium.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14,
+                                    // Left side - Icon
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: _getStatusColor(
+                                          followup.status,
+                                        ).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      followup.contactPerson,
-                                      style: AppTheme.bodyMedium.copyWith(
-                                        color: AppTheme.gray,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 12,
+                                      child: Icon(
+                                        Icons.business_center_rounded,
+                                        color: _getStatusColor(followup.status),
+                                        size: 16,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.access_time_rounded,
-                                          size: 12,
-                                          color: AppTheme.gray.withOpacity(0.7),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Flexible(
-                                          child: Text(
-                                            _formatFollowupTime(
-                                              followup.followUpDate!,
-                                            ),
+                                    const SizedBox(width: 12),
+                                    // Middle - Company info
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            followup.companyName,
+                                            style: AppTheme.titleMedium
+                                                .copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            followup.contactPerson,
                                             style: AppTheme.bodyMedium.copyWith(
-                                              color: AppTheme.gray.withOpacity(
-                                                0.8,
-                                              ),
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w400,
+                                              color: AppTheme.gray,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 12,
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(height: 3),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.access_time_rounded,
+                                                size: 12,
+                                                color: AppTheme.gray
+                                                    .withOpacity(0.7),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Flexible(
+                                                child: Text(
+                                                  _formatFollowupTime(
+                                                    followup.followUpDate!,
+                                                  ),
+                                                  style: AppTheme.bodyMedium
+                                                      .copyWith(
+                                                        color: AppTheme.gray
+                                                            .withOpacity(0.8),
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w400,
+                                                      ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _getStatusColor(followup.status),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      _getStatusText(followup.status),
-                                      style: AppTheme.bodyMedium.copyWith(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.primaryBlue.withOpacity(
-                                        0.1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Icon(
-                                      Icons.phone_rounded,
-                                      color: AppTheme.primaryBlue,
-                                      size: 14,
-                                    ),
-                                  ),
-                                ],
                               ),
                             ],
                           ),
@@ -1328,9 +1395,7 @@ class _DashboardPageState extends State<DashboardPage>
     HapticFeedback.lightImpact();
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const SearchUsersScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const SearchUsersScreen()),
     );
   }
 
@@ -1395,9 +1460,9 @@ class _DashboardPageState extends State<DashboardPage>
     if (widget.onNavigateToSection != null) {
       NavigationSection? targetSection;
       String? filter;
-      
+
       print('📊 KPI Tapped: ${kpi.title}');
-      
+
       switch (kpi.title.toLowerCase()) {
         case 'total calls':
           targetSection = NavigationSection.callHistory;
@@ -1423,16 +1488,18 @@ class _DashboardPageState extends State<DashboardPage>
           targetSection = NavigationSection.callHistory;
           filter = 'all';
       }
-      
-      print('📊 Navigating to: $targetSection (index=${targetSection.index}), filter=$filter');
-      
+
+      print(
+        '📊 Navigating to: $targetSection (index=${targetSection.index}), filter=$filter',
+      );
+
       // Navigate with or without filter
       if (filter != null) {
         widget.onNavigateToSection!(targetSection, filter: filter);
       } else {
         widget.onNavigateToSection!(targetSection);
       }
-      
+
       // Show a snackbar to indicate navigation
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1444,7 +1511,6 @@ class _DashboardPageState extends State<DashboardPage>
       );
     }
   }
-
 
   void _startSmartCalling() {
     context.push(AppRouter.smartCalling);

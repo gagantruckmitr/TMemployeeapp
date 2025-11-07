@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import '../../../core/theme/app_colors.dart';
 
 class TransporterCallFeedbackModal extends StatefulWidget {
   final String transporterTmid;
   final String transporterName;
   final String jobId;
-  final Function(String callStatus, String? notes) onSubmit;
+  final Function(String callStatus, String? notes, File? recordingFile) onSubmit;
 
   const TransporterCallFeedbackModal({
     Key? key,
@@ -26,6 +28,8 @@ class _TransporterCallFeedbackModalState
   String? _selectedSubStatus;
   final TextEditingController _notesController = TextEditingController();
   bool _isSubmitting = false;
+  File? _selectedRecordingFile;
+  String? _selectedRecordingName;
 
   final Map<String, List<String>> _statusOptions = {
     'Connected': [
@@ -33,6 +37,8 @@ class _TransporterCallFeedbackModalState
       'Details Received',
       'Not a Genuine Transporter',
       'He is Driver, mistakenly registered as Transporter',
+      'Hire from other source',
+      'Hired from TruckMitr',
     ],
     'Not Connected': [
       'Ringing / Call Busy',
@@ -44,6 +50,39 @@ class _TransporterCallFeedbackModalState
   void dispose() {
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickRecording() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'wma', 'amr', 'opus', '3gp'],
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _selectedRecordingFile = File(result.files.single.path!);
+          _selectedRecordingName = result.files.single.name;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking file: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _removeRecording() {
+    setState(() {
+      _selectedRecordingFile = null;
+      _selectedRecordingName = null;
+    });
   }
 
   bool get _canSubmit =>
@@ -59,7 +98,7 @@ class _TransporterCallFeedbackModalState
         : null;
 
     setState(() => _isSubmitting = true);
-    widget.onSubmit(callStatus, notes);
+    widget.onSubmit(callStatus, notes, _selectedRecordingFile);
   }
 
   @override
@@ -204,6 +243,102 @@ class _TransporterCallFeedbackModalState
                   contentPadding: const EdgeInsets.all(16),
                 ),
               ),
+              const SizedBox(height: 20),
+
+              // Call Recording Upload Section
+              const Text(
+                'Call Recording (Optional)',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              if (_selectedRecordingFile == null)
+                GestureDetector(
+                  onTap: _pickRecording,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      border: Border.all(
+                        color: const Color(0xFFE5E7EB),
+                        style: BorderStyle.solid,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.cloud_upload_outlined,
+                          color: AppColors.primary,
+                          size: 32,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Upload Call Recording',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Tap to select audio file',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    border: Border.all(color: AppColors.primary),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.audiotrack,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _selectedRecordingName!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF374151),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _removeRecording,
+                        icon: const Icon(
+                          Icons.close,
+                          color: Color(0xFF9CA3AF),
+                          size: 18,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 24),
             ],
 
@@ -309,7 +444,7 @@ class _TransporterCallFeedbackModalState
         // If "Details Received" is selected, immediately submit and open job brief form
         if (option == 'Details Received' && _selectedMainStatus != null) {
           final callStatus = '$_selectedMainStatus: $option';
-          widget.onSubmit(callStatus, null);
+          widget.onSubmit(callStatus, null, null);
         }
       },
       child: Container(

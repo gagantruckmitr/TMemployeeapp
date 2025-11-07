@@ -661,7 +661,7 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
 
   Widget _buildCallHistoryItem(Map<String, dynamic> call) {
     final status = call['call_status'] ?? 'pending';
-    final driverName = call['driver_name'] ?? 'Unknown Driver';
+    final driverName = call['driver_name'] ?? '';
     final duration = call['duration_formatted'] ?? '0:00';
     final timeAgo = call['time_ago'] ?? '';
 

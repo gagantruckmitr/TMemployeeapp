@@ -1,91 +1,68 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
+// Admin Dashboard Stats API
+header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
-header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
-$host = '127.0.0.1';
-$dbname = 'truckmitr';
-$username = 'truckmitr';
-$password = '825Redp&4';
+require_once 'config.php';
 
 try {
-    $conn = new mysqli($host, $username, $password, $dbname);
-    
-    if ($conn->connect_error) {
-        throw new Exception("Connection failed: " . $conn->connect_error);
-    }
     
     $response = [];
     
     // Get total telecallers
-    $result = $conn->query("SELECT COUNT(*) as count FROM admins WHERE role = 'telecaller'");
-    if ($result) {
-        $response['total_telecallers'] = (int)$result->fetch_assoc()['count'];
-    } else {
-        $response['total_telecallers'] = 0;
-    }
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM admins WHERE role = 'telecaller'");
+    $stmt->execute();
+    $response['total_telecallers'] = (int)$stmt->fetchColumn();
     
     // Get total managers
-    $result = $conn->query("SELECT COUNT(*) as count FROM admins WHERE role = 'manager'");
-    if ($result) {
-        $response['total_managers'] = (int)$result->fetch_assoc()['count'];
-    } else {
-        $response['total_managers'] = 0;
-    }
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM admins WHERE role = 'manager'");
+    $stmt->execute();
+    $response['total_managers'] = (int)$stmt->fetchColumn();
     
     // Get total admins
-    $result = $conn->query("SELECT COUNT(*) as count FROM admins WHERE role = 'admin'");
-    if ($result) {
-        $response['total_admins'] = (int)$result->fetch_assoc()['count'];
-    } else {
-        $response['total_admins'] = 0;
-    }
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM admins WHERE role = 'admin'");
+    $stmt->execute();
+    $response['total_admins'] = (int)$stmt->fetchColumn();
     
-    // Get total drivers
-    $result = $conn->query("SELECT COUNT(*) as count FROM drivers");
-    if ($result) {
-        $response['total_drivers'] = (int)$result->fetch_assoc()['count'];
-    } else {
-        $response['total_drivers'] = 0;
+    // Get total drivers - check if users table exists, fallback to drivers table
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM users WHERE role IN ('driver', 'transporter')");
+        $stmt->execute();
+        $response['total_drivers'] = (int)$stmt->fetchColumn();
+    } catch (Exception $e) {
+        // Fallback to drivers table if users table doesn't exist
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM drivers");
+            $stmt->execute();
+            $response['total_drivers'] = (int)$stmt->fetchColumn();
+        } catch (Exception $e2) {
+            $response['total_drivers'] = 0;
+        }
     }
     
     // Get call stats
-    $result = $conn->query("SELECT COUNT(*) as count FROM call_logs");
-    if ($result) {
-        $response['total_calls'] = (int)$result->fetch_assoc()['count'];
-    } else {
-        $response['total_calls'] = 0;
-    }
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM call_logs");
+    $stmt->execute();
+    $response['total_calls'] = (int)$stmt->fetchColumn();
     
-    $result = $conn->query("SELECT COUNT(*) as count FROM call_logs WHERE call_status = 'connected'");
-    if ($result) {
-        $response['connected_calls'] = (int)$result->fetch_assoc()['count'];
-    } else {
-        $response['connected_calls'] = 0;
-    }
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM call_logs WHERE call_status = 'connected'");
+    $stmt->execute();
+    $response['connected_calls'] = (int)$stmt->fetchColumn();
     
-    $result = $conn->query("SELECT COUNT(*) as count FROM call_logs WHERE DATE(call_time) = CURDATE()");
-    if ($result) {
-        $response['calls_today'] = (int)$result->fetch_assoc()['count'];
-    } else {
-        $response['calls_today'] = 0;
-    }
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM call_logs WHERE DATE(call_time) = CURDATE()");
+    $stmt->execute();
+    $response['calls_today'] = (int)$stmt->fetchColumn();
     
-    $result = $conn->query("SELECT COUNT(*) as count FROM call_logs WHERE call_status = 'pending'");
-    if ($result) {
-        $response['active_calls'] = (int)$result->fetch_assoc()['count'];
-    } else {
-        $response['active_calls'] = 0;
-    }
+    $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM call_logs WHERE call_status = 'pending'");
+    $stmt->execute();
+    $response['active_calls'] = (int)$stmt->fetchColumn();
     
     $response['conversion_rate'] = $response['total_calls'] > 0 
         ? round(($response['connected_calls'] / $response['total_calls']) * 100, 1) 
@@ -95,19 +72,14 @@ try {
     $response['call_trends'] = [];
     for ($i = 6; $i >= 0; $i--) {
         $date = date('Y-m-d', strtotime("-$i days"));
-        $result = $conn->query("SELECT COUNT(*) as calls FROM call_logs WHERE DATE(call_time) = '$date'");
-        $calls = 0;
-        if ($result) {
-            $row = $result->fetch_assoc();
-            $calls = (int)$row['calls'];
-        }
         
-        $result = $conn->query("SELECT COUNT(*) as connected FROM call_logs WHERE DATE(call_time) = '$date' AND call_status = 'connected'");
-        $connected = 0;
-        if ($result) {
-            $row = $result->fetch_assoc();
-            $connected = (int)$row['connected'];
-        }
+        $stmt = $pdo->prepare("SELECT COUNT(*) as calls FROM call_logs WHERE DATE(call_time) = ?");
+        $stmt->execute([$date]);
+        $calls = (int)$stmt->fetchColumn();
+        
+        $stmt = $pdo->prepare("SELECT COUNT(*) as connected FROM call_logs WHERE DATE(call_time) = ? AND call_status = 'connected'");
+        $stmt->execute([$date]);
+        $connected = (int)$stmt->fetchColumn();
         
         $response['call_trends'][] = [
             'date' => date('M d', strtotime($date)),
@@ -118,19 +90,20 @@ try {
     
     // Get call distribution
     $response['call_distribution'] = [];
-    $result = $conn->query("SELECT call_status as name, COUNT(*) as value FROM call_logs GROUP BY call_status");
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $response['call_distribution'][] = [
-                'name' => ucfirst(str_replace('_', ' ', $row['name'])),
-                'value' => (int)$row['value']
-            ];
-        }
+    $stmt = $pdo->prepare("SELECT call_status as name, COUNT(*) as value FROM call_logs GROUP BY call_status");
+    $stmt->execute();
+    $results = $stmt->fetchAll();
+    
+    foreach ($results as $row) {
+        $response['call_distribution'][] = [
+            'name' => ucfirst(str_replace('_', ' ', $row['name'])),
+            'value' => (int)$row['value']
+        ];
     }
     
     // Get top performers
     $response['top_performers'] = [];
-    $result = $conn->query("SELECT 
+    $stmt = $pdo->prepare("SELECT 
         a.name,
         COUNT(cl.id) as calls,
         SUM(CASE WHEN cl.call_status = 'connected' THEN 1 ELSE 0 END) as connected
@@ -141,21 +114,22 @@ try {
     ORDER BY calls DESC
     LIMIT 5");
     
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $response['top_performers'][] = [
-                'name' => $row['name'],
-                'calls' => (int)$row['calls'],
-                'connected' => (int)$row['connected']
-            ];
-        }
+    $stmt->execute();
+    $results = $stmt->fetchAll();
+    
+    foreach ($results as $row) {
+        $response['top_performers'][] = [
+            'name' => $row['name'],
+            'calls' => (int)$row['calls'],
+            'connected' => (int)$row['connected']
+        ];
     }
     
     // Get recent activity
     $response['recent_activity'] = [];
-    $result = $conn->query("SELECT 
+    $stmt = $pdo->prepare("SELECT 
         a.name as telecaller,
-        cl.driver_name,
+        COALESCE(cl.driver_name, cl.user_number, 'Unknown') as contact_name,
         cl.call_status,
         cl.call_time
     FROM call_logs cl
@@ -163,30 +137,31 @@ try {
     ORDER BY cl.call_time DESC
     LIMIT 10");
     
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $timeAgo = time() - strtotime($row['call_time']);
-            if ($timeAgo < 60) {
-                $timeStr = 'Just now';
-            } elseif ($timeAgo < 3600) {
-                $timeStr = floor($timeAgo / 60) . ' min ago';
-            } elseif ($timeAgo < 86400) {
-                $timeStr = floor($timeAgo / 3600) . ' hours ago';
-            } else {
-                $timeStr = date('M d, H:i', strtotime($row['call_time']));
-            }
-            
-            $response['recent_activity'][] = [
-                'telecaller' => $row['telecaller'],
-                'action' => 'Called ' . ($row['driver_name'] ?: 'Unknown') . ' - ' . ucfirst($row['call_status']),
-                'time' => $timeStr
-            ];
+    $stmt->execute();
+    $results = $stmt->fetchAll();
+    
+    foreach ($results as $row) {
+        $timeAgo = time() - strtotime($row['call_time']);
+        if ($timeAgo < 60) {
+            $timeStr = 'Just now';
+        } elseif ($timeAgo < 3600) {
+            $timeStr = floor($timeAgo / 60) . ' min ago';
+        } elseif ($timeAgo < 86400) {
+            $timeStr = floor($timeAgo / 3600) . ' hours ago';
+        } else {
+            $timeStr = date('M d, H:i', strtotime($row['call_time']));
         }
+        
+        $response['recent_activity'][] = [
+            'telecaller' => $row['telecaller'],
+            'action' => 'Called ' . $row['contact_name'] . ' - ' . ucfirst(str_replace('_', ' ', $row['call_status'])),
+            'time' => $timeStr
+        ];
     }
     
     // Get telecallers list
     $response['telecallers_list'] = [];
-    $result = $conn->query("SELECT 
+    $stmt = $pdo->prepare("SELECT 
         a.id,
         a.name,
         a.email,
@@ -200,28 +175,19 @@ try {
     GROUP BY a.id
     ORDER BY total_calls DESC");
     
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $response['telecallers_list'][] = $row;
-        }
-    }
+    $stmt->execute();
+    $response['telecallers_list'] = $stmt->fetchAll();
     
     // Get managers list
     $response['managers_list'] = [];
-    $result = $conn->query("SELECT id, name, email, mobile, created_at FROM admins WHERE role = 'manager' ORDER BY created_at DESC");
-    
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $response['managers_list'][] = $row;
-        }
-    }
+    $stmt = $pdo->prepare("SELECT id, name, email, mobile, created_at FROM admins WHERE role = 'manager' ORDER BY created_at DESC");
+    $stmt->execute();
+    $response['managers_list'] = $stmt->fetchAll();
     
     echo json_encode([
         'success' => true,
         'data' => $response
     ]);
-    
-    $conn->close();
     
 } catch (Exception $e) {
     http_response_code(500);

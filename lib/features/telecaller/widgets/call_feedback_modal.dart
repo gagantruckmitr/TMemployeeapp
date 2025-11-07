@@ -34,17 +34,17 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _feedbackSlideAnimation;
-  
+
   CallStatus? _selectedStatus;
   ConnectedFeedback? _selectedConnectedFeedback;
   CallBackReason? _selectedCallBackReason;
   CallBackTime? _selectedCallBackTime;
   final TextEditingController _remarksController = TextEditingController();
-  
+
   bool _showConnectedOptions = false;
   bool _showCallBackReasons = false;
   bool _showCallBackTimes = false;
-  
+
   // Recording upload state
   File? _selectedRecording;
   String? _recordingFileName;
@@ -53,41 +53,37 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   @override
   void initState() {
     super.initState();
-    
+
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
-    
+
     _feedbackAnimationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutCubic,
-    ));
-    
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _feedbackAnimationController,
-      curve: Curves.easeOut,
-    ));
-    
-    _feedbackSlideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _feedbackAnimationController,
-      curve: Curves.easeOutCubic,
-    ));
-    
+
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+        );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _feedbackAnimationController,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    _feedbackSlideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _feedbackAnimationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+
     _slideController.forward();
   }
 
@@ -113,19 +109,19 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
         _showCallBackReasons = status == CallStatus.callBack;
         _showCallBackTimes = status == CallStatus.callBackLater;
       }
-      
+
       // Reset sub-selections when status changes
       _selectedConnectedFeedback = null;
       _selectedCallBackReason = null;
       _selectedCallBackTime = null;
     });
-    
+
     // Animate feedback options
     _feedbackAnimationController.reset();
     if (_showConnectedOptions || _showCallBackReasons || _showCallBackTimes) {
       _feedbackAnimationController.forward();
     }
-    
+
     HapticFeedback.selectionClick();
   }
 
@@ -134,7 +130,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
       _selectedCallBackReason = reason;
       _showCallBackTimes = true;
     });
-    
+
     HapticFeedback.selectionClick();
   }
 
@@ -142,7 +138,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     setState(() {
       _selectedCallBackTime = time;
     });
-    
+
     HapticFeedback.selectionClick();
   }
 
@@ -150,7 +146,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     setState(() {
       _selectedConnectedFeedback = feedback;
     });
-    
+
     HapticFeedback.selectionClick();
   }
 
@@ -203,21 +199,21 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
 
   Future<void> _pickRecording() async {
     if (_isPickingFile) return;
-    
+
     setState(() {
       _isPickingFile = true;
     });
-    
+
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.audio,
         allowMultiple: false,
       );
-      
+
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
         final fileSize = await file.length();
-        
+
         // Check file size (max 50MB)
         if (fileSize > 50 * 1024 * 1024) {
           if (mounted) {
@@ -230,12 +226,12 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
           }
           return;
         }
-        
+
         setState(() {
           _selectedRecording = file;
           _recordingFileName = result.files.single.name;
         });
-        
+
         HapticFeedback.mediumImpact();
       }
     } catch (e) {
@@ -253,7 +249,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
       });
     }
   }
-  
+
   void _removeRecording() {
     setState(() {
       _selectedRecording = null;
@@ -261,15 +257,15 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     });
     HapticFeedback.lightImpact();
   }
-  
+
   bool _canSubmit() {
     if (_selectedStatus == null) return false;
-    
+
     // If recording is required and not uploaded, can't submit
     if (widget.requireRecording && _selectedRecording == null) {
       return false;
     }
-    
+
     switch (_selectedStatus!) {
       case CallStatus.connected:
         return _selectedConnectedFeedback != null;
@@ -287,18 +283,18 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
 
   void _submitFeedback() {
     if (!_canSubmit()) return;
-    
+
     final feedback = CallFeedback(
       status: _selectedStatus!,
       connectedFeedback: _selectedConnectedFeedback,
       callBackReason: _selectedCallBackReason,
       callBackTime: _selectedCallBackTime,
-      remarks: _remarksController.text.trim().isEmpty 
-          ? null 
+      remarks: _remarksController.text.trim().isEmpty
+          ? null
           : _remarksController.text.trim(),
       recordingFile: _selectedRecording,
     );
-    
+
     HapticFeedback.mediumImpact();
     widget.onFeedbackSubmitted(feedback);
   }
@@ -428,9 +424,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.primaryBlue.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -471,12 +465,12 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  widget.contact.company,
-                  style: AppTheme.bodyLarge.copyWith(
-                    color: AppTheme.gray,
+                if (widget.contact.company.isNotEmpty &&
+                    !widget.contact.company.toLowerCase().contains('unknown'))
+                  Text(
+                    widget.contact.company,
+                    style: AppTheme.bodyLarge.copyWith(color: AppTheme.gray),
                   ),
-                ),
               ],
             ),
           ),
@@ -497,7 +491,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
           ),
         ),
         const SizedBox(height: 12),
-        
+
         // Connected Status with inline feedback
         _buildStatusWithFeedback(
           'Connected',
@@ -505,15 +499,15 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
           _showConnectedOptions,
           _buildConnectedFeedbackOptions(),
         ),
-        
-        // Call Back Status with inline feedback
+
+        // Not Connected Status with inline feedback
         _buildStatusWithFeedback(
-          'Call Back',
+          'Not Connected',
           CallStatus.callBack,
           _showCallBackReasons,
           _buildCallBackReasonOptions(),
         ),
-        
+
         // Call Back Later Status with inline feedback
         _buildStatusWithFeedback(
           'Call Back Later',
@@ -572,8 +566,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             ),
           ),
         ),
-        ...ConnectedFeedback.values.map((feedback) =>
-          _buildRadioOption(
+        ...ConnectedFeedback.values.map(
+          (feedback) => _buildRadioOption(
             feedback.displayName,
             feedback,
             _selectedConnectedFeedback,
@@ -592,7 +586,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'Call Back Reason',
+            'Not Connected Reason',
             style: AppTheme.titleMedium.copyWith(
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -600,8 +594,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             ),
           ),
         ),
-        ...CallBackReason.values.map((reason) =>
-          _buildRadioOption(
+        ...CallBackReason.values.map(
+          (reason) => _buildRadioOption(
             reason.displayName,
             reason,
             _selectedCallBackReason,
@@ -628,8 +622,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             ),
           ),
         ),
-        ...CallBackTime.values.map((time) =>
-          _buildRadioOption(
+        ...CallBackTime.values.map(
+          (time) => _buildRadioOption(
             time.displayName,
             time,
             _selectedCallBackTime,
@@ -649,19 +643,17 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     Color color,
   ) {
     final isSelected = selectedValue == value;
-    
+
     return GestureDetector(
       onTap: () => onSelected(value),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected 
-              ? color.withValues(alpha: 0.1)
-              : AppTheme.white,
+          color: isSelected ? color.withValues(alpha: 0.1) : AppTheme.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected 
+            color: isSelected
                 ? color.withValues(alpha: 0.5)
                 : AppTheme.gray.withValues(alpha: 0.2),
             width: isSelected ? 2 : 1,
@@ -681,11 +673,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
                 ),
               ),
               child: isSelected
-                  ? const Icon(
-                      Icons.check,
-                      color: AppTheme.white,
-                      size: 12,
-                    )
+                  ? const Icon(Icons.check, color: AppTheme.white, size: 12)
                   : null,
             ),
             const SizedBox(width: 12),
@@ -710,11 +698,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
       children: [
         Row(
           children: [
-            Icon(
-              Icons.mic,
-              size: 18,
-              color: AppTheme.primaryBlue,
-            ),
+            Icon(Icons.mic, size: 18, color: AppTheme.primaryBlue),
             const SizedBox(width: 8),
             Text(
               'Call Recording',
@@ -727,7 +711,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: widget.requireRecording 
+                color: widget.requireRecording
                     ? Colors.red.withValues(alpha: 0.1)
                     : AppTheme.gray.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
@@ -753,7 +737,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
                 color: AppTheme.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: widget.requireRecording 
+                  color: widget.requireRecording
                       ? Colors.red.withValues(alpha: 0.3)
                       : AppTheme.primaryBlue.withValues(alpha: 0.2),
                   width: 1.5,
@@ -867,11 +851,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
       children: [
         Row(
           children: [
-            Icon(
-              Icons.notes,
-              size: 18,
-              color: AppTheme.primaryBlue,
-            ),
+            Icon(Icons.notes, size: 18, color: AppTheme.primaryBlue),
             const SizedBox(width: 8),
             Text(
               'Remarks',
@@ -898,7 +878,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             ),
           ],
         ),
-              
+
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(
@@ -921,7 +901,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             maxLines: 4,
             maxLength: 500,
             decoration: InputDecoration(
-              hintText: 'Add any important details, concerns, or follow-up notes...',
+              hintText:
+                  'Add any important details, concerns, or follow-up notes...',
               hintStyle: AppTheme.bodyLarge.copyWith(
                 color: AppTheme.gray.withValues(alpha: 0.5),
                 fontSize: 14,
@@ -946,7 +927,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
 
   Widget _buildSubmitButton() {
     final canSubmit = _canSubmit();
-    
+
     return Column(
       children: [
         if (!canSubmit)
@@ -956,9 +937,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             decoration: BoxDecoration(
               color: Colors.orange.shade50,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.orange.shade200,
-              ),
+              border: Border.all(color: Colors.orange.shade200),
             ),
             child: Row(
               children: [
@@ -988,7 +967,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 18),
               decoration: BoxDecoration(
-                gradient: canSubmit 
+                gradient: canSubmit
                     ? AppTheme.primaryGradient
                     : LinearGradient(
                         colors: [

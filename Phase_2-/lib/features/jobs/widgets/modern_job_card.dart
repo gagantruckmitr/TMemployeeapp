@@ -38,12 +38,13 @@ class _ModernJobCardState extends State<ModernJobCard> {
       print('Job assignedTo: ${widget.job.assignedTo}');
       print('Job assignedToName: ${widget.job.assignedToName}');
       print('Current User ID: ${user.id}');
-      print('Match: ${widget.job.assignedTo != null && widget.job.assignedTo.toString() == user.id.toString()}');
-      
+      print(
+          'Match: ${widget.job.assignedTo != null && widget.job.assignedTo.toString() == user.id.toString()}');
+
       setState(() {
         // Check if this job is assigned to the current user
-        _isAssignedToMe = widget.job.assignedTo != null && 
-                         widget.job.assignedTo.toString() == user.id.toString();
+        _isAssignedToMe = widget.job.assignedTo != null &&
+            widget.job.assignedTo.toString() == user.id.toString();
       });
     }
   }
@@ -87,12 +88,20 @@ class _ModernJobCardState extends State<ModernJobCard> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: widget.job.isExpiredByDeadline
+            ? const Color(0xFFFEF2F2)
+            : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
+        border: Border.all(
+            color: widget.job.isExpiredByDeadline
+                ? const Color(0xFFEF4444)
+                : Colors.grey.shade200,
+            width: widget.job.isExpiredByDeadline ? 2 : 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: widget.job.isExpiredByDeadline
+                ? const Color(0xFFEF4444).withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -148,6 +157,33 @@ class _ModernJobCardState extends State<ModernJobCard> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              // Show expired badge first and more prominently
+              if (widget.job.isExpiredByDeadline) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warning, color: Colors.white, size: 12),
+                      SizedBox(width: 4),
+                      Text(
+                        'EXPIRED',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
               _buildStatusBadge(
                   'Approval',
                   widget.job.isApproved ? 'Approved' : 'Pending',
@@ -206,7 +242,8 @@ class _ModernJobCardState extends State<ModernJobCard> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     // Show assignment badge in search results
-                    if (widget.isSearchResult && widget.job.assignedTo != null) ...[
+                    if (widget.isSearchResult &&
+                        widget.job.assignedTo != null) ...[
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -412,7 +449,7 @@ class _ModernJobCardState extends State<ModernJobCard> {
                       transporterTmid: widget.job.transporterTmid,
                       transporterName: widget.job.transporterName,
                       jobId: widget.job.jobId,
-                      onSubmit: (callStatus, notes) async {
+                      onSubmit: (callStatus, notes, recordingFile) async {
                         // Close the first modal
                         Navigator.pop(context);
 

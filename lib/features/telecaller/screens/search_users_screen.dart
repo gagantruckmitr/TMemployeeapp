@@ -115,7 +115,7 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
     return DriverContact(
       id: json['id']?.toString() ?? '',
       tmid: json['tmid']?.toString() ?? '',
-      name: json['name']?.toString() ?? 'Unknown',
+      name: json['name']?.toString() ?? '',
       company: json['company']?.toString() ?? '',
       phoneNumber: json['phoneNumber']?.toString() ?? '',
       state: json['state']?.toString() ?? '',

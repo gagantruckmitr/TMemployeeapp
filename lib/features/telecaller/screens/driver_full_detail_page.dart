@@ -62,7 +62,7 @@ class _DriverFullDetailPageState extends State<DriverFullDetailPage>
                 return CallHistoryEntry(
                   id: item['id'].toString(),
                   driverId: item['driver_id'].toString(),
-                  driverName: item['driver_name'] ?? 'Unknown',
+                  driverName: item['driver_name'] ?? '',
                   phoneNumber: item['phone_number'] ?? '',
                   status: _parseCallStatus(item['status']),
                   callTime: DateTime.parse(item['call_time']),

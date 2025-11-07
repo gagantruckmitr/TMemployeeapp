@@ -25,7 +25,8 @@ class _MainContainerState extends State<MainContainer> {
     _screens = [
       const DynamicDashboardScreen(),
       DynamicJobsScreen(
-          onBackToDashboard: () => setState(() => _currentIndex = 0)),
+        onBackToDashboard: () => setState(() => _currentIndex = 0),
+      ),
       const CallHistoryHubScreen(),
       const CallAnalyticsScreen(),
       const ProfileScreen(),
@@ -51,82 +52,95 @@ class _MainContainerState extends State<MainContainer> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
-      bottomNavigationBar: AnimatedBottomNavigationBar.builder(
-        itemCount: _icons.length,
-        tabBuilder: (int index, bool isActive) {
-          return _buildNavItem(index, _icons[index], _labels[index], isActive);
-        },
-        activeIndex: _currentIndex,
-        gapLocation: GapLocation.none,
-        notchSmoothness: NotchSmoothness.softEdge,
-        leftCornerRadius: 20,
-        rightCornerRadius: 20,
-        onTap: (index) => setState(() => _currentIndex = index),
-        backgroundColor: Colors.white,
-        splashColor: AppColors.primary.withValues(alpha: 0.2),
-        splashSpeedInMilliseconds: 300,
-        height: 70,
-        elevation: 8,
-        shadow: BoxShadow(
-          color: Colors.black.withValues(alpha: 0.15),
-          blurRadius: 20,
-          offset: const Offset(0, -5),
-          spreadRadius: 2,
+      body: IndexedStack(index: _currentIndex, children: _screens),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: AnimatedBottomNavigationBar.builder(
+            itemCount: _icons.length,
+            tabBuilder: (int index, bool isActive) {
+              return _buildNavItem(index, _icons[index], _labels[index], isActive);
+            },
+            activeIndex: _currentIndex,
+            gapLocation: GapLocation.none,
+            notchSmoothness: NotchSmoothness.softEdge,
+            leftCornerRadius: 20,
+            rightCornerRadius: 20,
+            onTap: (index) => setState(() => _currentIndex = index),
+            backgroundColor: Colors.transparent,
+            splashColor: AppColors.primary.withValues(alpha: 0.2),
+            splashSpeedInMilliseconds: 300,
+            height: 80,
+            elevation: 0,
+          ),
         ),
       ),
     );
   }
 
   Widget _buildNavItem(int index, IconData icon, String label, bool isActive) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          padding: EdgeInsets.all(isActive ? 8 : 6),
-          decoration: BoxDecoration(
-            color: isActive
-                ? AppColors.primary.withValues(alpha: 0.15)
-                : Colors.transparent,
-            shape: BoxShape.circle,
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : [],
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            padding: EdgeInsets.all(isActive ? 8 : 6),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AppColors.primary.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              shape: BoxShape.circle,
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : [],
+            ),
+            child: Icon(
+              icon,
+              color: isActive ? AppColors.primary : AppColors.softGray,
+              size: isActive ? 24 : 20,
+            ),
           ),
-          child: Icon(
-            icon,
-            color: isActive ? AppColors.primary : AppColors.softGray,
-            size: isActive ? 26 : 22,
+          const SizedBox(height: 4),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 300),
+            style: TextStyle(
+              fontSize: isActive ? 11 : 9,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+              color: isActive ? AppColors.primary : AppColors.softGray,
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 300),
-          style: TextStyle(
-            fontSize: isActive ? 11 : 10,
-            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-            color: isActive ? AppColors.primary : AppColors.softGray,
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

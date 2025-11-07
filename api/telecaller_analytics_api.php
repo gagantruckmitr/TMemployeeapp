@@ -167,8 +167,6 @@ function getRecentCalls($pdo, $callerId, $limit = 50) {
     $stmt = $pdo->prepare("
         SELECT 
             cl.*,
-            cl.driver_name,
-            cl.driver_mobile,
             COALESCE(cl.call_initiated_at, cl.call_time) as actual_call_time,
             TIMESTAMPDIFF(SECOND, COALESCE(cl.call_initiated_at, cl.call_time), NOW()) as seconds_ago
         FROM call_logs cl
@@ -189,6 +187,10 @@ function getRecentCalls($pdo, $callerId, $limit = 50) {
         $call['time_ago'] = timeAgo($callTime);
         $call['date'] = date('M d, Y', strtotime($callTime));
         $call['time'] = date('h:i A', strtotime($callTime));
+        
+        // Set default values for missing fields
+        $call['driver_name'] = $call['driver_name'] ?? 'Unknown';
+        $call['driver_mobile'] = $call['driver_mobile'] ?? $call['user_number'] ?? 'N/A';
     }
     
     return $calls;

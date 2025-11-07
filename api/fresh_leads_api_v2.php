@@ -128,7 +128,7 @@ function getFreshLeads($pdo, $callerId) {
                 'id' => (string)$user['id'],
                 'tmid' => $tmid,
                 'name' => $user['name'] ?? 'Driver ' . $user['id'],
-                'company' => ($user['city'] ?? 'Unknown') . ' Transport',
+                'company' => $user['city'] ? $user['city'] . ' Transport' : '',
                 'phoneNumber' => $user['mobile'] ?? '',
                 'email' => $user['email'] ?? '',
                 'city' => $user['city'] ?? 'Unknown',

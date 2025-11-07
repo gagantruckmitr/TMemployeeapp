@@ -12,10 +12,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 function getJobs() {
-    global $conn;
+    $conn = getDBConnection();
     
     if (!$conn) {
         sendError('Database connection not available', 500);
+        return;
     }
     
     // Get user_id from request
@@ -29,6 +30,10 @@ function getJobs() {
     try {
         $filter = isset($_GET['filter']) ? $conn->real_escape_string($_GET['filter']) : 'all';
         
+        // Check if Application_Deadline column exists
+        $columnCheck = $conn->query("SHOW COLUMNS FROM jobs LIKE 'Application_Deadline'");
+        $hasDeadlineColumn = $columnCheck && $columnCheck->num_rows > 0;
+        
         // Get jobs with vehicle type name - FILTER BY ASSIGNED USER
         $query = "SELECT 
             j.*,
@@ -38,14 +43,36 @@ function getJobs() {
         WHERE j.assigned_to = $userId";
         
         // Apply filters
-        if ($filter === 'approved') {
-            $query .= " AND j.status = '1'";
-        } elseif ($filter === 'pending') {
-            $query .= " AND j.status = '0'";
-        } elseif ($filter === 'active') {
-            $query .= " AND j.active_inactive = 1 AND j.status = '1'";
-        } elseif ($filter === 'inactive') {
-            $query .= " AND j.active_inactive = 0";
+        if ($hasDeadlineColumn) {
+            // Use deadline-aware filters
+            if ($filter === 'approved') {
+                $query .= " AND j.status = '1' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+            } elseif ($filter === 'pending') {
+                $query .= " AND j.status = '0' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+            } elseif ($filter === 'active') {
+                $query .= " AND j.active_inactive = 1 AND j.status = '1' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+            } elseif ($filter === 'inactive') {
+                $query .= " AND j.active_inactive = 0 AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+            } elseif ($filter === 'expired') {
+                $query .= " AND j.Application_Deadline IS NOT NULL AND j.Application_Deadline != '' AND j.Application_Deadline < NOW()";
+            } elseif ($filter === 'all') {
+                // For 'all' filter, exclude expired jobs by default to show only active jobs
+                $query .= " AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+            }
+        } else {
+            // Use simple filters without deadline checks
+            if ($filter === 'approved') {
+                $query .= " AND j.status = '1'";
+            } elseif ($filter === 'pending') {
+                $query .= " AND j.status = '0'";
+            } elseif ($filter === 'active') {
+                $query .= " AND j.active_inactive = 1 AND j.status = '1'";
+            } elseif ($filter === 'inactive') {
+                $query .= " AND j.active_inactive = 0";
+            } elseif ($filter === 'expired') {
+                // Return no results if no deadline column
+                $query .= " AND 1 = 0";
+            }
         }
         
         $query .= " ORDER BY j.Created_at DESC LIMIT 50";
@@ -145,7 +172,7 @@ function getJobs() {
                 'applicantsCount' => (int)$applicantsCount,
                 'isApproved' => $row['status'] === '1',
                 'isActive' => (int)($row['active_inactive'] ?? 1) === 1,
-                'isExpired' => false,
+                'isExpired' => $hasDeadlineColumn && !empty($row['Application_Deadline']) && strtotime($row['Application_Deadline']) < time(),
                 'assignedTo' => $userId, // Since we filtered by assigned_to, all jobs are assigned to this user
                 'assignedToName' => null, // Current user's own jobs
             ];

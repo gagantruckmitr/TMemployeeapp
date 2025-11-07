@@ -21,6 +21,8 @@ enum ConnectedFeedback {
   notATruckDriver('Not a Truck Driver'),
   needsHelpInProfile('Needs Help in Profile'),
   notInterested('Not Interested'),
+  interviewFixed('Interview Fixed'),
+  readyForInterview('Ready for Interview'),
   others('Others'),
   willSubscribeLater('Will Subscribe Later (Not sure when)'),
   willSubscribeWhenNeedJob('Will Subscribe when I need Job'),
@@ -33,8 +35,7 @@ enum ConnectedFeedback {
 
 enum CallBackReason {
   ringingCallBusy('Ringing / Call Busy'),
-  switchedOffNotReachable('Switched Off / Not Reachable / Disconnected'),
-  didntPick('Didn\'t Pick');
+  switchedOffNotReachable('Switched Off / Not Reachable / Disconnected');
 
   const CallBackReason(this.displayName);
   final String displayName;
