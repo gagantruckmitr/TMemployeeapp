@@ -414,10 +414,11 @@ class _DashboardPageState extends State<DashboardPage>
             ? const Center(child: CircularProgressIndicator())
             : ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 16), // Consistent padding
                 itemCount: kpiData.length,
                 cacheExtent: 500,
                 addAutomaticKeepAlives: true,
+                physics: const NeverScrollableScrollPhysics(), // Disable scrolling since items should fit
                 itemBuilder: (context, index) {
                   final kpi = kpiData[index];
                   return _buildOptimizedKPITile(kpi, index);
@@ -470,83 +471,90 @@ class _DashboardPageState extends State<DashboardPage>
 
   Widget _buildOptimizedKPITile(KPIData kpi, int index) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final tileWidth = (screenWidth - 60) / 2.2; // Responsive width
+    // Calculate available width: screen width minus horizontal padding (32) and margins between items (4*4=16)
+    final availableWidth = screenWidth - 32 - 16;
+    final tileWidth = availableWidth / 5; // Divide equally among 5 items
 
     return RepaintBoundary(
       // Isolate repaints for better performance
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16), // Reduced border radius
           onTap: () {
             HapticFeedback.lightImpact();
             _showKPIDetails(kpi);
           },
           child: Container(
-            width: tileWidth.clamp(140.0, 160.0),
-            margin: const EdgeInsets.only(right: 16),
+            width: tileWidth, // Use calculated width without clamping
+            margin: EdgeInsets.only(
+              right: index == 4 ? 0 : 4, // Consistent 4px margin between items
+            ),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16), // Reduced border radius
               boxShadow: [
                 BoxShadow(
                   color: AppTheme.black.withOpacity(0.04),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                  spreadRadius: -5,
+                  blurRadius: 15, // Reduced shadow
+                  offset: const Offset(0, 6),
+                  spreadRadius: -3,
                 ),
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8), // Optimized padding
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center, // Center align content
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Icon and trending icon row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(3), // Minimal padding
                         decoration: BoxDecoration(
                           color: Color(kpi.color).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           kpi.icon,
-                          style: const TextStyle(fontSize: 20),
+                          style: const TextStyle(fontSize: 12), // Smaller icon
                         ),
                       ),
                       Icon(
                         Icons.trending_up_rounded,
                         color: Color(kpi.color),
-                        size: 16,
+                        size: 10, // Smaller trending icon
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
+                  // Value and title column
                   Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Simplified counter without heavy animation
                       Text(
                         kpi.value,
                         style: AppTheme.headingMedium.copyWith(
                           color: AppTheme.black,
-                          fontSize: 24,
+                          fontSize: 16, // Reduced font size
                           fontWeight: FontWeight.w800,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
                         kpi.title,
                         style: AppTheme.bodyMedium.copyWith(
                           color: AppTheme.gray,
-                          fontSize: 12,
+                          fontSize: 8, // Smaller font size
                           fontWeight: FontWeight.w500,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -565,14 +573,14 @@ class _DashboardPageState extends State<DashboardPage>
 
     return Positioned(
       top: 10,
-      left: 16,
-      right: 16,
+      left: 12, // Reduced from 16
+      right: 12, // Reduced from 16
       child: RepaintBoundary(
         child: AnimatedOpacity(
           opacity: !_isKPIVisible ? 1.0 : 0.0,
           duration: const Duration(milliseconds: 200),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced padding
             decoration: BoxDecoration(
               color: AppTheme.white,
               borderRadius: BorderRadius.circular(20),
@@ -586,7 +594,7 @@ class _DashboardPageState extends State<DashboardPage>
               ],
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Changed from spaceAround
               children: kpiData.map((kpi) {
                 return Flexible(
                   child: Column(
@@ -597,14 +605,14 @@ class _DashboardPageState extends State<DashboardPage>
                         style: AppTheme.titleMedium.copyWith(
                           color: Color(kpi.color),
                           fontWeight: FontWeight.w800,
-                          fontSize: 16,
+                          fontSize: 14, // Reduced from 16
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1), // Reduced from 2
                       Text(
                         kpi.title.split(' ').first,
                         style: AppTheme.bodyMedium.copyWith(
-                          fontSize: 10,
+                          fontSize: 9, // Reduced from 10
                           color: AppTheme.gray,
                         ),
                         maxLines: 1,
@@ -1150,11 +1158,11 @@ class _DashboardPageState extends State<DashboardPage>
                 child: Dismissible(
                   key: Key(followup.id),
                   background: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.only(bottom: 8), // Reduced from 12
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
                       color: const Color(0xFF4CAF50),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12), // Reduced from 16
                     ),
                     alignment: Alignment.centerLeft,
                     child: Row(
@@ -1163,26 +1171,26 @@ class _DashboardPageState extends State<DashboardPage>
                         const Icon(
                           Icons.check_circle_outline_rounded,
                           color: Colors.white,
-                          size: 20,
+                          size: 18, // Reduced from 20
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6), // Reduced from 8
                         Text(
                           'Complete',
                           style: AppTheme.bodyMedium.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
-                            fontSize: 12,
+                            fontSize: 11, // Reduced from 12
                           ),
                         ),
                       ],
                     ),
                   ),
                   secondaryBackground: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.only(bottom: 8), // Reduced from 12
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
                       color: AppTheme.accentPurple,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12), // Reduced from 16
                     ),
                     alignment: Alignment.centerRight,
                     child: Row(
@@ -1194,14 +1202,14 @@ class _DashboardPageState extends State<DashboardPage>
                           style: AppTheme.bodyMedium.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
-                            fontSize: 12,
+                            fontSize: 11, // Reduced from 12
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6), // Reduced from 8
                         const Icon(
                           Icons.schedule_rounded,
                           color: Colors.white,
-                          size: 20,
+                          size: 18, // Reduced from 20
                         ),
                       ],
                     ),
@@ -1214,10 +1222,11 @@ class _DashboardPageState extends State<DashboardPage>
                     }
                   },
                   child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.only(bottom: 8), // Reduced from 12
+                    height: 70, // Fixed height to reduce card size
                     decoration: BoxDecoration(
                       color: _getStatusColor(followup.status).withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12), // Reduced from 16
                       border: Border.all(
                         color: _getStatusColor(
                           followup.status,
@@ -1228,142 +1237,120 @@ class _DashboardPageState extends State<DashboardPage>
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(12), // Reduced from 16
                         onTap: () => _initiateCall(followup),
                         child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Stack(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced padding
+                          child: Row(
                             children: [
-                              // Status badge positioned at top-right
-                              Positioned(
-                                top: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _getStatusColor(followup.status),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    _getStatusText(followup.status),
-                                    style: AppTheme.bodyMedium.copyWith(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
+                              // Left side - Icon
+                              Container(
+                                padding: const EdgeInsets.all(6), // Reduced from 8
+                                decoration: BoxDecoration(
+                                  color: _getStatusColor(
+                                    followup.status,
+                                  ).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8), // Reduced from 10
+                                ),
+                                child: Icon(
+                                  Icons.business_center_rounded,
+                                  color: _getStatusColor(followup.status),
+                                  size: 14, // Reduced from 16
                                 ),
                               ),
-                              // Call button positioned at bottom-right
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryBlue.withOpacity(
-                                      0.1,
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    Icons.phone_rounded,
-                                    color: AppTheme.primaryBlue,
-                                    size: 14,
-                                  ),
-                                ),
-                              ),
-                              // Main content with proper padding to avoid overlap
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 16,
-                                  right: 70,
-                                  bottom: 8,
-                                ),
-                                child: Row(
+                              const SizedBox(width: 10), // Reduced from 12
+                              // Middle - Company info (expanded to take available space)
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    // Left side - Icon
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: _getStatusColor(
-                                          followup.status,
-                                        ).withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(10),
+                                    Text(
+                                      followup.companyName,
+                                      style: AppTheme.titleMedium.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13, // Reduced from 14
                                       ),
-                                      child: Icon(
-                                        Icons.business_center_rounded,
-                                        color: _getStatusColor(followup.status),
-                                        size: 16,
-                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(width: 12),
-                                    // Middle - Company info
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            followup.companyName,
-                                            style: AppTheme.titleMedium
-                                                .copyWith(
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 14,
-                                                ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            followup.contactPerson,
+                                    const SizedBox(height: 1), // Reduced from 2
+                                    Text(
+                                      followup.contactPerson,
+                                      style: AppTheme.bodyMedium.copyWith(
+                                        color: AppTheme.gray,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 11, // Reduced from 12
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2), // Reduced from 3
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.access_time_rounded,
+                                          size: 10, // Reduced from 12
+                                          color: AppTheme.gray.withOpacity(0.7),
+                                        ),
+                                        const SizedBox(width: 3), // Reduced from 4
+                                        Flexible(
+                                          child: Text(
+                                            _formatFollowupTime(
+                                              followup.followUpDate!,
+                                            ),
                                             style: AppTheme.bodyMedium.copyWith(
-                                              color: AppTheme.gray,
-                                              fontWeight: FontWeight.w500,
-                                              fontSize: 12,
+                                              color: AppTheme.gray.withOpacity(0.8),
+                                              fontSize: 10, // Reduced from 11
+                                              fontWeight: FontWeight.w400,
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
-                                          const SizedBox(height: 3),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.access_time_rounded,
-                                                size: 12,
-                                                color: AppTheme.gray
-                                                    .withOpacity(0.7),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Flexible(
-                                                child: Text(
-                                                  _formatFollowupTime(
-                                                    followup.followUpDate!,
-                                                  ),
-                                                  style: AppTheme.bodyMedium
-                                                      .copyWith(
-                                                        color: AppTheme.gray
-                                                            .withOpacity(0.8),
-                                                        fontSize: 11,
-                                                        fontWeight:
-                                                            FontWeight.w400,
-                                                      ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
+                              ),
+                              // Right side - Call button (vertically centered) and Status badge (bottom)
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  // Call button - vertically centered
+                                  Container(
+                                    padding: const EdgeInsets.all(8), // Increased for better touch target
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.accentPurple.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      Icons.phone_rounded,
+                                      color: AppTheme.accentPurple,
+                                      size: 18, // Increased from 14
+                                    ),
+                                  ),
+                                  // Status badge - bottom right
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, // Reduced from 8
+                                      vertical: 2, // Reduced from 3
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _getStatusColor(followup.status),
+                                      borderRadius: BorderRadius.circular(8), // Reduced from 10
+                                    ),
+                                    child: Text(
+                                      _getStatusText(followup.status),
+                                      style: AppTheme.bodyMedium.copyWith(
+                                        color: Colors.white,
+                                        fontSize: 8, // Reduced from 9
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
