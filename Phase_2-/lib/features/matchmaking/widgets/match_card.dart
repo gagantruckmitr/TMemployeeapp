@@ -57,9 +57,9 @@ class MatchCard extends StatelessWidget {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Driver info
           Row(
             children: [
@@ -92,7 +92,8 @@ class MatchCard extends StatelessWidget {
                         ),
                         if (match['verified'] == true) ...[
                           const SizedBox(width: 4),
-                          Icon(Icons.verified, size: 18, color: AppColors.success),
+                          Icon(Icons.verified,
+                              size: 18, color: AppColors.success),
                         ],
                       ],
                     ),
@@ -108,17 +109,20 @@ class MatchCard extends StatelessWidget {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 20),
           Divider(color: AppColors.secondary.withOpacity(0.3)),
           const SizedBox(height: 20),
-          
+
           // Match details
-          _buildMatchDetail('Location Match', '${match['locationMatch']}%', Icons.location_on),
+          _buildMatchDetail('Location Match', '${match['locationMatch']}%',
+              Icons.location_on),
           const SizedBox(height: 12),
-          _buildMatchDetail('Truck Type Match', '${match['truckTypeMatch']}%', Icons.local_shipping),
+          _buildMatchDetail('Truck Type Match', '${match['truckTypeMatch']}%',
+              Icons.local_shipping),
           const SizedBox(height: 12),
-          _buildMatchDetail('Availability', match['availability'], Icons.schedule),
+          _buildMatchDetail(
+              'Availability', match['availability'], Icons.schedule),
         ],
       ),
     );

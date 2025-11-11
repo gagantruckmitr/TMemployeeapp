@@ -26,6 +26,9 @@ class DriverApplicant {
   final String? subscriptionStartDate;
   final String? subscriptionEndDate;
   final String subscriptionStatus;
+  final String? callFeedback;
+  final String? matchStatus;
+  final String? feedbackNotes;
 
   DriverApplicant({
     required this.jobId,
@@ -55,6 +58,9 @@ class DriverApplicant {
     this.subscriptionStartDate,
     this.subscriptionEndDate,
     this.subscriptionStatus = 'inactive',
+    this.callFeedback,
+    this.matchStatus,
+    this.feedbackNotes,
   });
 
   factory DriverApplicant.fromJson(Map<String, dynamic> json) {
@@ -86,6 +92,9 @@ class DriverApplicant {
       subscriptionStartDate: json['subscriptionStartDate'],
       subscriptionEndDate: json['subscriptionEndDate'],
       subscriptionStatus: json['subscriptionStatus'] ?? 'inactive',
+      callFeedback: json['callFeedback'],
+      matchStatus: json['matchStatus'],
+      feedbackNotes: json['feedbackNotes'],
     );
   }
 }

@@ -140,7 +140,20 @@ class Phase2ApiService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
-          final List<dynamic> applicantsJson = data['data'];
+          // Handle new response format with applicants and server_time
+          final responseData = data['data'];
+          
+          List<dynamic> applicantsJson;
+          if (responseData is Map && responseData.containsKey('applicants')) {
+            // New format with server time
+            applicantsJson = responseData['applicants'];
+            final serverTime = responseData['server_time'];
+            print('Server time: ${serverTime['current_datetime']}');
+          } else {
+            // Old format - direct array
+            applicantsJson = responseData;
+          }
+          
           return applicantsJson
               .map((json) => DriverApplicant.fromJson(json))
               .toList();
@@ -284,13 +297,60 @@ class Phase2ApiService {
     String? feedback,
     String? matchStatus,
     String? remark,
+    String? recordingFilePath,
+    String? jobId,
+    String? userTmid,
+    String? userType,
   }) async {
     try {
+      // If recording file is provided, upload it first
+      String? recordingUrl;
+      if (recordingFilePath != null && jobId != null && userTmid != null) {
+        try {
+          final user = await Phase2AuthService.getCurrentUser();
+          final callerId = user?.id ?? 0;
+
+          var request = http.MultipartRequest(
+            'POST',
+            Uri.parse('$baseUrl/phase2_upload_driver_recording_api.php'),
+          );
+
+          request.files.add(await http.MultipartFile.fromPath(
+            'recording',
+            recordingFilePath,
+          ));
+
+          request.fields['job_id'] = jobId;
+          request.fields['caller_id'] = callerId.toString();
+          
+          // Support both driver and transporter recordings
+          if (userType == 'driver') {
+            request.fields['driver_tmid'] = userTmid;
+          } else if (userType == 'transporter') {
+            request.fields['transporter_tmid'] = userTmid;
+          }
+
+          final streamedResponse = await request.send();
+          final response = await http.Response.fromStream(streamedResponse);
+
+          if (response.statusCode == 200) {
+            final responseData = json.decode(response.body);
+            if (responseData['success'] == true) {
+              recordingUrl = responseData['recording_url'];
+            }
+          }
+        } catch (e) {
+          print('Recording upload failed during update: $e');
+          // Continue with update even if recording fails
+        }
+      }
+
       final requestBody = {
         'id': id,
         if (feedback != null) 'feedback': feedback,
         if (matchStatus != null) 'matchStatus': matchStatus,
         if (remark != null) 'remark': remark,
+        if (recordingUrl != null) 'callRecording': recordingUrl,
       };
 
       final response = await http.put(
@@ -352,6 +412,7 @@ class Phase2ApiService {
     String? mileage,
     String? fastTagRoadKharcha,
     String? callStatusFeedback,
+    String? callRecording,
   }) async {
     try {
       // Get caller ID from current user if not provided
@@ -381,6 +442,7 @@ class Phase2ApiService {
           'fastTagRoadKharcha': fastTagRoadKharcha,
         if (callStatusFeedback != null)
           'callStatusFeedback': callStatusFeedback,
+        if (callRecording != null) 'callRecording': callRecording,
       };
 
       final response = await http.post(
@@ -467,6 +529,7 @@ class Phase2ApiService {
     String? mileage,
     String? fastTagRoadKharcha,
     String? callStatusFeedback,
+    String? callRecording,
   }) async {
     try {
       final requestBody = {
@@ -488,6 +551,7 @@ class Phase2ApiService {
           'fastTagRoadKharcha': fastTagRoadKharcha,
         if (callStatusFeedback != null)
           'callStatusFeedback': callStatusFeedback,
+        if (callRecording != null) 'callRecording': callRecording,
       };
 
       final response = await http.post(
@@ -585,6 +649,95 @@ class Phase2ApiService {
       request.fields['job_id'] = jobId;
       request.fields['caller_id'] = callerId.toString();
       request.fields['driver_tmid'] = driverTmid;
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          return data;
+        } else {
+          throw Exception(data['message'] ?? 'Failed to upload recording');
+        }
+      } else {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Failed to upload recording: $e');
+    }
+  }
+
+  // Upload transporter call recording
+  static Future<Map<String, dynamic>> uploadTransporterCallRecording({
+    required String filePath,
+    required String jobId,
+    required int callerId,
+    required String transporterTmid,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/phase2_upload_driver_recording_api.php');
+
+      var request = http.MultipartRequest('POST', uri);
+
+      // Add file
+      request.files.add(await http.MultipartFile.fromPath(
+        'recording',
+        filePath,
+      ));
+
+      // Add form fields
+      request.fields['job_id'] = jobId;
+      request.fields['caller_id'] = callerId.toString();
+      request.fields['transporter_tmid'] = transporterTmid;
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          return data;
+        } else {
+          throw Exception(data['message'] ?? 'Failed to upload recording');
+        }
+      } else {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Failed to upload recording: $e');
+    }
+  }
+
+  // Upload call recording (generic - supports both driver and transporter)
+  static Future<Map<String, dynamic>> uploadCallRecording({
+    required String filePath,
+    required String jobId,
+    required int callerId,
+    String? driverTmid,
+    String? transporterTmid,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/phase2_upload_driver_recording_api.php');
+
+      var request = http.MultipartRequest('POST', uri);
+
+      // Add file
+      request.files.add(await http.MultipartFile.fromPath(
+        'recording',
+        filePath,
+      ));
+
+      // Add form fields
+      request.fields['job_id'] = jobId;
+      request.fields['caller_id'] = callerId.toString();
+      
+      if (driverTmid != null) {
+        request.fields['driver_tmid'] = driverTmid;
+      }
+      if (transporterTmid != null) {
+        request.fields['transporter_tmid'] = transporterTmid;
+      }
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);

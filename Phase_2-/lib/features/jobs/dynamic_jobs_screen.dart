@@ -18,14 +18,12 @@ class DynamicJobsScreen extends StatefulWidget {
 
 class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   List<JobModel> _jobs = [];
   List<JobModel> _allJobs = [];
   bool _isLoading = true;
   bool _isSearching = false;
   String _error = '';
   String _currentFilter = 'all';
-  bool _isHeaderCollapsed = false;
 
   final List<String> _filters = [
     'all',
@@ -49,23 +47,13 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
     super.initState();
     _currentFilter = widget.initialFilter;
     _searchController.addListener(_onSearchChanged);
-    _scrollController.addListener(_onScroll);
     _loadJobs();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _scrollController.dispose();
     super.dispose();
-  }
-
-  void _onScroll() {
-    if (_scrollController.offset > 100 && !_isHeaderCollapsed) {
-      setState(() => _isHeaderCollapsed = true);
-    } else if (_scrollController.offset <= 100 && _isHeaderCollapsed) {
-      setState(() => _isHeaderCollapsed = false);
-    }
   }
 
   void _onSearchChanged() {
@@ -125,119 +113,101 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              SliverToBoxAdapter(
-                  child: SizedBox(height: _isHeaderCollapsed ? 80 : 280)),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: _buildJobsList(),
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 280,
+            floating: false,
+            pinned: true,
+            elevation: 0,
+            backgroundColor: const Color(0xFF007BFF),
+            leading: IconButton(
+              onPressed: widget.onBackToDashboard ?? () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_ios_rounded,
+                  color: Colors.white, size: 20),
+            ),
+            title: const Text(
+              'Job Postings',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+                  ),
+                  child: Text(
+                    '${_jobs.length} Jobs',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ),
             ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: ClipPath(
+                clipper: CurvedHeaderClipper(),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF007BFF), Color(0xFF0056D2)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Job Postings',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            _buildSearchBar(),
+                            const SizedBox(height: 16),
+                            _build3DNavigationTabs(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-          _buildAnimatedHeader(),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+            sliver: _buildJobsList(),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildAnimatedHeader() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      height: _isHeaderCollapsed ? 80 : 280,
-      child: ClipPath(
-        clipper: CurvedHeaderClipper(),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.primary,
-                AppColors.primary.withValues(alpha: 0.85)
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.3),
-                blurRadius: 30,
-                offset: const Offset(0, 15),
-              ),
-            ],
-          ),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 12,
-                left: 20,
-                right: 20,
-                bottom: 16,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: widget.onBackToDashboard ??
-                            () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back_ios_rounded,
-                            color: Colors.white, size: 20),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Job Postings',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.4),
-                              width: 1.5),
-                        ),
-                        child: Text(
-                          '${_jobs.length} Jobs',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (!_isHeaderCollapsed) ...[
-                    const SizedBox(height: 20),
-                    _buildSearchBar(),
-                    const SizedBox(height: 16),
-                    _build3DNavigationTabs(),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildSearchBar() {
     return Container(

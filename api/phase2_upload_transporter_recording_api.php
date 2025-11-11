@@ -80,47 +80,17 @@ try {
     // Generate URL
     $recordingUrl = "https://truckmitr.com/truckmitr-app/Match-making_call_recording/transporter/{$filename}";
     
-    // Update database - find the most recent job brief for this job and transporter
-    $updateQuery = "UPDATE job_brief_table 
-                    SET call_recording = ? 
-                    WHERE unique_id = ? 
-                    AND job_id = ? 
-                    ORDER BY created_at DESC 
-                    LIMIT 1";
-    
-    $stmt = $conn->prepare($updateQuery);
-    $stmt->bind_param("sss", $recordingUrl, $transporterTmid, $jobId);
-    
-    $dbUpdateSuccess = $stmt->execute();
-    $rowsAffected = $stmt->affected_rows;
-    
-    if ($dbUpdateSuccess && $rowsAffected > 0) {
-        echo json_encode([
-            'success' => true,
-            'message' => 'Recording uploaded and database updated successfully',
-            'data' => [
-                'filename' => $filename,
-                'url' => $recordingUrl,
-                'size' => $file['size'],
-                'upload_path' => $uploadPath,
-                'rows_updated' => $rowsAffected
-            ]
-        ]);
-    } else {
-        // File uploaded but database update failed or no matching record found
-        echo json_encode([
-            'success' => true,
-            'message' => 'Recording uploaded but database not updated (no matching job brief found)',
-            'data' => [
-                'filename' => $filename,
-                'url' => $recordingUrl,
-                'size' => $file['size'],
-                'upload_path' => $uploadPath,
-                'warning' => 'No matching job brief found for transporter_tmid=' . $transporterTmid . ', job_id=' . $jobId,
-                'rows_affected' => $rowsAffected
-            ]
-        ]);
-    }
+    // Return success with URL - database will be updated when job brief is saved
+    echo json_encode([
+        'success' => true,
+        'message' => 'Recording uploaded successfully',
+        'data' => [
+            'filename' => $filename,
+            'url' => $recordingUrl,
+            'size' => $file['size'],
+            'upload_path' => $uploadPath
+        ]
+    ]);
     
 } catch (Exception $e) {
     http_response_code(500);

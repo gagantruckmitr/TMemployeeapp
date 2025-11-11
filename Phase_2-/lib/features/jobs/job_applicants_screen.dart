@@ -22,27 +22,38 @@ class JobApplicantsScreen extends StatefulWidget {
 }
 
 class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
-  final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   List<DriverApplicant> _applicants = [];
   List<DriverApplicant> _filteredApplicants = [];
   bool _isLoading = true;
   String _error = '';
-  bool _isHeaderCollapsed = false;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
     _searchController.addListener(_onSearchChanged);
     _loadApplicants();
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _sortApplicants() {
+    _applicants.sort((a, b) {
+      // Sort by feedback status: no feedback first, then feedback submitted
+      final aHasFeedback = a.callFeedback != null && a.callFeedback!.isNotEmpty;
+      final bHasFeedback = b.callFeedback != null && b.callFeedback!.isNotEmpty;
+      
+      if (aHasFeedback && !bHasFeedback) return 1; // a goes to bottom
+      if (!aHasFeedback && bHasFeedback) return -1; // b goes to bottom
+      
+      // If both have same feedback status, sort by applied date (newest first)
+      return b.appliedAt.compareTo(a.appliedAt);
+    });
   }
 
   void _onSearchChanged() {
@@ -63,14 +74,6 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     });
   }
 
-  void _onScroll() {
-    if (_scrollController.offset > 100 && !_isHeaderCollapsed) {
-      setState(() => _isHeaderCollapsed = true);
-    } else if (_scrollController.offset <= 100 && _isHeaderCollapsed) {
-      setState(() => _isHeaderCollapsed = false);
-    }
-  }
-
   Future<void> _loadApplicants() async {
     setState(() {
       _isLoading = true;
@@ -81,7 +84,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
           await Phase2ApiService.fetchJobApplicants(widget.jobId);
       setState(() {
         _applicants = applicants;
-        _filteredApplicants = applicants;
+        _sortApplicants();
+        _filteredApplicants = _applicants;
         _isLoading = false;
       });
     } catch (e) {
@@ -94,268 +98,159 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              SliverToBoxAdapter(
-                  child: SizedBox(height: _isHeaderCollapsed ? 80 : 220)),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: _buildContent(),
-              ),
-            ],
-          ),
-          _buildAnimatedHeader(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAnimatedHeader() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      height: _isHeaderCollapsed ? 80 : 220,
-      child: ClipPath(
-        clipper: CurvedHeaderClipper(),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.primary,
-                AppColors.primary.withValues(alpha: 0.85)
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 220,
+            floating: false,
+            pinned: true,
+            elevation: 0,
+            backgroundColor: const Color(0xFF007BFF),
+            leading: IconButton(
+              onPressed: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                } else {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const main.MainContainer(),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.arrow_back_ios_rounded,
+                  color: Colors.white, size: 20),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.3),
-                blurRadius: 30,
-                offset: const Offset(0, 15),
+            title: const Text(
+              'Job Applicants',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
-            ],
-          ),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 12,
-                left: 20,
-                right: 20,
-                bottom: 16,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: () {
-                          if (Navigator.canPop(context)) {
-                            Navigator.pop(context);
-                          } else {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const main.MainContainer(),
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.arrow_back_ios_rounded,
-                            color: Colors.white, size: 20),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Job Applicants',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                letterSpacing: 0.3,
-                              ),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: GestureDetector(
+                  onTap: _applicants.isNotEmpty
+                      ? () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  MatchMakingScreen(jobId: widget.jobId),
                             ),
-                            if (!_isHeaderCollapsed)
-                              Text(
-                                widget.jobTitle,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: _applicants.isNotEmpty
-                            ? () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        MatchMakingScreen(jobId: widget.jobId),
-                                  ),
-                                );
-                              }
-                            : null,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.4),
-                                width: 1.5),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${_applicants.length}',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              if (_applicants.isNotEmpty) ...[
-                                const SizedBox(width: 4),
-                                const Icon(Icons.compare_arrows_rounded,
-                                    color: Colors.white, size: 16),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (!_isHeaderCollapsed) ...[
-                    const SizedBox(height: 16),
-                    GestureDetector(
-                      onTap: _applicants.isNotEmpty
-                          ? () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      MatchMakingScreen(jobId: widget.jobId),
-                                ),
-                              );
-                            }
-                          : null,
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(Icons.badge_rounded,
-                                  color: AppColors.primary, size: 20),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Job ID: ${widget.jobId}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color:
-                                          Colors.white.withValues(alpha: 0.9),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${_applicants.length} Applications',
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (_applicants.isNotEmpty)
-                              Icon(Icons.compare_arrows_rounded,
-                                  color: Colors.white, size: 24),
-                          ],
-                        ),
+                          );
+                        }
+                      : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 1,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${_applicants.length}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.compare_arrows_rounded,
+                            color: Colors.white, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: ClipPath(
+                clipper: CurvedHeaderClipper(),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF007BFF), Color(0xFF0056D2)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 80, 16, 50),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: TextField(
+                              controller: _searchController,
+                              style: const TextStyle(fontSize: 15),
+                              decoration: InputDecoration(
+                                hintText: 'Search applicants...',
+                                hintStyle: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade500,
+                                ),
+                                prefixIcon: Icon(Icons.search_rounded,
+                                    color: AppColors.primary, size: 22),
+                                suffixIcon: _searchController.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: Icon(Icons.clear_rounded,
+                                            color: Colors.grey.shade600, size: 20),
+                                        onPressed: () {
+                                          _searchController.clear();
+                                        },
+                                      )
+                                    : null,
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 16),
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText:
-                              'Search by name, TMID, location, vehicle...',
-                          hintStyle: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade500,
-                          ),
-                          prefixIcon: Icon(Icons.search_rounded,
-                              color: AppColors.primary, size: 22),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(Icons.clear_rounded,
-                                      color: Colors.grey.shade600, size: 20),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                  },
-                                )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                        ),
-                      ),
                     ),
-                  ],
-                ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+            sliver: _buildContent(),
+          ),
+        ],
       ),
+    ),
     );
   }
 
@@ -442,21 +337,49 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     }
     return SliverList(
       delegate: SliverChildBuilderDelegate(
-        (context, index) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _buildDriverCard(_filteredApplicants[index]),
-        ),
+        (context, index) {
+          final isLast = index == _filteredApplicants.length - 1;
+          return Container(
+            width: double.infinity,
+            margin: EdgeInsets.only(
+              bottom: isLast ? 24 : 12,
+            ),
+            child: _buildDriverCard(_filteredApplicants[index]),
+          );
+        },
         childCount: _filteredApplicants.length,
       ),
     );
   }
 
   Widget _buildDriverCard(DriverApplicant driver) {
+    final hasFeedback = driver.callFeedback != null && driver.callFeedback!.isNotEmpty;
+    final hasMatchStatus = driver.matchStatus != null && driver.matchStatus!.isNotEmpty;
+    
+    // Determine card color based on match status first, then feedback
+    Color cardColor = Colors.white;
+    Color borderColor = Colors.grey.shade200;
+    int borderWidth = 1;
+    
+    if (hasMatchStatus) {
+      cardColor = _getMatchStatusColor(driver.matchStatus);
+      borderColor = _getMatchStatusBorderColor(driver.matchStatus);
+      borderWidth = 2;
+    } else if (hasFeedback) {
+      cardColor = _getFeedbackColor(driver.callFeedback);
+      borderColor = _getFeedbackBorderColor(driver.callFeedback);
+      borderWidth = 2;
+    }
+    
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
+        border: Border.all(
+          color: borderColor, 
+          width: borderWidth.toDouble()
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -468,6 +391,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
@@ -498,6 +422,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                         '${driver.city}, ${driver.state}',
                         style: TextStyle(
                             fontSize: 12, color: Colors.grey.shade600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -521,6 +447,66 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
               ],
             ),
             const SizedBox(height: 12),
+            // Show match status first (higher priority)
+            if (driver.matchStatus != null && driver.matchStatus!.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _getMatchStatusBorderColor(driver.matchStatus).withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.assignment_turned_in_outlined,
+                      size: 16,
+                      color: _getMatchStatusTextColor(driver.matchStatus),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Status: ${driver.matchStatus}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _getMatchStatusTextColor(driver.matchStatus),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ] else if (driver.callFeedback != null && driver.callFeedback!.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _getFeedbackBorderColor(driver.callFeedback).withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.feedback_outlined,
+                      size: 16,
+                      color: _getFeedbackTextColor(driver.callFeedback),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Status: ${driver.callFeedback}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _getFeedbackTextColor(driver.callFeedback),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Divider(height: 1, color: Colors.grey.shade200),
             const SizedBox(height: 12),
             _buildInfoItem('Vehicle',
@@ -536,6 +522,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                 driver.licenseType.isNotEmpty ? driver.licenseType : 'N/A'),
             const SizedBox(height: 8),
             _buildInfoItem('Applied', _formatDate(driver.appliedAt)),
+            const SizedBox(height: 8),
+            _buildInfoItem('Time', _formatTime(driver.appliedAt)),
             const SizedBox(height: 8),
             if (driver.subscriptionStartDate != null &&
                 driver.subscriptionStartDate!.isNotEmpty) ...[
@@ -561,16 +549,23 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                         fontWeight: FontWeight.w700,
                         color: Colors.green,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (driver.subscriptionAmount != null &&
                       driver.subscriptionAmount!.isNotEmpty)
-                    Text(
-                      '₹${driver.subscriptionAmount}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey.shade800,
+                    Container(
+                      constraints: const BoxConstraints(maxWidth: 80),
+                      child: Text(
+                        '₹${driver.subscriptionAmount}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey.shade800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                 ],
@@ -633,11 +628,341 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
   String _formatDate(String date) {
     if (date.isEmpty) return 'N/A';
+    
+
+    
     try {
-      final dt = DateTime.parse(date);
-      return '${dt.day}/${dt.month}/${dt.year}';
+      DateTime dt;
+      
+      // Try different parsing approaches
+      if (date.contains('-')) {
+        // Handle YYYY-MM-DD or YYYY-MM-DD HH:MM:SS format
+        dt = DateTime.parse(date);
+      } else if (date.contains('/')) {
+        // Handle DD/MM/YYYY format
+        final parts = date.split(' ')[0].split('/'); // Take only date part if datetime
+        if (parts.length == 3) {
+          final day = int.parse(parts[0]);
+          final month = int.parse(parts[1]);
+          var year = int.parse(parts[2]);
+          
+          // Fix 2-digit year to 4-digit year
+          if (year < 100) {
+            if (year > 50) {
+              year += 1900; // 51-99 -> 1951-1999
+            } else {
+              year += 2000; // 00-50 -> 2000-2050
+            }
+          }
+          
+          dt = DateTime(year, month, day);
+        } else {
+          throw FormatException('Invalid date format');
+        }
+      } else {
+        // Try parsing as-is
+        dt = DateTime.parse(date);
+      }
+      
+      // Ensure datetime is reasonable (not in future, not too old)
+      final now = DateTime.now();
+      final currentYear = now.year;
+      
+      // Log if datetime is in future but display the actual database date
+      if (dt.isAfter(now)) {
+        print('ℹ️ Database contains future date: $dt (displaying original)');
+        // Keep and display the original database date
+      }
+      
+      var correctedYear = dt.year;
+      
+      // Only correct year if it's unreasonably old (before 2020)
+      // Current year (2025) and future years are now valid
+      if (dt.year < 2020) {
+        // If year is too old (before 2020), use current year
+        correctedYear = currentYear;
+        print('⚠️ Old year detected: ${dt.year}, corrected to: $correctedYear');
+      }
+      
+      return '${dt.day}/${dt.month}/$correctedYear';
+      
     } catch (e) {
-      return date;
+
+      
+      // Last resort: try to extract numbers and format them
+      try {
+        final numbers = RegExp(r'\d+').allMatches(date).map((m) => m.group(0)!).toList();
+        if (numbers.length >= 3) {
+          var day = int.parse(numbers[0]);
+          var month = int.parse(numbers[1]);
+          var year = int.parse(numbers[2]);
+          
+          // Fix 2-digit year
+          if (year < 100) {
+            if (year > 50) {
+              year += 1900;
+            } else {
+              year += 2000;
+            }
+          }
+          
+          // Only fix unreasonably old years (before 2020)
+          if (year < 2020) {
+            year = DateTime.now().year;
+          }
+          
+          // Ensure valid day/month
+          if (day > 31) day = 1;
+          if (month > 12) month = 1;
+          
+          return '$day/$month/$year';
+        }
+        
+        return date; // Return original if can't parse
+      } catch (e2) {
+        return date; // Return original if all parsing fails
+      }
+    }
+  }
+
+  String _formatTime(String date) {
+    if (date.isEmpty) return 'N/A';
+    
+    // Debug: Show original database time
+    print('📅 Original database time: $date');
+    
+    try {
+      DateTime dt;
+      
+      // Try parsing the full datetime string
+      if (date.contains('-')) {
+        dt = DateTime.parse(date);
+      } else if (date.contains('/') && date.contains(' ')) {
+        // Handle DD/MM/YYYY HH:MM:SS format
+        final parts = date.split(' ');
+        if (parts.length >= 2) {
+          final datePart = parts[0].split('/');
+          final timePart = parts[1].split(':');
+          
+          if (datePart.length == 3 && timePart.length >= 2) {
+            final day = int.parse(datePart[0]);
+            final month = int.parse(datePart[1]);
+            var year = int.parse(datePart[2]);
+            final hour = int.parse(timePart[0]);
+            final minute = int.parse(timePart[1]);
+            
+            // Fix 2-digit year
+            if (year < 100) {
+              year += (year > 50) ? 1900 : 2000;
+            }
+            
+            dt = DateTime(year, month, day, hour, minute);
+          } else {
+            throw FormatException('Invalid datetime format');
+          }
+        } else {
+          throw FormatException('No time part found');
+        }
+      } else {
+        dt = DateTime.parse(date);
+      }
+      
+      // Log if datetime is in the future but keep the original time from database
+      final now = DateTime.now();
+      
+      if (dt.isAfter(now)) {
+        print('ℹ️ Database contains future datetime: $dt, current: $now (keeping original)');
+        // Keep the original database time - don't modify it
+      }
+      
+      // Format time as HH:MM AM/PM
+      final hour = dt.hour;
+      final minute = dt.minute;
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+      final formattedMinute = minute.toString().padLeft(2, '0');
+      
+      return '$displayHour:$formattedMinute $period';
+      
+    } catch (e) {
+
+      
+      // Try to extract time manually
+      try {
+        final timeRegex = RegExp(r'(\d{1,2}):(\d{2})(?::(\d{2}))?');
+        final match = timeRegex.firstMatch(date);
+        
+        if (match != null) {
+          final hour = int.parse(match.group(1)!);
+          final minute = int.parse(match.group(2)!);
+          
+          final period = hour >= 12 ? 'PM' : 'AM';
+          final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+          final formattedMinute = minute.toString().padLeft(2, '0');
+          
+          return '$displayHour:$formattedMinute $period';
+        }
+        
+        return 'N/A';
+      } catch (e2) {
+        return 'N/A';
+      }
+    }
+  }
+
+  Color _getFeedbackColor(String? feedback) {
+    if (feedback == null || feedback.isEmpty) return Colors.white;
+    
+    switch (feedback.toLowerCase()) {
+      // Green - Connected/Interview related
+      case 'interview done':
+      case 'interview fixed':
+      case 'ready for interview':
+      case 'will confirm later':
+      case 'match making done':
+        return Colors.green.shade50;
+      
+      // Yellow - Call issues
+      case 'ringing':
+      case 'call busy':
+      case 'switched off':
+      case 'not reachable':
+      case 'disconnected':
+        return Colors.yellow.shade50;
+      
+      // Blue - Call back later
+      case 'busy right now':
+      case 'call tomorrow morning':
+      case 'call in evening':
+      case 'call after 2 days':
+        return Colors.blue.shade50;
+      
+      // Red - Not selected/interested
+      case 'not selected':
+      case 'not interested':
+        return Colors.red.shade50;
+      
+      default:
+        return Colors.grey.shade50;
+    }
+  }
+
+  Color _getFeedbackBorderColor(String? feedback) {
+    if (feedback == null || feedback.isEmpty) return Colors.grey.shade200;
+    
+    switch (feedback.toLowerCase()) {
+      // Green - Connected/Interview related
+      case 'interview done':
+      case 'interview fixed':
+      case 'ready for interview':
+      case 'will confirm later':
+      case 'match making done':
+        return Colors.green.shade200;
+      
+      // Yellow - Call issues
+      case 'ringing':
+      case 'call busy':
+      case 'switched off':
+      case 'not reachable':
+      case 'disconnected':
+        return Colors.yellow.shade200;
+      
+      // Blue - Call back later
+      case 'busy right now':
+      case 'call tomorrow morning':
+      case 'call in evening':
+      case 'call after 2 days':
+        return Colors.blue.shade200;
+      
+      // Red - Not selected/interested
+      case 'not selected':
+      case 'not interested':
+        return Colors.red.shade200;
+      
+      default:
+        return Colors.grey.shade300;
+    }
+  }
+
+  Color _getFeedbackTextColor(String? feedback) {
+    if (feedback == null || feedback.isEmpty) return Colors.grey.shade600;
+    
+    switch (feedback.toLowerCase()) {
+      // Green - Connected/Interview related
+      case 'interview done':
+      case 'interview fixed':
+      case 'ready for interview':
+      case 'will confirm later':
+      case 'match making done':
+        return Colors.green.shade700;
+      
+      // Yellow - Call issues
+      case 'ringing':
+      case 'call busy':
+      case 'switched off':
+      case 'not reachable':
+      case 'disconnected':
+        return Colors.yellow.shade700;
+      
+      // Blue - Call back later
+      case 'busy right now':
+      case 'call tomorrow morning':
+      case 'call in evening':
+      case 'call after 2 days':
+        return Colors.blue.shade700;
+      
+      // Red - Not selected/interested
+      case 'not selected':
+      case 'not interested':
+        return Colors.red.shade700;
+      
+      default:
+        return Colors.grey.shade700;
+    }
+  }
+
+  Color _getMatchStatusColor(String? matchStatus) {
+    if (matchStatus == null || matchStatus.isEmpty) return Colors.white;
+    
+    switch (matchStatus.toLowerCase()) {
+      case 'selected':
+        return Colors.green.shade50;
+      case 'not selected':
+        return Colors.red.shade50;
+      case 'pending':
+        return Colors.yellow.shade50;
+      default:
+        return Colors.grey.shade50;
+    }
+  }
+
+  Color _getMatchStatusBorderColor(String? matchStatus) {
+    if (matchStatus == null || matchStatus.isEmpty) return Colors.grey.shade200;
+    
+    switch (matchStatus.toLowerCase()) {
+      case 'selected':
+        return Colors.green.shade200;
+      case 'not selected':
+        return Colors.red.shade200;
+      case 'pending':
+        return Colors.yellow.shade200;
+      default:
+        return Colors.grey.shade300;
+    }
+  }
+
+  Color _getMatchStatusTextColor(String? matchStatus) {
+    if (matchStatus == null || matchStatus.isEmpty) return Colors.grey.shade600;
+    
+    switch (matchStatus.toLowerCase()) {
+      case 'selected':
+        return Colors.green.shade700;
+      case 'not selected':
+        return Colors.red.shade700;
+      case 'pending':
+        return Colors.yellow.shade700;
+      default:
+        return Colors.grey.shade700;
     }
   }
 
@@ -682,7 +1007,10 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.darkGray)),
-                        Text(driver.driverTmid.isNotEmpty ? driver.driverTmid : 'ID: ${driver.driverId}',
+                        Text(
+                            driver.driverTmid.isNotEmpty
+                                ? driver.driverTmid
+                                : 'ID: ${driver.driverId}',
                             style: const TextStyle(
                                 fontSize: 14, color: AppColors.softGray)),
                       ],
@@ -743,6 +1071,15 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                         driver.preferredLocation.isNotEmpty
                             ? driver.preferredLocation
                             : 'N/A'),
+                    const SizedBox(height: 24),
+                    const Text('Application Details',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.darkGray)),
+                    const SizedBox(height: 12),
+                    _buildDetailItem('Applied Date', _formatDate(driver.appliedAt)),
+                    _buildDetailItem('Applied Time', _formatTime(driver.appliedAt)),
                     const SizedBox(height: 24),
                     const Text('Documents',
                         style: TextStyle(
@@ -837,23 +1174,65 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
               notes: notes,
               jobId: widget.jobId,
             );
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Feedback saved successfully'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            }
+            
+            // Update the driver's feedback status locally
+            setState(() {
+              final index = _applicants.indexWhere((d) => d.driverId == driver.driverId);
+              if (index != -1) {
+                _applicants[index] = DriverApplicant(
+                  jobId: driver.jobId,
+                  jobTitle: driver.jobTitle,
+                  contractorId: driver.contractorId,
+                  driverId: driver.driverId,
+                  driverTmid: driver.driverTmid,
+                  name: driver.name,
+                  mobile: driver.mobile,
+                  email: driver.email,
+                  city: driver.city,
+                  state: driver.state,
+                  vehicleType: driver.vehicleType,
+                  drivingExperience: driver.drivingExperience,
+                  licenseType: driver.licenseType,
+                  licenseNumber: driver.licenseNumber,
+                  preferredLocation: driver.preferredLocation,
+                  aadharNumber: driver.aadharNumber,
+                  panNumber: driver.panNumber,
+                  gstNumber: driver.gstNumber,
+                  status: driver.status,
+                  createdAt: driver.createdAt,
+                  updatedAt: driver.updatedAt,
+                  appliedAt: driver.appliedAt,
+                  profileCompletion: driver.profileCompletion,
+                  subscriptionAmount: driver.subscriptionAmount,
+                  subscriptionStartDate: driver.subscriptionStartDate,
+                  subscriptionEndDate: driver.subscriptionEndDate,
+                  subscriptionStatus: driver.subscriptionStatus,
+                  callFeedback: feedback,
+                  matchStatus: matchStatus,
+                  feedbackNotes: notes,
+                );
+              }
+              _sortApplicants();
+              _onSearchChanged(); // Refresh filtered list
+            });
+            
+            // Show toast using global key - more reliable
+            _scaffoldMessengerKey.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('Feedback submitted successfully'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
           } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error: ${e.toString()}'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
+            // Show error toast using global key
+            _scaffoldMessengerKey.currentState?.showSnackBar(
+              SnackBar(
+                content: Text('Error: Exception: Failed to save call feedback: Exception: ${e.toString()}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
+            );
           }
         },
       ),
@@ -865,10 +1244,27 @@ class CurvedHeaderClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path();
-    path.lineTo(0, size.height - 40);
-    path.quadraticBezierTo(
-        size.width / 2, size.height, size.width, size.height - 40);
+    
+    // Start from top-left corner
+    path.lineTo(0, 0);
+    
+    // Draw top edge
     path.lineTo(size.width, 0);
+    
+    // Draw right edge to the curve start point
+    path.lineTo(size.width, size.height - 50);
+    
+    // Create a simple rounded bottom curve
+    path.quadraticBezierTo(
+      size.width * 0.5,   // Control point X (center)
+      size.height,        // Control point Y (bottom)
+      0,                  // End point X (left edge)
+      size.height - 50,   // End point Y
+    );
+    
+    // Draw left edge back to start
+    path.lineTo(0, 0);
+    
     path.close();
     return path;
   }

@@ -40,7 +40,6 @@ class _DashboardPageState extends State<DashboardPage>
 
   // Dynamic data
   Map<String, int> _dashboardStats = {};
-  bool _isLoadingStats = true;
 
   @override
   bool get wantKeepAlive => true;
@@ -71,7 +70,7 @@ class _DashboardPageState extends State<DashboardPage>
   Future<void> _loadDashboardData() async {
     if (!mounted) return;
 
-    setState(() => _isLoadingStats = true);
+    // Loading dashboard data
 
     try {
       // Load stats from telecaller service
@@ -81,7 +80,6 @@ class _DashboardPageState extends State<DashboardPage>
       if (mounted) {
         setState(() {
           _dashboardStats = stats;
-          _isLoadingStats = false;
         });
         print('✅ Dashboard UI Updated with stats');
 
@@ -99,7 +97,7 @@ class _DashboardPageState extends State<DashboardPage>
     } catch (e) {
       print('❌ Error loading dashboard stats: $e');
       if (mounted) {
-        setState(() => _isLoadingStats = false);
+        // Error occurred while loading stats
 
         // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
@@ -128,7 +126,7 @@ class _DashboardPageState extends State<DashboardPage>
 
   void _onScroll() {
     final offset = _scrollController.offset;
-    final newVisibility = offset < 120;
+    final newVisibility = offset < 100;
     if (_isKPIVisible != newVisibility) {
       setState(() {
         _isKPIVisible = newVisibility;
@@ -183,247 +181,333 @@ class _DashboardPageState extends State<DashboardPage>
       onPanUpdate: (_) => ActivityTrackerService.instance.recordActivity(),
       child: Scaffold(
         backgroundColor: Colors.white,
-        body: SafeArea(
-          child: Stack(
-            children: [
-              // Main Content with pull-to-refresh
-              RefreshIndicator(
+        appBar: null, // Explicitly no AppBar to prevent conflicts
+        body: Column(
+          children: [
+            // FIXED HEADER - This will NEVER scroll
+            Material(
+              elevation: 4,
+              color: Colors.transparent,
+              shadowColor: Colors.black.withOpacity(0.1),
+              child: _buildFixedHeader(),
+            ),
+
+            // SCROLLABLE CONTENT - Only this part scrolls
+            Expanded(
+              child: RefreshIndicator(
                 onRefresh: _loadDashboardData,
                 color: AppTheme.primaryBlue,
-                child: CustomScrollView(
+                child: SingleChildScrollView(
                   controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
-                  cacheExtent: 1000,
-                  slivers: [
-                    // Custom App Bar
-                    _buildStickyAppBar(),
+                  padding: const EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    bottom: 100,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Search bar
+                      _buildSearchBar(),
 
-                    // KPI Section as separate sliver for better performance
-                    SliverToBoxAdapter(child: _buildKPISection()),
+                      const SizedBox(height: 20),
 
-                    // Smart Calling Section
-                    SliverToBoxAdapter(child: _buildSmartCallingSection()),
+                      // KPI Cards in horizontal scroll
+                      _buildKPICardsSection(),
 
-                    // Performance Section with Charts
-                    SliverToBoxAdapter(child: _buildPerformanceSection()),
+                      const SizedBox(height: 24),
 
-                    // Upcoming Follow-ups Section
-                    SliverToBoxAdapter(child: _buildFollowupsSection()),
+                      // Smart Calling Card
+                      _buildSmartCallingCard(),
 
-                    // Bottom padding for bottom navigation
-                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                  ],
+                      const SizedBox(height: 20),
+
+                      // Call History Section
+                      _buildCallHistorySection(),
+
+                      const SizedBox(height: 20),
+
+                      // Performance Section
+                      _buildPerformanceSection(),
+
+                      const SizedBox(height: 20),
+
+                      // Follow-ups Section
+                      _buildFollowupsSection(),
+                    ],
+                  ),
                 ),
               ),
-
-              // Floating KPI Summary (when scrolled)
-              if (!_isKPIVisible) _buildFloatingKPISummary(),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildStickyAppBar() {
-    return SliverAppBar(
-      expandedHeight: 160,
-      floating: false,
-      pinned: true,
-      elevation: 0,
-      backgroundColor: Colors.white,
-      automaticallyImplyLeading: false,
-      leading: widget.onOpenDrawer != null
-          ? IconButton(
-              icon: const Icon(Icons.menu, color: Colors.black87),
-              onPressed: widget.onOpenDrawer,
-            )
-          : null,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.08),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
+  Widget _buildFixedHeader() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        // Add minimal shadow to ensure it appears above scrollable content
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(60, 16, 24, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // Top navigation bar with menu, title, and profile
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                                  _getGreeting(),
-                                  style: AppTheme.bodyLarge.copyWith(
-                                    color: Colors.grey.shade600,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                )
-                                .animate()
-                                .fadeIn(duration: 600.ms)
-                                .slideX(begin: -0.3, end: 0),
-                            const SizedBox(height: 4),
-                            Text(
-                                  'Hi ${_getUserName()} 👋',
-                                  style: AppTheme.headingMedium.copyWith(
-                                    color: Colors.grey.shade900,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: -0.5,
-                                    height: 1.2,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                )
-                                .animate()
-                                .fadeIn(duration: 600.ms, delay: 200.ms)
-                                .slideX(begin: -0.3, end: 0),
-                          ],
+                  // Menu button - flat design, no shadow
+                  Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: Colors.white, // Flat white background
                         ),
-                      ),
+                        child: IconButton(
+                          icon: Icon(
+                            Icons.menu_rounded,
+                            color: Colors.grey.shade700,
+                            size: 22,
+                          ),
+                          onPressed: widget.onOpenDrawer,
+                          padding: EdgeInsets.zero,
+                        ),
+                      )
+                      .animate()
+                      .fadeIn(duration: 600.ms)
+                      .scale(begin: const Offset(0.8, 0.8)),
+
+                  // Expanded center section for "Home" title
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'Home',
+                        style: AppTheme.headingMedium.copyWith(
+                          color: Colors.grey.shade800,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ).animate().fadeIn(duration: 600.ms, delay: 200.ms),
+                    ),
+                  ),
+
+                  // Right side icons
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Notification bell - flat design
+                      Container(
+                            width: 40,
+                            height: 40,
+                            decoration: const BoxDecoration(
+                              color: Colors.white, // Flat white background
+                            ),
+                            child: Stack(
+                              children: [
+                                Center(
+                                  child: Icon(
+                                    Icons.notifications_none_rounded,
+                                    color: Colors.grey.shade700,
+                                    size: 20,
+                                  ),
+                                ),
+                                // Red notification dot
+                                Positioned(
+                                  top: 10,
+                                  right: 10,
+                                  child: Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                          .animate()
+                          .fadeIn(duration: 600.ms, delay: 400.ms)
+                          .scale(begin: const Offset(0.8, 0.8)),
+
                       const SizedBox(width: 12),
-                      _buildProfileSection(),
+
+                      // Profile avatar
+                      GestureDetector(
+                            onTap: _navigateToProfile,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor,
+                                borderRadius: BorderRadius.circular(
+                                  20,
+                                ), // Circular avatar
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _getUserName().isNotEmpty
+                                      ? _getUserName()[0].toUpperCase()
+                                      : 'U',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                          .animate()
+                          .fadeIn(duration: 600.ms, delay: 600.ms)
+                          .scale(begin: const Offset(0.8, 0.8)),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  _buildSearchBar(),
                 ],
               ),
             ),
-          ),
+
+            // Greeting section - left aligned below menu button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                24,
+                8,
+                16,
+                16,
+              ), // Left padding for alignment below menu
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _buildGreetingSection(),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildProfileSection() {
-    return Row(
+  Widget _buildGreetingSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Notifications Button
-        Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200, width: 1),
+        Text(
+              'Hi ${_getUserName()}!',
+              style: AppTheme.headingLarge.copyWith(
+                color: AppTheme.primaryColor, // Blue color as requested
+                fontSize: 26, // Increased font size for wider look
+                fontWeight: FontWeight.w800, // Made it bolder
+                letterSpacing:
+                    -0.3, // Slightly reduced letter spacing for better width
+                height: 1.1,
               ),
-              child: Icon(
-                Icons.notifications_none_rounded,
-                color: Colors.grey.shade700,
-                size: 20,
+            )
+            .animate()
+            .fadeIn(duration: 600.ms, delay: 200.ms)
+            .slideY(begin: 0.3, end: 0),
+
+        const SizedBox(height: 4),
+
+        Text(
+              _getGreeting(),
+              style: AppTheme.bodyLarge.copyWith(
+                color: Colors.grey.shade600, // Grey color as requested
+                fontSize: 14, // Smaller font size
+                fontWeight: FontWeight.w500,
               ),
             )
             .animate()
             .fadeIn(duration: 600.ms, delay: 400.ms)
-            .scale(begin: const Offset(0.8, 0.8)),
-        const SizedBox(width: 12),
-        // Profile Avatar
-        GestureDetector(
-          onTap: _navigateToProfile,
-          child:
-              Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppTheme.primaryColor.withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.person_rounded,
-                      color: AppTheme.primaryColor,
-                      size: 20,
-                    ),
-                  )
-                  .animate()
-                  .fadeIn(duration: 600.ms, delay: 600.ms)
-                  .scale(begin: const Offset(0.8, 0.8)),
-        ),
+            .slideY(begin: 0.3, end: 0),
       ],
     );
   }
 
   Widget _buildSearchBar() {
     return GestureDetector(
-      onTap: _navigateToSearch,
-      child:
-          Container(
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.grey.shade200, width: 1),
+          onTap: _navigateToSearch,
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
                 ),
-                child: Row(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Icon(
-                        Icons.search_rounded,
-                        color: Colors.grey.shade500,
-                        size: 20,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        'Search leads, contacts...',
-                        style: AppTheme.bodyLarge.copyWith(
-                          color: Colors.grey.shade500,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                  ],
+              ],
+            ),
+            child: Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Icon(
+                    Icons.search_rounded,
+                    color: Colors.grey.shade500,
+                    size: 22,
+                  ),
                 ),
-              )
-              .animate()
-              .fadeIn(duration: 600.ms, delay: 800.ms)
-              .slideY(begin: 0.3, end: 0),
-    );
+                Expanded(
+                  child: Text(
+                    'Search here...',
+                    style: AppTheme.bodyLarge.copyWith(
+                      color: Colors.grey.shade500,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )
+        .animate()
+        .fadeIn(duration: 600.ms, delay: 800.ms)
+        .slideY(begin: 0.3, end: 0);
   }
 
-  Widget _buildKPISection() {
-    // Create dynamic KPI data from real stats
+  Widget _buildKPICardsSection() {
     final kpiData = _getDynamicKPIData();
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 20),
-      child: SizedBox(
-        height: 140,
-        child: _isLoadingStats
-            ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16), // Consistent padding
-                itemCount: kpiData.length,
-                cacheExtent: 500,
-                addAutomaticKeepAlives: true,
-                physics: const NeverScrollableScrollPhysics(), // Disable scrolling since items should fit
-                itemBuilder: (context, index) {
-                  final kpi = kpiData[index];
-                  return _buildOptimizedKPITile(kpi, index);
-                },
+    return SizedBox(
+      height: 120,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: kpiData.map((kpi) {
+            final index = kpiData.indexOf(kpi);
+            return Padding(
+              padding: EdgeInsets.only(
+                left: index == 0 ? 0 : 8,
+                right: index == kpiData.length - 1 ? 0 : 8,
               ),
+              child: SizedBox(
+                width: 100, // Reduced width to prevent overflow
+                child: _buildKPICard(kpi),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -469,94 +553,70 @@ class _DashboardPageState extends State<DashboardPage>
     ];
   }
 
-  Widget _buildOptimizedKPITile(KPIData kpi, int index) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    // Calculate available width: screen width minus horizontal padding (32) and margins between items (4*4=16)
-    final availableWidth = screenWidth - 32 - 16;
-    final tileWidth = availableWidth / 5; // Divide equally among 5 items
-
+  Widget _buildKPICard(KPIData kpi) {
     return RepaintBoundary(
-      // Isolate repaints for better performance
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16), // Reduced border radius
+          borderRadius: BorderRadius.circular(16),
           onTap: () {
             HapticFeedback.lightImpact();
             _showKPIDetails(kpi);
           },
           child: Container(
-            width: tileWidth, // Use calculated width without clamping
-            margin: EdgeInsets.only(
-              right: index == 4 ? 0 : 4, // Consistent 4px margin between items
-            ),
+            height: 120,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16), // Reduced border radius
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.black.withOpacity(0.04),
-                  blurRadius: 15, // Reduced shadow
-                  offset: const Offset(0, 6),
-                  spreadRadius: -3,
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8), // Optimized padding
+              padding: const EdgeInsets.all(12), // Reduced padding
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center, // Center align content
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Icon and trending icon row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(3), // Minimal padding
-                        decoration: BoxDecoration(
-                          color: Color(kpi.color).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          kpi.icon,
-                          style: const TextStyle(fontSize: 12), // Smaller icon
-                        ),
-                      ),
-                      Icon(
-                        Icons.trending_up_rounded,
-                        color: Color(kpi.color),
-                        size: 10, // Smaller trending icon
-                      ),
-                    ],
+                  // Icon at top
+                  Container(
+                    padding: const EdgeInsets.all(6), // Reduced padding
+                    decoration: BoxDecoration(
+                      color: Color(kpi.color).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      kpi.icon,
+                      style: const TextStyle(fontSize: 16), // Reduced size
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  // Value and title column
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        kpi.value,
-                        style: AppTheme.headingMedium.copyWith(
-                          color: AppTheme.black,
-                          fontSize: 16, // Reduced font size
-                          fontWeight: FontWeight.w800,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 1),
-                      Text(
-                        kpi.title,
-                        style: AppTheme.bodyMedium.copyWith(
-                          color: AppTheme.gray,
-                          fontSize: 8, // Smaller font size
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+
+                  const Spacer(),
+
+                  // Bold number
+                  Text(
+                    kpi.value,
+                    style: AppTheme.headingMedium.copyWith(
+                      color: AppTheme.black,
+                      fontSize: 20, // Reduced size
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+
+                  const SizedBox(height: 2), // Reduced spacing
+                  // Small title below number
+                  Text(
+                    kpi.title,
+                    style: AppTheme.bodyMedium.copyWith(
+                      color: AppTheme.gray,
+                      fontSize: 9, // Reduced size
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -567,193 +627,125 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _buildFloatingKPISummary() {
-    if (_isLoadingStats) return const SizedBox.shrink();
-    final kpiData = _getDynamicKPIData();
-
-    return Positioned(
-      top: 10,
-      left: 12, // Reduced from 16
-      right: 12, // Reduced from 16
-      child: RepaintBoundary(
-        child: AnimatedOpacity(
-          opacity: !_isKPIVisible ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 200),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced padding
-            decoration: BoxDecoration(
-              color: AppTheme.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.black.withOpacity(0.1),
-                  blurRadius: 20,
-                  offset: const Offset(0, 5),
-                  spreadRadius: -3,
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Changed from spaceAround
-              children: kpiData.map((kpi) {
-                return Flexible(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        kpi.value,
-                        style: AppTheme.titleMedium.copyWith(
-                          color: Color(kpi.color),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14, // Reduced from 16
-                        ),
-                      ),
-                      const SizedBox(height: 1), // Reduced from 2
-                      Text(
-                        kpi.title.split(' ').first,
-                        style: AppTheme.bodyMedium.copyWith(
-                          fontSize: 9, // Reduced from 10
-                          color: AppTheme.gray,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
+  Widget _buildSmartCallingCard() {
+    return RepaintBoundary(
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primaryBlue.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+              spreadRadius: -5,
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Text(
+              'Smart Calling',
+              style: AppTheme.headingMedium.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Start automated IVR call sequence for your next best lead.',
+              style: AppTheme.bodyMedium.copyWith(
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            SmartCallButton(
+              onPressed: () {
+                _startSmartCalling();
+              },
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildSmartCallingSection() {
-    return RepaintBoundary(
-      child: Column(
-        children: [
-          Container(
-            margin: const EdgeInsets.all(20),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+  Widget _buildCallHistorySection() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _navigateToCallHistory,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.indigo.withOpacity(0.2),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primaryBlue.withOpacity(0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                  spreadRadius: -5,
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'Smart Calling',
-                  style: AppTheme.headingMedium.copyWith(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Start automated IVR call sequence for your next best lead.',
-                  style: AppTheme.bodyMedium.copyWith(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                SmartCallButton(
-                  onPressed: () {
-                    _startSmartCalling();
-                  },
-                ),
-              ],
-            ),
+            ],
           ),
-          // Call History Button
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _navigateToCallHistory,
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.indigo.withValues(alpha: 0.2),
-                      width: 1.5,
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.history_rounded,
+                  color: Colors.indigo,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Call History',
+                      style: AppTheme.titleMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                    const SizedBox(height: 2),
+                    Text(
+                      'View all your call logs with feedback',
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.indigo.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.history_rounded,
-                          color: Colors.indigo,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Call History',
-                              style: AppTheme.titleMedium.copyWith(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'View all your call logs with feedback',
-                              style: AppTheme.bodyMedium.copyWith(
-                                color: Colors.grey.shade600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        color: Colors.grey.shade400,
-                        size: 16,
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Colors.grey.shade400,
+                size: 16,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -768,7 +760,6 @@ class _DashboardPageState extends State<DashboardPage>
   Widget _buildPerformanceSection() {
     return RepaintBoundary(
       child: Container(
-        margin: const EdgeInsets.all(20),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -1087,7 +1078,6 @@ class _DashboardPageState extends State<DashboardPage>
 
     return RepaintBoundary(
       child: Container(
-        margin: const EdgeInsets.all(20),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppTheme.white,
@@ -1162,7 +1152,9 @@ class _DashboardPageState extends State<DashboardPage>
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
                       color: const Color(0xFF4CAF50),
-                      borderRadius: BorderRadius.circular(12), // Reduced from 16
+                      borderRadius: BorderRadius.circular(
+                        12,
+                      ), // Reduced from 16
                     ),
                     alignment: Alignment.centerLeft,
                     child: Row(
@@ -1190,7 +1182,9 @@ class _DashboardPageState extends State<DashboardPage>
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
                       color: AppTheme.accentPurple,
-                      borderRadius: BorderRadius.circular(12), // Reduced from 16
+                      borderRadius: BorderRadius.circular(
+                        12,
+                      ), // Reduced from 16
                     ),
                     alignment: Alignment.centerRight,
                     child: Row(
@@ -1222,11 +1216,15 @@ class _DashboardPageState extends State<DashboardPage>
                     }
                   },
                   child: Container(
-                    margin: const EdgeInsets.only(bottom: 8), // Reduced from 12
-                    height: 70, // Fixed height to reduce card size
+                    margin: const EdgeInsets.only(bottom: 8),
+                    constraints: const BoxConstraints(
+                      minHeight: 75, // Minimum height to prevent overflow
+                    ),
                     decoration: BoxDecoration(
                       color: _getStatusColor(followup.status).withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12), // Reduced from 16
+                      borderRadius: BorderRadius.circular(
+                        12,
+                      ), // Reduced from 16
                       border: Border.all(
                         color: _getStatusColor(
                           followup.status,
@@ -1237,20 +1235,29 @@ class _DashboardPageState extends State<DashboardPage>
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(12), // Reduced from 16
+                        borderRadius: BorderRadius.circular(
+                          12,
+                        ), // Reduced from 16
                         onTap: () => _initiateCall(followup),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced padding
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ), // Reduced padding
                           child: Row(
                             children: [
                               // Left side - Icon
                               Container(
-                                padding: const EdgeInsets.all(6), // Reduced from 8
+                                padding: const EdgeInsets.all(
+                                  6,
+                                ), // Reduced from 8
                                 decoration: BoxDecoration(
                                   color: _getStatusColor(
                                     followup.status,
                                   ).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8), // Reduced from 10
+                                  borderRadius: BorderRadius.circular(
+                                    8,
+                                  ), // Reduced from 10
                                 ),
                                 child: Icon(
                                   Icons.business_center_rounded,
@@ -1293,14 +1300,18 @@ class _DashboardPageState extends State<DashboardPage>
                                           size: 10, // Reduced from 12
                                           color: AppTheme.gray.withOpacity(0.7),
                                         ),
-                                        const SizedBox(width: 3), // Reduced from 4
+                                        const SizedBox(
+                                          width: 3,
+                                        ), // Reduced from 4
                                         Flexible(
                                           child: Text(
                                             _formatFollowupTime(
                                               followup.followUpDate!,
                                             ),
                                             style: AppTheme.bodyMedium.copyWith(
-                                              color: AppTheme.gray.withOpacity(0.8),
+                                              color: AppTheme.gray.withOpacity(
+                                                0.8,
+                                              ),
                                               fontSize: 10, // Reduced from 11
                                               fontWeight: FontWeight.w400,
                                             ),
@@ -1313,41 +1324,44 @@ class _DashboardPageState extends State<DashboardPage>
                                   ],
                                 ),
                               ),
-                              // Right side - Call button (vertically centered) and Status badge (bottom)
+                              // Right side - Status badge (top) and Call button (bottom)
                               Column(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  // Call button - vertically centered
-                                  Container(
-                                    padding: const EdgeInsets.all(8), // Increased for better touch target
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.accentPurple.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      Icons.phone_rounded,
-                                      color: AppTheme.accentPurple,
-                                      size: 18, // Increased from 14
-                                    ),
-                                  ),
-                                  // Status badge - bottom right
+                                  // Status badge - top right corner
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, // Reduced from 8
-                                      vertical: 2, // Reduced from 3
+                                      horizontal: 8,
+                                      vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
                                       color: _getStatusColor(followup.status),
-                                      borderRadius: BorderRadius.circular(8), // Reduced from 10
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
                                       _getStatusText(followup.status),
                                       style: AppTheme.bodyMedium.copyWith(
                                         color: Colors.white,
-                                        fontSize: 8, // Reduced from 9
+                                        fontSize: 9,
                                         fontWeight: FontWeight.w700,
                                       ),
+                                    ),
+                                  ),
+                                  // Call button - bottom right
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.accentPurple.withOpacity(
+                                        0.15,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      Icons.phone_rounded,
+                                      color: AppTheme.accentPurple,
+                                      size: 18,
                                     ),
                                   ),
                                 ],

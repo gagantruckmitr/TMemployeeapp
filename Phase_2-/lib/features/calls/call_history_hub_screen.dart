@@ -3,6 +3,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import 'transporter_call_history_screen.dart';
 import 'call_history_screen.dart';
+import '../main_container.dart' as main;
 
 class CallHistoryHubScreen extends StatefulWidget {
   const CallHistoryHubScreen({Key? key}) : super(key: key);
@@ -32,10 +33,37 @@ class _CallHistoryHubScreenState extends State<CallHistoryHubScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Call History',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.white)),
         backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: false,
         toolbarHeight: 48,
+        leadingWidth: 40,
+        leading: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => const main.MainContainer(),
+                  ),
+                );
+              }
+            },
+            child: const Icon(
+              Icons.arrow_back,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: TabBar(
@@ -273,6 +301,32 @@ class _TransporterCard extends StatelessWidget {
     required this.onTap,
   }) : super(key: key);
 
+  String _getDisplayName(Map<String, dynamic> transporter) {
+    final name = transporter['name']?.toString().trim();
+    final company = transporter['company']?.toString().trim();
+    final tmid = transporter['tmid']?.toString().trim();
+
+    // If name exists and is not empty, use it
+    if (name != null && name.isNotEmpty && name.toLowerCase() != 'null') {
+      return name;
+    }
+
+    // If company exists, use it
+    if (company != null &&
+        company.isNotEmpty &&
+        company.toLowerCase() != 'null') {
+      return company;
+    }
+
+    // If TMID exists, use it with a prefix
+    if (tmid != null && tmid.isNotEmpty && tmid.toLowerCase() != 'null') {
+      return 'Contact ($tmid)';
+    }
+
+    // Last resort
+    return 'Unknown Contact';
+  }
+
   @override
   Widget build(BuildContext context) {
     final callCount = transporter['callCount'] ?? 0;
@@ -295,7 +349,7 @@ class _TransporterCard extends StatelessWidget {
                     width: 50,
                     height: 50,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -334,7 +388,7 @@ class _TransporterCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      transporter['name'] ?? 'Unknown',
+                      _getDisplayName(transporter),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
 import '../../models/call_history_model.dart';
 import '../../models/phase2_user_model.dart';
+import '../../widgets/audio_player_widget.dart';
 import 'widgets/call_feedback_modal.dart';
 import 'package:intl/intl.dart';
+import '../main_container.dart' as main;
 
 class CallHistoryScreen extends StatefulWidget {
   const CallHistoryScreen({super.key});
@@ -124,6 +128,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
       backgroundColor: AppColors.background,
       body: Column(
         children: [
+          _buildHeader(),
           _buildPeriodTabs(),
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -152,25 +157,49 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     return Container(
       decoration: BoxDecoration(
         color: AppColors.primary,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              const Icon(Icons.history_rounded, color: Colors.white, size: 18),
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white, size: 20),
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (context) => const main.MainContainer(),
+                      ),
+                    );
+                  }
+                },
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 12),
+              const Icon(Icons.history_rounded, color: Colors.white, size: 20),
               const SizedBox(width: 8),
               const Text(
                 'Call History',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+                icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
                 onPressed: _loadData,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -184,21 +213,35 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
   Widget _buildPeriodTabs() {
     return Container(
-      color: Colors.white,
-      child: TabBar(
-        controller: _tabController,
-        labelColor: AppColors.primary,
-        unselectedLabelColor: Colors.grey,
-        indicatorColor: AppColors.primary,
-        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        unselectedLabelStyle:
-            const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-        tabs: const [
-          Tab(text: 'All'),
-          Tab(text: 'Today'),
-          Tab(text: 'Week'),
-          Tab(text: 'Month'),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: TabBar(
+          controller: _tabController,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: Colors.grey.shade600,
+          indicatorColor: AppColors.primary,
+          indicatorWeight: 3,
+          indicatorSize: TabBarIndicatorSize.tab,
+          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          unselectedLabelStyle:
+              const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          tabs: const [
+            Tab(text: 'All'),
+            Tab(text: 'Today'),
+            Tab(text: 'Week'),
+            Tab(text: 'Month'),
+          ],
+        ),
       ),
     );
   }
@@ -545,6 +588,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                   ),
                 ],
 
+                // Call Recording (if available)
+                if (log.callRecording.isNotEmpty)
+                  AudioPlayerWidget(recordingUrl: log.callRecording),
+
                 const SizedBox(height: 14),
 
                 // Footer Row
@@ -755,6 +802,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                           'Updated At', _formatDateTime(log.updatedAt)),
                     ]),
 
+                    // Call Recording
+                    if (log.callRecording.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      AudioPlayerWidget(recordingUrl: log.callRecording),
+                    ],
+
                     const SizedBox(height: 24),
 
                     // Action Buttons
@@ -935,38 +988,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => CallFeedbackModal(
-        userType: log.contactType.toLowerCase(),
-        userName: log.contactName,
-        userTmid: log.contactId,
-        transporterTmid:
-            log.uniqueIdTransporter.isNotEmpty ? log.uniqueIdTransporter : null,
-        jobId: log.jobId.isNotEmpty ? log.jobId : null,
-        onSubmit: (feedback, matchStatus, notes) async {
-          try {
-            await Phase2ApiService.updateCallLog(
-              id: log.id,
-              feedback: feedback,
-              matchStatus: matchStatus,
-              remark: notes,
-            );
-
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Feedback updated successfully'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-              _loadData();
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error updating feedback: $e')),
-              );
-            }
-          }
+      builder: (context) => _EditCallFeedbackModal(
+        log: log,
+        onUpdate: () {
+          _loadData();
         },
       ),
     );
@@ -1077,5 +1102,476 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     } else {
       return DateFormat('dd MMM yyyy, HH:mm').format(dateTime);
     }
+  }
+}
+
+// Edit Call Feedback Modal with Recording Upload Support
+class _EditCallFeedbackModal extends StatefulWidget {
+  final CallHistoryLog log;
+  final VoidCallback onUpdate;
+
+  const _EditCallFeedbackModal({
+    required this.log,
+    required this.onUpdate,
+  });
+
+  @override
+  State<_EditCallFeedbackModal> createState() => _EditCallFeedbackModalState();
+}
+
+class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
+  late String? _selectedFeedback;
+  late String? _selectedMatchStatus;
+  late TextEditingController _notesController;
+  File? _selectedRecordingFile;
+  String? _selectedRecordingName;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFeedback = widget.log.feedback.isNotEmpty ? widget.log.feedback : null;
+    _selectedMatchStatus = widget.log.matchStatus.isNotEmpty ? widget.log.matchStatus : null;
+    _notesController = TextEditingController(text: widget.log.remark);
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickRecording() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'wma', 'amr', 'opus', '3gp'],
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _selectedRecordingFile = File(result.files.single.path!);
+          _selectedRecordingName = result.files.single.name;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error selecting file: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitUpdate() async {
+    if (_selectedFeedback == null) return;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      await Phase2ApiService.updateCallLog(
+        id: widget.log.id,
+        feedback: _selectedFeedback,
+        matchStatus: _selectedMatchStatus,
+        remark: _notesController.text,
+        recordingFilePath: _selectedRecordingFile?.path,
+        jobId: widget.log.jobId.isNotEmpty ? widget.log.jobId : null,
+        userTmid: widget.log.contactId,
+        userType: widget.log.contactType.toLowerCase(),
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Feedback updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        widget.onUpdate();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating feedback: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Edit Call Feedback',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.darkGray,
+                        ),
+                      ),
+                      Text(
+                        '${widget.log.contactName} • ${widget.log.contactId}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSection(
+                    '1. Connected',
+                    Icons.check_circle_outline,
+                    Colors.green,
+                    [
+                      'Interview Done',
+                      'Not Selected',
+                      'Not Interested',
+                      'Interview Fixed',
+                      'Ready for Interview',
+                      'Will Confirm Later',
+                      'Match Making Done',
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _buildSection(
+                    '2. Not Connected',
+                    Icons.phone_disabled_outlined,
+                    Colors.orange,
+                    [
+                      'Ringing',
+                      'Call Busy',
+                      'Switched Off',
+                      'Not Reachable',
+                      'Disconnected',
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _buildSection(
+                    '3. Call Back Later',
+                    Icons.schedule_outlined,
+                    Colors.blue,
+                    [
+                      'Busy Right Now',
+                      'Call Tomorrow Morning',
+                      'Call in Evening',
+                      'Call After 2 Days',
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '4. Match Status',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.darkGray,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildMatchStatusChip('Selected'),
+                      _buildMatchStatusChip('Not Selected'),
+                      _buildMatchStatusChip('Pending'),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '5. Additional Notes',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.darkGray,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _notesController,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: 'Enter any remarks or follow-up details...',
+                      hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  if (widget.log.jobId.isNotEmpty) ...[
+                    const Text(
+                      '6. Call Recording (Optional)',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.darkGray,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        children: [
+                          if (_selectedRecordingName != null) ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.audiotrack, color: AppColors.primary, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _selectedRecordingName!,
+                                    style: const TextStyle(fontSize: 13),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedRecordingFile = null;
+                                      _selectedRecordingName = null;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Recording will be uploaded when you update feedback',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                              textAlign: TextAlign.center,
+                            ),
+                          ] else ...[
+                            OutlinedButton.icon(
+                              onPressed: _pickRecording,
+                              icon: const Icon(Icons.attach_file, size: 18),
+                              label: const Text('Select Recording File'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                side: const BorderSide(color: AppColors.primary),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.log.callRecording.isNotEmpty
+                                  ? 'Replace existing recording or leave empty to keep current'
+                                  : 'Select audio file from your device storage',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _selectedFeedback != null && !_isSubmitting ? _submitUpdate : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        disabledBackgroundColor: Colors.grey.shade300,
+                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              _selectedRecordingFile != null
+                                  ? 'Update Feedback & Upload Recording'
+                                  : 'Update Feedback',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSection(String title, IconData icon, Color color, List<String> options) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.darkGray,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((option) => _buildFeedbackChip(option, color)).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeedbackChip(String label, Color color) {
+    final isSelected = _selectedFeedback == label;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedFeedback = label;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? color : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            color: isSelected ? Colors.white : Colors.grey.shade700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMatchStatusChip(String label) {
+    final isSelected = _selectedMatchStatus == label;
+    final color = label == 'Selected'
+        ? Colors.green
+        : label == 'Not Selected'
+            ? Colors.red
+            : Colors.orange;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedMatchStatus = label;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? color : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            color: isSelected ? Colors.white : Colors.grey.shade700,
+          ),
+        ),
+      ),
+    );
   }
 }

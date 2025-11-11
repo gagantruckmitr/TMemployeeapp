@@ -23,6 +23,8 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
   bool _isLoading = true;
   Map<String, dynamic>? _profileData;
   String _error = '';
+  int _selectedTabIndex = 0;
+  List<String> _tabCategories = [];
 
   @override
   void initState() {
@@ -46,8 +48,10 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
+          final completion = data['data']['completion'] as Map<String, dynamic>;
           setState(() {
             _profileData = data['data'];
+            _tabCategories = completion.keys.toList();
             _isLoading = false;
           });
         } else {
@@ -118,106 +122,113 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
     final totalFields = _profileData!['totalFields'] as int;
     final completion = _profileData!['completion'] as Map<String, dynamic>;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Completion Summary Card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.mediumBeige),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  '$percentage%',
-                  style: TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: _getCompletionColor(percentage),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Profile Completion',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppColors.darkGray,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                LinearProgressIndicator(
-                  value: percentage / 100,
-                  backgroundColor: AppColors.lightBeige,
-                  valueColor: AlwaysStoppedAnimation(_getCompletionColor(percentage)),
-                  minHeight: 8,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '$filledFields of $totalFields fields completed',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // Field Categories
-          ...completion.entries.map((entry) {
-            return _buildCategorySection(entry.key, entry.value as List);
-          }).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategorySection(String category, List fields) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          category,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppColors.darkGray,
-          ),
-        ),
-        const SizedBox(height: 12),
+        // Completion Summary Card
         Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.mediumBeige),
           ),
           child: Column(
-            children: fields.asMap().entries.map((entry) {
-              final index = entry.key;
-              final field = entry.value as Map<String, dynamic>;
-              final isLast = index == fields.length - 1;
-              
-              return Column(
-                children: [
-                  _buildFieldRow(field),
-                  if (!isLast) Divider(color: AppColors.mediumBeige, height: 1),
-                ],
-              );
-            }).toList(),
+            children: [
+              Text(
+                'Profile Completion',
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: AppColors.darkGray,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: percentage / 100,
+                backgroundColor: AppColors.lightBeige,
+                valueColor: AlwaysStoppedAnimation(_getCompletionColor(percentage)),
+                minHeight: 8,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$filledFields of $totalFields fields completed',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
           ),
         ),
+        
+        // Horizontal Scrollable Tabs
+        Container(
+          height: 60,
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            itemCount: _tabCategories.length,
+            itemBuilder: (context, index) {
+              final category = _tabCategories[index];
+              final isSelected = index == _selectedTabIndex;
+              
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedTabIndex = index;
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.only(right: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primary : Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(
+                      color: isSelected ? AppColors.primary : Colors.grey.shade300,
+                      width: 2,
+                    ),
+                    boxShadow: isSelected ? [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ] : [],
+                  ),
+                  child: Center(
+                    child: Text(
+                      _formatCategoryName(category),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected ? Colors.white : Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        
         const SizedBox(height: 16),
+        
+        // Selected Category Content
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildSelectedCategoryContent(completion),
+          ),
+        ),
       ],
     );
   }
+
+
 
   Widget _buildFieldRow(Map<String, dynamic> field) {
     final label = field['label'] as String;
@@ -274,6 +285,67 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  String _formatCategoryName(String category) {
+    // Convert category names to more readable format
+    switch (category.toLowerCase()) {
+      case 'basic info':
+      case 'basicinfo':
+      case 'basic_info':
+        return 'Basic Info';
+      case 'professional':
+      case 'professional details':
+        return 'Professional';
+      case 'income':
+      case 'income details':
+        return 'Income';
+      case 'documents':
+      case 'upload documents':
+        return 'Documents';
+      case 'driving':
+      case 'driving details':
+        return 'Driving';
+      case 'vehicle':
+      case 'vehicle details':
+        return 'Vehicle';
+      case 'personal':
+      case 'personal details':
+        return 'Personal';
+      default:
+        return category;
+    }
+  }
+
+  Widget _buildSelectedCategoryContent(Map<String, dynamic> completion) {
+    if (_tabCategories.isEmpty || _selectedTabIndex >= _tabCategories.length) {
+      return const Center(child: Text('No data available'));
+    }
+    
+    final selectedCategory = _tabCategories[_selectedTabIndex];
+    final fields = completion[selectedCategory] as List;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.mediumBeige),
+      ),
+      child: Column(
+        children: fields.asMap().entries.map((entry) {
+          final index = entry.key;
+          final field = entry.value as Map<String, dynamic>;
+          final isLast = index == fields.length - 1;
+          
+          return Column(
+            children: [
+              _buildFieldRow(field),
+              if (!isLast) const Divider(color: AppColors.mediumBeige, height: 1),
+            ],
+          );
+        }).toList(),
       ),
     );
   }

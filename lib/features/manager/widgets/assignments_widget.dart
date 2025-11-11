@@ -4,10 +4,7 @@ import '../../../core/services/manager_service.dart';
 class AssignmentsWidget extends StatefulWidget {
   final int managerId;
 
-  const AssignmentsWidget({
-    super.key,
-    required this.managerId,
-  });
+  const AssignmentsWidget({super.key, required this.managerId});
 
   @override
   State<AssignmentsWidget> createState() => _AssignmentsWidgetState();
@@ -48,17 +45,27 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
         _filteredAssignments = _assignments;
       } else {
         _filteredAssignments = _assignments.where((assignment) {
-          final telecallerName = (assignment['telecaller_name'] ?? '').toString().toLowerCase();
-          final driverName = (assignment['driver_name'] ?? '').toString().toLowerCase();
-          final driverMobile = (assignment['driver_mobile'] ?? '').toString().toLowerCase();
-          final driverState = (assignment['driver_state'] ?? '').toString().toLowerCase();
-          final driverCity = (assignment['driver_city'] ?? '').toString().toLowerCase();
-          
+          final telecallerName = (assignment['telecaller_name'] ?? '')
+              .toString()
+              .toLowerCase();
+          final driverName = (assignment['driver_name'] ?? '')
+              .toString()
+              .toLowerCase();
+          final driverMobile = (assignment['driver_mobile'] ?? '')
+              .toString()
+              .toLowerCase();
+          final driverState = (assignment['driver_state'] ?? '')
+              .toString()
+              .toLowerCase();
+          final driverCity = (assignment['driver_city'] ?? '')
+              .toString()
+              .toLowerCase();
+
           return telecallerName.contains(query) ||
-                 driverName.contains(query) ||
-                 driverMobile.contains(query) ||
-                 driverState.contains(query) ||
-                 driverCity.contains(query);
+              driverName.contains(query) ||
+              driverMobile.contains(query) ||
+              driverState.contains(query) ||
+              driverCity.contains(query);
         }).toList();
       }
     });
@@ -114,8 +121,8 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
                 child: _isLoading
                     ? _buildLoadingState()
                     : _filteredAssignments.isEmpty
-                        ? _buildEmptyState()
-                        : _buildAssignmentsList(),
+                    ? _buildEmptyState()
+                    : _buildAssignmentsList(),
               ),
             ],
           ),
@@ -135,7 +142,11 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
               color: _tealPrimary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.assignment_rounded, color: _tealPrimary, size: 24),
+            child: const Icon(
+              Icons.assignment_rounded,
+              color: _tealPrimary,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 12),
           const Expanded(
@@ -156,7 +167,11 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
             ),
             child: IconButton(
               onPressed: _loadAssignments,
-              icon: const Icon(Icons.refresh_rounded, color: _tealPrimary, size: 20),
+              icon: const Icon(
+                Icons.refresh_rounded,
+                color: _tealPrimary,
+                size: 20,
+              ),
               tooltip: 'Refresh',
             ),
           ),
@@ -172,10 +187,7 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
         controller: _searchController,
         decoration: InputDecoration(
           hintText: 'Search by name, mobile, or location...',
-          hintStyle: const TextStyle(
-            color: _textSecondary,
-            fontSize: 14,
-          ),
+          hintStyle: const TextStyle(color: _textSecondary, fontSize: 14),
           prefixIcon: const Icon(Icons.search_rounded, color: _tealPrimary),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
@@ -199,7 +211,10 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: _tealPrimary, width: 2),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -276,7 +291,11 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
                 Expanded(
                   child: Row(
                     children: [
-                      Icon(Icons.assignment_rounded, color: _tealPrimary, size: 20),
+                      Icon(
+                        Icons.assignment_rounded,
+                        color: _tealPrimary,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       const Text(
                         'Assignment',
@@ -290,11 +309,16 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: priorityColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: priorityColor.withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: priorityColor.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Text(
                     priorityLabel,
@@ -360,10 +384,7 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
                 ),
                 const SizedBox(height: 12),
                 // Divider
-                Container(
-                  height: 1,
-                  color: _borderColor,
-                ),
+                Container(height: 1, color: _borderColor),
                 const SizedBox(height: 12),
                 // Driver info
                 Row(
@@ -515,7 +536,9 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isSearching ? Icons.search_off_rounded : Icons.assignment_outlined,
+              isSearching
+                  ? Icons.search_off_rounded
+                  : Icons.assignment_outlined,
               size: 64,
               color: _tealPrimary.withValues(alpha: 0.3),
             ),
@@ -534,10 +557,7 @@ class _AssignmentsWidgetState extends State<AssignmentsWidget> {
             isSearching
                 ? 'Try a different search term'
                 : 'Lead assignments will appear here',
-            style: const TextStyle(
-              fontSize: 13,
-              color: _textSecondary,
-            ),
+            style: const TextStyle(fontSize: 13, color: _textSecondary),
           ),
         ],
       ),

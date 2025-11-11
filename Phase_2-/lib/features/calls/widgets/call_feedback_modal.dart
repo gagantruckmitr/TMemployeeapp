@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/theme/app_colors.dart';
@@ -33,7 +34,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
   final TextEditingController _notesController = TextEditingController();
   File? _selectedRecordingFile;
   String? _selectedRecordingName;
-  bool _isUploadingRecording = false;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -45,7 +46,18 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'wma', 'amr', 'opus', '3gp'],
+        allowedExtensions: [
+          'mp3',
+          'wav',
+          'm4a',
+          'aac',
+          'ogg',
+          'flac',
+          'wma',
+          'amr',
+          'opus',
+          '3gp'
+        ],
         allowMultiple: false,
       );
 
@@ -67,93 +79,75 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
     }
   }
 
-  Future<void> _uploadRecording() async {
-    if (_selectedRecordingFile == null || widget.jobId == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a recording file first'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
+  Future<void> _submitFeedback() async {
+    if (_selectedFeedback == null) return;
 
-    setState(() => _isUploadingRecording = true);
+    setState(() => _isSubmitting = true);
 
     try {
-      final callerId = await Phase2AuthService.getUserId();
+      // First, upload recording if selected
+      if (_selectedRecordingFile != null && widget.jobId != null) {
+        try {
+          final callerId = await Phase2AuthService.getUserId();
 
-      print('Uploading recording: ${_selectedRecordingFile!.path}');
-      print('Job ID: ${widget.jobId}');
-      print('Caller ID: $callerId');
-      print('Driver TMID: ${widget.userTmid}');
+          var request = http.MultipartRequest(
+            'POST',
+            Uri.parse(
+                'https://truckmitr.com/truckmitr-app/api/phase2_upload_driver_recording_api.php'),
+          );
 
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse(
-            'https://truckmitr.com/truckmitr-app/api/phase2_upload_driver_recording_api_debug.php'),
+          request.files.add(await http.MultipartFile.fromPath(
+            'recording',
+            _selectedRecordingFile!.path,
+          ));
+
+          request.fields['job_id'] = widget.jobId!;
+          request.fields['caller_id'] = callerId.toString();
+          
+          // Support both driver and transporter recordings
+          if (widget.userType == 'driver') {
+            request.fields['driver_tmid'] = widget.userTmid;
+          } else if (widget.userType == 'transporter') {
+            request.fields['transporter_tmid'] = widget.userTmid;
+          }
+
+          final streamedResponse = await request.send();
+          final response = await http.Response.fromStream(streamedResponse);
+
+          if (response.statusCode == 200) {
+            final responseData = json.decode(response.body);
+            if (responseData['success'] == true) {
+              print('Recording uploaded successfully');
+            }
+          }
+        } catch (e) {
+          print('Recording upload failed: $e');
+          // Continue with feedback submission even if recording fails
+        }
+      }
+
+      // Then submit feedback
+      widget.onSubmit(
+        _selectedFeedback!,
+        _selectedMatchStatus ?? '',
+        _notesController.text,
       );
 
-      request.files.add(await http.MultipartFile.fromPath(
-        'recording',
-        _selectedRecordingFile!.path,
-      ));
-
-      request.fields['job_id'] = widget.jobId!;
-      request.fields['caller_id'] = callerId.toString();
-      request.fields['driver_tmid'] = widget.userTmid;
-
-      print('Sending request...');
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final responseData = response.body;
-        if (responseData.contains('success')) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Recording uploaded successfully!'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
-            );
-            setState(() {
-              _selectedRecordingFile = null;
-              _selectedRecordingName = null;
-            });
-          }
-        } else {
-          throw Exception('Server returned error: $responseData');
-        }
-      } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      if (mounted) {
+        Navigator.pop(context);
       }
-    } catch (e, stackTrace) {
-      print('Upload error: $e');
-      print('Stack trace: $stackTrace');
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Upload failed: ${e.toString()}'),
+            content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              textColor: Colors.white,
-              onPressed: () {},
-            ),
           ),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => _isUploadingRecording = false);
+        setState(() => _isSubmitting = false);
       }
     }
   }
@@ -216,6 +210,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,8 +232,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
                   ),
                   const SizedBox(height: 20),
                   _buildSection(
-                    '2. Call Back',
-                    Icons.phone_callback_outlined,
+                    '2. Not Connected',
+                    Icons.phone_disabled_outlined,
                     Colors.orange,
                     [
                       'Ringing',
@@ -245,7 +241,6 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
                       'Switched Off',
                       'Not Reachable',
                       'Disconnected',
-                      'Didn\'t Pick',
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -313,7 +308,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  if (widget.userType == 'driver' && widget.jobId != null) ...[
+                  if (widget.jobId != null) ...[
                     const Text(
                       'Call Recording (Optional)',
                       style: TextStyle(
@@ -357,38 +352,12 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _isUploadingRecording
-                                    ? null
-                                    : _uploadRecording,
-                                icon: _isUploadingRecording
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                  Colors.white),
-                                        ),
-                                      )
-                                    : const Icon(Icons.cloud_upload, size: 18),
-                                label: Text(_isUploadingRecording
-                                    ? 'Uploading...'
-                                    : 'Upload Recording'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Recording will be uploaded when you submit feedback',
+                              style: TextStyle(
+                                  fontSize: 11, color: Colors.grey.shade600),
+                              textAlign: TextAlign.center,
                             ),
                           ] else ...[
                             OutlinedButton.icon(
@@ -422,15 +391,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _selectedFeedback != null
-                          ? () {
-                              widget.onSubmit(
-                                _selectedFeedback!,
-                                _selectedMatchStatus ?? '',
-                                _notesController.text,
-                              );
-                              Navigator.pop(context);
-                            }
+                      onPressed: _selectedFeedback != null && !_isSubmitting
+                          ? _submitFeedback
                           : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
@@ -441,13 +403,24 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
                         ),
                         disabledBackgroundColor: Colors.grey.shade300,
                       ),
-                      child: const Text(
-                        'Submit Feedback',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : Text(
+                              _selectedRecordingFile != null
+                                  ? 'Submit Feedback & Upload Recording'
+                                  : 'Submit Feedback',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                 ],

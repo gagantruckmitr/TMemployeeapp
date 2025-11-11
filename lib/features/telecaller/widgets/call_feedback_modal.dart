@@ -34,6 +34,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _feedbackSlideAnimation;
+  final ScrollController _scrollController = ScrollController();
 
   CallStatus? _selectedStatus;
   ConnectedFeedback? _selectedConnectedFeedback;
@@ -92,10 +93,16 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     _slideController.dispose();
     _feedbackAnimationController.dispose();
     _remarksController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   void _onStatusSelected(CallStatus status) {
+    // Preserve current scroll position
+    final currentScrollPosition = _scrollController.hasClients 
+        ? _scrollController.position.pixels 
+        : 0.0;
+
     setState(() {
       // Toggle logic: if same status is selected, deselect it
       if (_selectedStatus == status) {
@@ -116,7 +123,14 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
       _selectedCallBackTime = null;
     });
 
-    // Animate feedback options
+    // Restore scroll position after rebuild to prevent auto-scroll
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients && currentScrollPosition > 0) {
+        _scrollController.jumpTo(currentScrollPosition);
+      }
+    });
+
+    // Animate feedback options without scrolling
     _feedbackAnimationController.reset();
     if (_showConnectedOptions || _showCallBackReasons || _showCallBackTimes) {
       _feedbackAnimationController.forward();
@@ -128,7 +142,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   void _onCallBackReasonSelected(CallBackReason reason) {
     setState(() {
       _selectedCallBackReason = reason;
-      _showCallBackTimes = true;
+      // Don't auto-expand Call Back Later section
+      // User must explicitly select "Call Back Later" status
     });
 
     HapticFeedback.selectionClick();
@@ -317,6 +332,9 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             _buildHeader(),
             Expanded(
               child: SingleChildScrollView(
+                controller: _scrollController,
+                physics: const ClampingScrollPhysics(),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: EdgeInsets.only(
                   left: 20,
                   right: 20,

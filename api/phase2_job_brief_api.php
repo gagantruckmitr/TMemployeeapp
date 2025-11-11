@@ -9,6 +9,11 @@
  * created_at, updated_at, call_status_feedback
  */
 
+// Enable error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // Don't display errors in output
+ini_set('log_errors', 1);
+
 require_once 'config.php';
 
 // Ensure we have helper functions
@@ -98,41 +103,88 @@ function saveJobBrief() {
     $mileage = isset($data['mileage']) ? $conn->real_escape_string($data['mileage']) : NULL;
     $fastTagRoadKharcha = isset($data['fastTagRoadKharcha']) ? $conn->real_escape_string($data['fastTagRoadKharcha']) : 'Company';
     $callStatusFeedback = isset($data['callStatusFeedback']) ? $conn->real_escape_string($data['callStatusFeedback']) : NULL;
+    $callRecording = isset($data['callRecording']) ? $conn->real_escape_string($data['callRecording']) : NULL;
     
     try {
-        $query = "INSERT INTO job_brief_table (
-            unique_id, job_id, caller_id, name, job_location, route, vehicle_type, license_type, 
-            experience, salary_fixed, salary_variable, esi_pf, food_allowance, 
-            trip_incentive, rehne_ki_suvidha, mileage, fast_tag_road_kharcha, 
-            call_status_feedback, created_at, updated_at
-        ) VALUES (
-            '$uniqueId', '$jobId', " . ($callerId !== NULL ? $callerId : "NULL") . ", " . 
-            ($name ? "'$name'" : "NULL") . ", " .
-            ($jobLocation ? "'$jobLocation'" : "NULL") . ", " .
-            ($route ? "'$route'" : "NULL") . ", " .
-            ($vehicleType ? "'$vehicleType'" : "NULL") . ", " .
-            ($licenseType ? "'$licenseType'" : "NULL") . ", " .
-            ($experience ? "'$experience'" : "NULL") . ", " .
-            ($salaryFixed !== NULL ? $salaryFixed : "NULL") . ", " .
-            ($salaryVariable !== NULL ? $salaryVariable : "NULL") . ", " .
-            "'$esiPf', " .
-            ($foodAllowance !== NULL ? $foodAllowance : "NULL") . ", " .
-            ($tripIncentive !== NULL ? $tripIncentive : "NULL") . ", " .
-            "'$rehneKiSuvidha', " .
-            ($mileage ? "'$mileage'" : "NULL") . ", " .
-            "'$fastTagRoadKharcha', " .
-            ($callStatusFeedback ? "'$callStatusFeedback'" : "NULL") . ", " .
-            "NOW(), NOW()
-        )";
+        // First check if a record exists for this unique_id and job_id combination
+        $checkQuery = "SELECT id FROM job_brief_table WHERE unique_id = '$uniqueId' AND job_id = '$jobId' LIMIT 1";
+        $checkResult = $conn->query($checkQuery);
         
-        if ($conn->query($query)) {
-            sendSuccess([
-                'id' => $conn->insert_id,
-                'uniqueId' => $uniqueId,
-                'jobId' => $jobId
-            ], 'Job brief saved successfully');
+        if ($checkResult && $checkResult->num_rows > 0) {
+            // Record exists, update it
+            $row = $checkResult->fetch_assoc();
+            $existingId = $row['id'];
+            
+            $updateFields = [];
+            if ($callerId !== NULL) $updateFields[] = "caller_id = $callerId";
+            if ($name !== NULL) $updateFields[] = "name = '$name'";
+            if ($jobLocation !== NULL) $updateFields[] = "job_location = '$jobLocation'";
+            if ($route !== NULL) $updateFields[] = "route = '$route'";
+            if ($vehicleType !== NULL) $updateFields[] = "vehicle_type = '$vehicleType'";
+            if ($licenseType !== NULL) $updateFields[] = "license_type = '$licenseType'";
+            if ($experience !== NULL) $updateFields[] = "experience = '$experience'";
+            if ($salaryFixed !== NULL) $updateFields[] = "salary_fixed = $salaryFixed";
+            if ($salaryVariable !== NULL) $updateFields[] = "salary_variable = $salaryVariable";
+            $updateFields[] = "esi_pf = '$esiPf'";
+            if ($foodAllowance !== NULL) $updateFields[] = "food_allowance = $foodAllowance";
+            if ($tripIncentive !== NULL) $updateFields[] = "trip_incentive = $tripIncentive";
+            $updateFields[] = "rehne_ki_suvidha = '$rehneKiSuvidha'";
+            if ($mileage !== NULL) $updateFields[] = "mileage = '$mileage'";
+            $updateFields[] = "fast_tag_road_kharcha = '$fastTagRoadKharcha'";
+            if ($callStatusFeedback !== NULL) $updateFields[] = "call_status_feedback = '$callStatusFeedback'";
+            if ($callRecording !== NULL) $updateFields[] = "call_recording = '$callRecording'";
+            $updateFields[] = "updated_at = NOW()";
+            
+            $query = "UPDATE job_brief_table SET " . implode(', ', $updateFields) . " WHERE id = $existingId";
+            
+            if ($conn->query($query)) {
+                sendSuccess([
+                    'id' => $existingId,
+                    'uniqueId' => $uniqueId,
+                    'jobId' => $jobId,
+                    'updated' => true
+                ], 'Job brief updated successfully');
+            } else {
+                sendError('Failed to update job brief: ' . $conn->error, 500);
+            }
         } else {
-            sendError('Failed to save job brief: ' . $conn->error, 500);
+            // Record doesn't exist, insert new one
+            $query = "INSERT INTO job_brief_table (
+                unique_id, job_id, caller_id, name, job_location, route, vehicle_type, license_type, 
+                experience, salary_fixed, salary_variable, esi_pf, food_allowance, 
+                trip_incentive, rehne_ki_suvidha, mileage, fast_tag_road_kharcha, 
+                call_status_feedback, call_recording, created_at, updated_at
+            ) VALUES (
+                '$uniqueId', '$jobId', " . ($callerId !== NULL ? $callerId : "NULL") . ", " . 
+                ($name ? "'$name'" : "NULL") . ", " .
+                ($jobLocation ? "'$jobLocation'" : "NULL") . ", " .
+                ($route ? "'$route'" : "NULL") . ", " .
+                ($vehicleType ? "'$vehicleType'" : "NULL") . ", " .
+                ($licenseType ? "'$licenseType'" : "NULL") . ", " .
+                ($experience ? "'$experience'" : "NULL") . ", " .
+                ($salaryFixed !== NULL ? $salaryFixed : "NULL") . ", " .
+                ($salaryVariable !== NULL ? $salaryVariable : "NULL") . ", " .
+                "'$esiPf', " .
+                ($foodAllowance !== NULL ? $foodAllowance : "NULL") . ", " .
+                ($tripIncentive !== NULL ? $tripIncentive : "NULL") . ", " .
+                "'$rehneKiSuvidha', " .
+                ($mileage ? "'$mileage'" : "NULL") . ", " .
+                "'$fastTagRoadKharcha', " .
+                ($callStatusFeedback ? "'$callStatusFeedback'" : "NULL") . ", " .
+                ($callRecording ? "'$callRecording'" : "NULL") . ", " .
+                "NOW(), NOW()
+            )";
+            
+            if ($conn->query($query)) {
+                sendSuccess([
+                    'id' => $conn->insert_id,
+                    'uniqueId' => $uniqueId,
+                    'jobId' => $jobId,
+                    'updated' => false
+                ], 'Job brief saved successfully');
+            } else {
+                sendError('Failed to save job brief: ' . $conn->error, 500);
+            }
         }
         
     } catch (Exception $e) {
@@ -161,7 +213,14 @@ function getJobBriefs() {
     $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
     
     try {
-        $query = "SELECT * FROM job_brief_table $whereClause ORDER BY created_at DESC LIMIT 100";
+        $query = "SELECT 
+                    jb.*,
+                    COALESCE(jb.name, u.Transport_Name, u.name_eng, u.name) as transporter_name
+                  FROM job_brief_table jb
+                  LEFT JOIN users u ON jb.unique_id = u.unique_id AND u.role = 'transporter'
+                  $whereClause 
+                  ORDER BY jb.created_at DESC 
+                  LIMIT 100";
         $result = $conn->query($query);
         
         if (!$result) {
@@ -170,6 +229,8 @@ function getJobBriefs() {
         
         $briefs = [];
         while ($row = $result->fetch_assoc()) {
+            // Override the name field with the joined transporter name
+            $row['name'] = $row['transporter_name'];
             $briefs[] = formatJobBriefRow($row);
         }
         
@@ -194,10 +255,14 @@ function getCallHistory() {
     }
     
     try {
-        // Simple query - only from job_brief_table
-        $query = "SELECT * FROM job_brief_table 
-                  WHERE unique_id = '$uniqueId'
-                  ORDER BY created_at DESC";
+        // Query with JOIN to get transporter name from users table
+        $query = "SELECT 
+                    jb.*,
+                    COALESCE(jb.name, u.Transport_Name, u.name_eng, u.name) as transporter_name
+                  FROM job_brief_table jb
+                  LEFT JOIN users u ON jb.unique_id = u.unique_id AND u.role = 'transporter'
+                  WHERE jb.unique_id = '$uniqueId'
+                  ORDER BY jb.created_at DESC";
         
         $result = $conn->query($query);
         
@@ -207,19 +272,27 @@ function getCallHistory() {
         
         $history = [];
         while ($row = $result->fetch_assoc()) {
-            $brief = formatJobBriefRow($row);
-            // Add placeholder values for optional fields
-            $brief['jobTitle'] = 'Job Brief';
-            $brief['companyName'] = null;
-            $brief['jobCity'] = $row['job_location'];
-            $brief['callerName'] = null;
-            $history[] = $brief;
+            try {
+                // Override the name field with the joined transporter name
+                $row['name'] = $row['transporter_name'];
+                $brief = formatJobBriefRow($row);
+                // Add placeholder values for optional fields
+                $brief['jobTitle'] = 'Job Brief';
+                $brief['companyName'] = null;
+                $brief['jobCity'] = $row['job_location'];
+                $brief['callerName'] = null;
+                $history[] = $brief;
+            } catch (Exception $e) {
+                // Log the error but continue processing other rows
+                error_log('Error formatting row: ' . $e->getMessage());
+                continue;
+            }
         }
         
         sendSuccess($history, 'Call history fetched successfully');
         
     } catch (Exception $e) {
-        sendError('Error: ' . $e->getMessage(), 500);
+        sendError('Error in getCallHistory: ' . $e->getMessage(), 500);
     }
 }
 
@@ -231,16 +304,24 @@ function getTransportersList() {
     }
     
     try {
-        // Get unique transporters who have call history - only from job_brief_table
+        // Query to get transporters with their names from users table
+        // Use COALESCE to get name from Transport_Name, name_eng, or name fields
         $query = "SELECT 
-                    unique_id as tmid,
-                    name,
-                    job_location as location,
-                    COUNT(id) as call_count,
-                    MAX(created_at) as last_call_date
-                  FROM job_brief_table
-                  GROUP BY unique_id
-                  ORDER BY MAX(created_at) DESC";
+                    jb.unique_id as tmid,
+                    COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown') as name,
+                    (SELECT job_location 
+                     FROM job_brief_table 
+                     WHERE unique_id = jb.unique_id 
+                     AND job_location IS NOT NULL 
+                     AND job_location != ''
+                     ORDER BY created_at DESC 
+                     LIMIT 1) as location,
+                    COUNT(jb.id) as call_count,
+                    MAX(jb.created_at) as last_call_date
+                  FROM job_brief_table jb
+                  LEFT JOIN users u ON jb.unique_id = u.unique_id AND u.role = 'transporter'
+                  GROUP BY jb.unique_id, COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown')
+                  ORDER BY last_call_date DESC";
         
         $result = $conn->query($query);
         
@@ -252,8 +333,7 @@ function getTransportersList() {
         while ($row = $result->fetch_assoc()) {
             $transporters[] = [
                 'tmid' => $row['tmid'],
-                'name' => $row['name'] ?? 'Unknown',
-                'company' => null,
+                'name' => $row['name'],
                 'location' => $row['location'],
                 'callCount' => (int)$row['call_count'],
                 'lastCallDate' => $row['last_call_date'],
@@ -263,7 +343,7 @@ function getTransportersList() {
         sendSuccess($transporters, 'Transporters list fetched successfully');
         
     } catch (Exception $e) {
-        sendError('Error: ' . $e->getMessage(), 500);
+        sendError('Error in getTransportersList: ' . $e->getMessage(), 500);
     }
 }
 
@@ -299,6 +379,7 @@ function updateJobBrief() {
     if (isset($data['mileage'])) $updateFields[] = "mileage = '" . $conn->real_escape_string($data['mileage']) . "'";
     if (isset($data['fastTagRoadKharcha'])) $updateFields[] = "fast_tag_road_kharcha = '" . $conn->real_escape_string($data['fastTagRoadKharcha']) . "'";
     if (isset($data['callStatusFeedback'])) $updateFields[] = "call_status_feedback = '" . $conn->real_escape_string($data['callStatusFeedback']) . "'";
+    if (isset($data['callRecording'])) $updateFields[] = "call_recording = '" . $conn->real_escape_string($data['callRecording']) . "'";
     
     if (empty($updateFields)) {
         sendError('No fields to update', 400);
@@ -370,6 +451,7 @@ function formatJobBriefRow($row) {
         'mileage' => $row['mileage'],
         'fastTagRoadKharcha' => $row['fast_tag_road_kharcha'],
         'callStatusFeedback' => $row['call_status_feedback'],
+        'callRecording' => $row['call_recording'] ?? null,
         'createdAt' => $row['created_at'],
         'updatedAt' => $row['updated_at'],
     ];

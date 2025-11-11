@@ -64,6 +64,27 @@ class _ModernJobCardState extends State<ModernJobCard> {
     }
   }
 
+
+
+  String _getTimeAgoString() {
+    if (widget.job.createdAt.isEmpty) return 'N/A';
+    
+    try {
+      final createdDate = DateTime.parse(widget.job.createdAt);
+      
+      // Format time as HH:MM AM/PM
+      final hour = createdDate.hour;
+      final minute = createdDate.minute;
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+      final formattedMinute = minute.toString().padLeft(2, '0');
+      
+      return '$displayHour:$formattedMinute $period';
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
   Future<void> _makePhoneCall(String phone) async {
     if (phone.isEmpty) return;
 
@@ -324,6 +345,8 @@ class _ModernJobCardState extends State<ModernJobCard> {
             widget.job.requiredExperience.isNotEmpty
                 ? widget.job.requiredExperience
                 : 'N/A'),
+        const SizedBox(height: 8),
+        _buildSingleInfo('Posted At', _getTimeAgoString()),
         const SizedBox(height: 8),
         _buildSingleInfo(
             'Drivers Required', '${widget.job.numberOfDriverRequired}'),
@@ -655,6 +678,7 @@ class _ModernJobCardState extends State<ModernJobCard> {
                         widget.job.typeOfLicense.isNotEmpty
                             ? widget.job.typeOfLicense
                             : 'Not specified'),
+                    _buildDetailItem('Posted At', _getTimeAgoString()),
                     _buildDetailItem('Drivers Required',
                         widget.job.numberOfDriverRequired.toString()),
                     _buildDetailItem(

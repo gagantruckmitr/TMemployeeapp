@@ -135,6 +135,16 @@ function getJobApplicants() {
                 }
             }
             
+            // Debug: Log the raw date from database
+            error_log("Raw applied_at from DB: " . ($row['applied_at'] ?? 'NULL'));
+            error_log("Raw subscription_start_date from DB: " . ($row['subscription_start_date'] ?? 'NULL'));
+            
+            // Return the actual database timestamp without modification
+            $appliedAt = $row['applied_at'] ?? '';
+            
+            // Return the actual database subscription timestamp without modification
+            $subscriptionStartDate = $row['subscription_start_date'] ?? null;
+
             $applicants[] = [
                 'jobId' => (int)$row['job_id'],
                 'jobTitle' => $row['job_title'] ?? '',
@@ -157,17 +167,26 @@ function getJobApplicants() {
                 'status' => $row['status'] ?? '',
                 'createdAt' => $row['Created_at'] ?? '',
                 'updatedAt' => $row['Updated_at'] ?? '',
-                'appliedAt' => $row['applied_at'] ?? '',
+                'appliedAt' => $appliedAt,
                 'profileCompletion' => $profileCompletion,
                 'subscriptionAmount' => $row['subscription_amount'] ?? null,
-                'subscriptionStartDate' => $row['subscription_start_date'] ?? null,
+                'subscriptionStartDate' => $subscriptionStartDate,
                 'subscriptionEndDate' => $row['subscription_end_date'] ?? null,
                 'subscriptionStatus' => $subscriptionStatus,
             ];
         }
         
-        // Return direct array, not nested
-        sendSuccess($applicants, 'Job applicants fetched successfully');
+        // Return applicants with server time for reference
+        $response = [
+            'applicants' => $applicants,
+            'server_time' => [
+                'current_datetime' => date('Y-m-d H:i:s'),
+                'current_timestamp' => time(),
+                'timezone' => date_default_timezone_get()
+            ]
+        ];
+        
+        sendSuccess($response, 'Job applicants fetched successfully');
         
     } catch (Exception $e) {
         sendError('Error: ' . $e->getMessage(), 500);

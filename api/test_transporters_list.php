@@ -1,117 +1,82 @@
 <?php
-/**
- * Test Transporters List API
- * Access via: https://truckmitr.com/truckmitr-app/api/test_transporters_list.php
- */
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 require_once 'config.php';
 
-header('Content-Type: text/html; charset=utf-8');
+echo "=== Testing Transporters List Query ===\n\n";
 
-echo "<h1>Transporters List Test</h1>";
-
-if (!$conn) {
-    die("<p style='color:red'>Database connection failed</p>");
-}
-
-echo "<h2>1. Check job_brief_table Data</h2>";
-$result = $conn->query("SELECT COUNT(*) as total FROM job_brief_table");
-if ($result) {
-    $row = $result->fetch_assoc();
-    echo "<p>Total records in job_brief_table: <strong>{$row['total']}</strong></p>";
-} else {
-    echo "<p style='color:red'>Failed to query job_brief_table</p>";
-}
-
-echo "<h2>2. Test Transporters List Query</h2>";
+// Test the exact query from getTransportersList()
 $query = "SELECT 
             jb.unique_id as tmid,
-            jb.name,
-            j.company_name as company,
-            j.job_location as location,
+            COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown') as name,
+            (SELECT job_location 
+             FROM job_brief_table 
+             WHERE unique_id = jb.unique_id 
+             AND job_location IS NOT NULL 
+             AND job_location != ''
+             ORDER BY created_at DESC 
+             LIMIT 1) as location,
             COUNT(jb.id) as call_count,
             MAX(jb.created_at) as last_call_date
           FROM job_brief_table jb
-          LEFT JOIN jobs j ON jb.job_id = j.job_id
-          GROUP BY jb.unique_id
-          ORDER BY MAX(jb.created_at) DESC";
+          LEFT JOIN users u ON jb.unique_id = u.unique_id AND u.role = 'transporter'
+          GROUP BY jb.unique_id, COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown')
+          ORDER BY last_call_date DESC
+          LIMIT 10";
 
 $result = $conn->query($query);
 
-if ($result) {
-    $count = $result->num_rows;
-    echo "<p style='color:green'>✓ Query successful! Found <strong>$count</strong> transporters with call history</p>";
-    
-    if ($count > 0) {
-        echo "<table border='1' cellpadding='10' style='border-collapse: collapse; width: 100%;'>";
-        echo "<tr style='background-color: #f0f0f0;'>";
-        echo "<th>TMID</th><th>Name</th><th>Company</th><th>Location</th><th>Call Count</th><th>Last Call</th>";
-        echo "</tr>";
-        
-        while ($row = $result->fetch_assoc()) {
-            echo "<tr>";
-            echo "<td>{$row['tmid']}</td>";
-            echo "<td>" . ($row['name'] ?? 'Unknown') . "</td>";
-            echo "<td>" . ($row['company'] ?? 'N/A') . "</td>";
-            echo "<td>" . ($row['location'] ?? 'N/A') . "</td>";
-            echo "<td><strong>{$row['call_count']}</strong></td>";
-            echo "<td>{$row['last_call_date']}</td>";
-            echo "</tr>";
-        }
-        echo "</table>";
-    } else {
-        echo "<p style='color:orange'>⚠ No transporters found with call history yet.</p>";
-        echo "<p>Make sure you have:</p>";
-        echo "<ol>";
-        echo "<li>Made calls from job posting screens</li>";
-        echo "<li>Filled in the job brief feedback modal</li>";
-        echo "<li>Saved the feedback successfully</li>";
-        echo "</ol>";
-    }
-} else {
-    echo "<p style='color:red'>✗ Query failed: " . $conn->error . "</p>";
+if (!$result) {
+    echo "❌ Query failed: " . $conn->error . "\n";
+    exit(1);
 }
 
-echo "<h2>3. Test API Endpoint</h2>";
-echo "<p>Test the API directly:</p>";
-echo "<p><a href='phase2_job_brief_api.php?action=transporters_list' target='_blank'>Click here to test API</a></p>";
+echo "✓ Query executed successfully\n";
+echo "Results:\n";
+echo str_repeat("-", 80) . "\n";
 
-echo "<h2>4. Sample Call History Records</h2>";
-$result = $conn->query("SELECT jb.*, j.job_title FROM job_brief_table jb LEFT JOIN jobs j ON jb.job_id = j.job_id ORDER BY jb.created_at DESC LIMIT 5");
-if ($result && $result->num_rows > 0) {
-    echo "<table border='1' cellpadding='10' style='border-collapse: collapse; width: 100%;'>";
-    echo "<tr style='background-color: #f0f0f0;'>";
-    echo "<th>ID</th><th>Transporter TMID</th><th>Job Title</th><th>Caller ID</th><th>Created</th>";
-    echo "</tr>";
-    
-    while ($row = $result->fetch_assoc()) {
-        echo "<tr>";
-        echo "<td>{$row['id']}</td>";
-        echo "<td>{$row['unique_id']}</td>";
-        echo "<td>" . ($row['job_title'] ?? 'N/A') . "</td>";
-        echo "<td>" . ($row['caller_id'] ?? 'NULL') . "</td>";
-        echo "<td>{$row['created_at']}</td>";
-        echo "</tr>";
-    }
-    echo "</table>";
-} else {
-    echo "<p>No call history records found</p>";
+$count = 0;
+while ($row = $result->fetch_assoc()) {
+    $count++;
+    echo "\nTransporter #$count:\n";
+    echo "  TMID: {$row['tmid']}\n";
+    echo "  Name: {$row['name']}\n";
+    echo "  Location: " . ($row['location'] ?: 'N/A') . "\n";
+    echo "  Call Count: {$row['call_count']}\n";
+    echo "  Last Call: {$row['last_call_date']}\n";
 }
 
-echo "<h2>Summary</h2>";
-echo "<ul>";
-echo "<li>✓ Database connection working</li>";
-echo "<li>✓ Query structure correct</li>";
-echo "<li>✓ API endpoint ready</li>";
-echo "</ul>";
+if ($count === 0) {
+    echo "\n⚠ No results found\n";
+}
 
-echo "<h3>Next Steps:</h3>";
-echo "<ol>";
-echo "<li>If no transporters shown, make some test calls from the app</li>";
-echo "<li>Fill in the job brief feedback modal</li>";
-echo "<li>Check this page again to see the transporters</li>";
-echo "<li>Test the Flutter app's History tab</li>";
-echo "</ol>";
+// Now test without GROUP BY to see raw data
+echo "\n\n=== Testing Without GROUP BY ===\n\n";
+
+$query2 = "SELECT 
+            jb.unique_id as tmid,
+            u.unique_id as user_unique_id,
+            u.Transport_Name,
+            u.name_eng,
+            u.name,
+            COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown') as final_name
+          FROM job_brief_table jb
+          LEFT JOIN users u ON jb.unique_id = u.unique_id AND u.role = 'transporter'
+          LIMIT 10";
+
+$result2 = $conn->query($query2);
+
+if ($result2) {
+    while ($row = $result2->fetch_assoc()) {
+        echo "\nTMID: {$row['tmid']}\n";
+        echo "  User TMID: " . ($row['user_unique_id'] ?: 'NULL') . "\n";
+        echo "  Transport_Name: " . ($row['Transport_Name'] ?: 'NULL') . "\n";
+        echo "  name_eng: " . ($row['name_eng'] ?: 'NULL') . "\n";
+        echo "  name: " . ($row['name'] ?: 'NULL') . "\n";
+        echo "  Final Name: {$row['final_name']}\n";
+    }
+}
 
 $conn->close();
 ?>

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:ui';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
+import '../calls/call_history_screen.dart';
 
 class CallAnalyticsScreen extends StatefulWidget {
   const CallAnalyticsScreen({super.key});
@@ -37,15 +39,15 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
       print('=== ANALYTICS DEBUG ===');
       final user = await Phase2AuthService.getCurrentUser();
       print('Current user: ${user?.name} (ID: ${user?.id})');
-      
+
       if (user == null) {
         print('ERROR: No user logged in!');
         throw Exception('Please login first');
       }
-      
+
       final stats = await Phase2ApiService.fetchCallAnalytics();
       print('Stats loaded: $stats');
-      
+
       // Try to load logs, but don't fail if it errors
       List<Map<String, dynamic>> logs = [];
       try {
@@ -55,7 +57,7 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
         print('Warning: Could not load call logs: $e');
         // Continue anyway with empty logs
       }
-      
+
       print('====================');
       setState(() {
         _stats = stats;
@@ -129,7 +131,7 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
       child: ClipPath(
         clipper: CurvedHeaderClipper(),
         child: Container(
-          height: 140,
+          height: 160,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -206,43 +208,63 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
   }
 
   Widget _buildStatCard(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _navigateToHistory(label),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 12,
+                    color: Colors.grey.shade400,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -455,6 +477,44 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
       return '${dt.day}/${dt.month} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return '';
+    }
+  }
+
+  void _navigateToHistory(String cardType) {
+    try {
+      // Add haptic feedback
+      HapticFeedback.lightImpact();
+
+      // Navigate to call history screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const CallHistoryScreen(),
+        ),
+      );
+
+      // Show a brief snackbar to indicate navigation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Opening $cardType history'),
+          duration: const Duration(seconds: 1),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    } catch (e) {
+      // Handle any navigation errors gracefully
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to open call history'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 }

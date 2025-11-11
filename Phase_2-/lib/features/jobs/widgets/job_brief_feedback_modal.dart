@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/theme/app_colors.dart';
@@ -61,7 +62,6 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
   // Recording upload
   File? _selectedRecordingFile;
   String? _selectedRecordingName;
-  bool _isUploadingRecording = false;
 
   @override
   void initState() {
@@ -127,91 +127,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
     }
   }
 
-  Future<void> _uploadRecording() async {
-    if (_selectedRecordingFile == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select a recording file first'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
 
-    setState(() => _isUploadingRecording = true);
-
-    try {
-      final callerId = await Phase2AuthService.getUserId();
-
-      print('=== TRANSPORTER RECORDING UPLOAD ===');
-      print('Uploading recording: ${_selectedRecordingFile!.path}');
-      print('Job ID: ${widget.job.jobId}');
-      print('Caller ID: $callerId');
-      print('Transporter TMID: ${widget.job.transporterTmid}');
-
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse(
-            'https://truckmitr.com/truckmitr-app/api/phase2_upload_transporter_recording_api_debug.php'),
-      );
-
-      request.files.add(await http.MultipartFile.fromPath(
-        'recording',
-        _selectedRecordingFile!.path,
-      ));
-
-      request.fields['job_id'] = widget.job.jobId;
-      request.fields['caller_id'] = callerId.toString();
-      request.fields['transporter_tmid'] = widget.job.transporterTmid;
-
-      print('Sending request...');
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final responseData = response.body;
-        if (responseData.contains('success')) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Recording uploaded successfully!'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
-            );
-            setState(() {
-              _selectedRecordingFile = null;
-              _selectedRecordingName = null;
-            });
-          }
-        } else {
-          throw Exception('Server returned error: $responseData');
-        }
-      } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Upload failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isUploadingRecording = false);
-      }
-    }
-  }
 
   Future<void> _submitFeedback() async {
     if (!_formKey.currentState!.validate()) return;
@@ -219,6 +135,44 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
     setState(() => _isSubmitting = true);
 
     try {
+      String? recordingUrl;
+      
+      // First, upload recording if selected
+      if (_selectedRecordingFile != null) {
+        try {
+          final callerId = await Phase2AuthService.getUserId();
+          
+          var request = http.MultipartRequest(
+            'POST',
+            Uri.parse(
+                'https://truckmitr.com/truckmitr-app/api/phase2_upload_transporter_recording_api.php'),
+          );
+
+          request.files.add(await http.MultipartFile.fromPath(
+            'recording',
+            _selectedRecordingFile!.path,
+          ));
+
+          request.fields['job_id'] = widget.job.jobId;
+          request.fields['caller_id'] = callerId.toString();
+          request.fields['transporter_tmid'] = widget.job.transporterTmid;
+
+          final streamedResponse = await request.send();
+          final response = await http.Response.fromStream(streamedResponse);
+
+          if (response.statusCode == 200) {
+            final responseData = json.decode(response.body);
+            if (responseData['success'] == true && responseData['data'] != null) {
+              recordingUrl = responseData['data']['url'];
+            }
+          }
+        } catch (e) {
+          // Log error but continue with job brief submission
+          print('Recording upload failed: $e');
+        }
+      }
+
+      // Then save job brief with recording URL
       await Phase2ApiService.saveJobBrief(
         uniqueId: widget.job.transporterTmid,
         jobId: widget.job.jobId,
@@ -244,15 +198,17 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
         rehneKiSuvidha: _rehneKiSuvidha,
         mileage: _mileageController.text,
         fastTagRoadKharcha: _fastTagRoadKharcha,
-        callStatusFeedback:
-            'Connected: Details Received', // Auto-set since this form only opens for Details Received
+        callStatusFeedback: 'Connected: Details Received',
+        callRecording: recordingUrl,
       );
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Job brief saved successfully'),
+          SnackBar(
+            content: Text(recordingUrl != null 
+                ? 'Job brief and recording saved successfully'
+                : 'Job brief saved successfully'),
             backgroundColor: Colors.green,
           ),
         );
@@ -537,34 +493,11 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isUploadingRecording ? null : _uploadRecording,
-                    icon: _isUploadingRecording
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Icon(Icons.cloud_upload, size: 18),
-                    label: Text(_isUploadingRecording
-                        ? 'Uploading...'
-                        : 'Upload Recording'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
+                const SizedBox(height: 8),
+                Text(
+                  'Recording will be uploaded when you submit the form',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  textAlign: TextAlign.center,
                 ),
               ] else ...[
                 SizedBox(
@@ -585,7 +518,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Upload transporter call recording (MP3, WAV, M4A, etc.)',
+                  'Select transporter call recording (MP3, WAV, M4A, etc.)',
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                   textAlign: TextAlign.center,
                 ),
