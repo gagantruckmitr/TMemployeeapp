@@ -28,6 +28,8 @@ try {
         throw new Exception('DB connection failed');
     }
     $conn->set_charset('utf8mb4');
+    // Set timezone to IST so NOW() returns IST time strings
+    $conn->query("SET time_zone = '+05:30'");
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Database error']);

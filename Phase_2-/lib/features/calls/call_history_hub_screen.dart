@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
+import '../../models/job_model.dart';
 import 'transporter_call_history_screen.dart';
 import 'call_history_screen.dart';
 import '../main_container.dart' as main;
+import '../jobs/widgets/job_brief_feedback_modal.dart';
 
 class CallHistoryHubScreen extends StatefulWidget {
   const CallHistoryHubScreen({Key? key}) : super(key: key);
@@ -301,140 +303,400 @@ class _TransporterCard extends StatelessWidget {
     required this.onTap,
   }) : super(key: key);
 
+  Future<void> _makeCall(BuildContext context, Map<String, dynamic> transporter) async {
+    final transporterName = _getDisplayName(transporter);
+    final transporterTmid = transporter['tmid'] ?? '';
+    
+    // Generate a placeholder job ID for direct transporter calls
+    final placeholderJobId = 'DIRECT_CALL_${transporterTmid}_${DateTime.now().millisecondsSinceEpoch}';
+    
+    // Create a minimal job object for the feedback modal
+    final dummyJob = JobModel(
+      id: 0,
+      jobId: placeholderJobId,
+      jobTitle: 'Call to $transporterName',
+      transporterId: transporter['id']?.toString() ?? '0',
+      transporterName: transporterName,
+      transporterTmid: transporterTmid,
+      transporterPhone: transporter['phone']?.toString() ?? '',
+      transporterCity: transporter['city']?.toString() ?? '',
+      transporterState: transporter['state']?.toString() ?? '',
+      transporterProfileCompletion: 0,
+      jobLocation: transporter['location']?.toString() ?? '',
+      jobDescription: '',
+      salaryRange: '',
+      requiredExperience: '',
+      preferredStatus: '',
+      typeOfLicense: '',
+      vehicleType: '',
+      vehicleTypeDetail: '',
+      applicationDeadline: '',
+      jobManagementDate: '',
+      jobManagementId: '',
+      jobDescriptionId: '',
+      numberOfDriverRequired: 1,
+      activePosition: 0,
+      createdVehicleDetail: '',
+      createdAt: DateTime.now().toIso8601String(),
+      updatedAt: DateTime.now().toIso8601String(),
+      status: 1,
+      applicantsCount: 0,
+      isApproved: true,
+      isActive: true,
+      isExpired: false,
+      assignedTo: null,
+      assignedToName: null,
+    );
+    
+    // Show feedback modal immediately
+    showJobBriefFeedbackModal(
+      context: context,
+      job: dummyJob,
+      onSubmit: () {
+        // Refresh the list after feedback is submitted
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Call feedback saved successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      },
+    );
+  }
+
   String _getDisplayName(Map<String, dynamic> transporter) {
     final name = transporter['name']?.toString().trim();
     final company = transporter['company']?.toString().trim();
     final tmid = transporter['tmid']?.toString().trim();
 
-    // If name exists and is not empty, use it
     if (name != null && name.isNotEmpty && name.toLowerCase() != 'null') {
       return name;
     }
-
-    // If company exists, use it
-    if (company != null &&
-        company.isNotEmpty &&
-        company.toLowerCase() != 'null') {
+    if (company != null && company.isNotEmpty && company.toLowerCase() != 'null') {
       return company;
     }
-
-    // If TMID exists, use it with a prefix
     if (tmid != null && tmid.isNotEmpty && tmid.toLowerCase() != 'null') {
       return 'Contact ($tmid)';
     }
-
-    // Last resort
     return 'Unknown Contact';
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+      final diff = now.difference(date);
+      
+      if (diff.inDays == 0) {
+        return 'Today ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+      } else if (diff.inDays == 1) {
+        return 'Yesterday';
+      } else if (diff.inDays < 7) {
+        return '${diff.inDays} days ago';
+      } else {
+        return '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      return '';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final callCount = transporter['callCount'] ?? 0;
+    final location = transporter['location']?.toString();
+    final lastCallDate = transporter['lastCallDate']?.toString();
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200, width: 1),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          child: Column(
             children: [
-              // Icon with badge
-              Stack(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.local_shipping,
-                      color: AppColors.primary,
-                      size: 28,
+                  // Modern gradient icon with badge
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.primary.withOpacity(0.15),
+                              AppColors.primary.withOpacity(0.05),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppColors.primary.withOpacity(0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.local_shipping_rounded,
+                          color: AppColors.primary,
+                          size: 28,
+                        ),
+                      ),
+                      if (callCount > 0)
+                        Positioned(
+                          right: -6,
+                          top: -6,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.red.shade400, Colors.red.shade600],
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.red.withOpacity(0.3),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              callCount > 99 ? '99+' : callCount.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Details
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _getDisplayName(transporter),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.darkGray,
+                            letterSpacing: -0.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 5),
+                        // TMID Badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.badge_outlined, size: 11, color: Colors.blue.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                transporter['tmid'] ?? '',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.blue.shade700,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (location != null && location.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(Icons.location_on_outlined, size: 12, color: Colors.grey.shade500),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  location,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  if (callCount > 0)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          callCount > 99 ? '99+' : callCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+
+                  // Action buttons column
+                  Column(
+                    children: [
+                      // Call button
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.green.shade400, Colors.green.shade600],
                           ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.green.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.phone, color: Colors.white, size: 20),
+                          onPressed: () => _makeCall(context, transporter),
+                          tooltip: 'Call',
+                          padding: const EdgeInsets.all(10),
+                          constraints: const BoxConstraints(),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      // View history indicator
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: Colors.grey.shade400,
+                      ),
+                    ],
+                  ),
                 ],
               ),
-              const SizedBox(width: 16),
-
-              // Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              
+              // Stats row
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      _getDisplayName(transporter),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (transporter['company'] != null)
-                      Text(
-                        transporter['company'],
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    const SizedBox(height: 2),
-                    Text(
-                      transporter['tmid'] ?? '',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[500],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.phone, size: 12, color: Colors.green[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$callCount call${callCount != 1 ? 's' : ''}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.green[600],
-                            fontWeight: FontWeight.w600,
+                    // Call count
+                    Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.phone_in_talk, size: 14, color: Colors.green.shade700),
                           ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Total Calls',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$callCount',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.green.shade700,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Divider
+                    Container(
+                      width: 1,
+                      height: 40,
+                      color: Colors.grey.shade300,
+                    ),
+                    
+                    // Last call
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 12),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(Icons.access_time_rounded, size: 14, color: Colors.blue.shade700),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Last Call',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey.shade600,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _formatDate(lastCallDate),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.blue.shade700,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
-              ),
-
-              // Arrow
-              const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: AppColors.softGray,
               ),
             ],
           ),

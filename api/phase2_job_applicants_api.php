@@ -38,11 +38,16 @@ function getJobApplicants() {
         $jobRow = $jobResult->fetch_assoc();
         $numericJobId = $jobRow['id'];
         
-        // Now get applicants using the numeric id with vehicle name, state name, and subscription details
+        // Now get applicants using the numeric id with vehicle name, state name, subscription details, transporter info, and call feedback
+        // Use a subquery to get only the most recent subscription payment per driver
+        // Also get the most recent call feedback for this driver and job
         $query = "SELECT 
             j.id AS job_id,
             j.job_title,
+            j.job_id AS job_id_string,
             j.transporter_id AS contractor_id,
+            t.unique_id AS transporter_tmid,
+            t.name AS transporter_name,
             u.id AS driver_id,
             u.unique_id AS driver_tmid,
             u.name,
@@ -68,15 +73,42 @@ function getJobApplicants() {
             p.created_at as subscription_start_date,
             p.end_at as subscription_end_date,
             p.payment_status as payment_status,
-            p.payment_type as payment_type
+            p.payment_type as payment_type,
+            cl.feedback as call_feedback,
+            cl.match_status as match_status,
+            cl.remark as feedback_notes
         FROM applyjobs a
         INNER JOIN users u ON a.driver_id = u.id
         INNER JOIN jobs j ON a.job_id = j.id
+        LEFT JOIN users t ON j.transporter_id = t.id AND t.role = 'transporter'
         LEFT JOIN vehicle_type vt ON CAST(u.vehicle_type AS UNSIGNED) = vt.id
         LEFT JOIN states s ON CAST(u.states AS UNSIGNED) = s.id
         LEFT JOIN states s2 ON CAST(u.Preferred_Location AS UNSIGNED) = s2.id
-        LEFT JOIN payments p ON u.unique_id = p.unique_id AND p.payment_type = 'subscription'
+        LEFT JOIN (
+            SELECT p1.*
+            FROM payments p1
+            INNER JOIN (
+                SELECT unique_id, MAX(created_at) as max_created
+                FROM payments
+                WHERE payment_type = 'subscription'
+                GROUP BY unique_id
+            ) p2 ON p1.unique_id = p2.unique_id AND p1.created_at = p2.max_created
+            WHERE p1.payment_type = 'subscription'
+        ) p ON u.unique_id = p.unique_id
+        LEFT JOIN (
+            SELECT cl1.*
+            FROM call_logs_match_making cl1
+            INNER JOIN (
+                SELECT unique_id_driver, job_id, MAX(created_at) as max_created
+                FROM call_logs_match_making
+                WHERE unique_id_driver IS NOT NULL AND unique_id_driver != ''
+                GROUP BY unique_id_driver, job_id
+            ) cl2 ON cl1.unique_id_driver = cl2.unique_id_driver 
+                  AND cl1.job_id = cl2.job_id 
+                  AND cl1.created_at = cl2.max_created
+        ) cl ON u.unique_id = cl.unique_id_driver AND j.job_id = cl.job_id
         WHERE a.job_id = $numericJobId
+        GROUP BY a.id, u.id
         ORDER BY a.created_at DESC";
         
         $result = $conn->query($query);
@@ -135,20 +167,35 @@ function getJobApplicants() {
                 }
             }
             
-            // Debug: Log the raw date from database
-            error_log("Raw applied_at from DB: " . ($row['applied_at'] ?? 'NULL'));
-            error_log("Raw subscription_start_date from DB: " . ($row['subscription_start_date'] ?? 'NULL'));
-            
-            // Return the actual database timestamp without modification
+            // Get timestamps from database
             $appliedAt = $row['applied_at'] ?? '';
-            
-            // Return the actual database subscription timestamp without modification
             $subscriptionStartDate = $row['subscription_start_date'] ?? null;
+            
+            // Debug: Log timezone info
+            error_log("=== TIMESTAMP DEBUG ===");
+            error_log("Raw applied_at from DB: " . $appliedAt);
+            error_log("PHP timezone: " . date_default_timezone_get());
+            error_log("Current PHP time: " . date('Y-m-d H:i:s'));
+            error_log("MySQL timezone should be: +05:30");
+            
+            // Verify the timestamp is not in the future
+            if (!empty($appliedAt)) {
+                $appliedTimestamp = strtotime($appliedAt);
+                $currentTimestamp = time();
+                if ($appliedTimestamp > $currentTimestamp) {
+                    error_log("WARNING: Future timestamp detected!");
+                    error_log("Applied: " . date('Y-m-d H:i:s', $appliedTimestamp));
+                    error_log("Current: " . date('Y-m-d H:i:s', $currentTimestamp));
+                    error_log("Difference: " . ($appliedTimestamp - $currentTimestamp) . " seconds");
+                }
+            }
 
             $applicants[] = [
                 'jobId' => (int)$row['job_id'],
                 'jobTitle' => $row['job_title'] ?? '',
                 'contractorId' => (int)$row['contractor_id'],
+                'transporterTmid' => $row['transporter_tmid'] ?? '',
+                'transporterName' => $row['transporter_name'] ?? '',
                 'driverId' => (int)$row['driver_id'],
                 'driverTmid' => $row['driver_tmid'] ?? '',
                 'name' => $row['name'] ?? '',
@@ -173,17 +220,34 @@ function getJobApplicants() {
                 'subscriptionStartDate' => $subscriptionStartDate,
                 'subscriptionEndDate' => $row['subscription_end_date'] ?? null,
                 'subscriptionStatus' => $subscriptionStatus,
+                'callFeedback' => $row['call_feedback'] ?? null,
+                'matchStatus' => $row['match_status'] ?? null,
+                'feedbackNotes' => $row['feedback_notes'] ?? null,
             ];
+        }
+        
+        // Add debug info about timestamps
+        $debugInfo = [
+            'server_time' => [
+                'current_datetime' => date('Y-m-d H:i:s'),
+                'current_timestamp' => time(),
+                'timezone' => date_default_timezone_get(),
+                'mysql_now' => $conn->query("SELECT NOW() as now")->fetch_assoc()['now']
+            ]
+        ];
+        
+        // Log sample timestamp for debugging
+        if (!empty($applicants)) {
+            $sampleAppliedAt = $applicants[0]['appliedAt'];
+            error_log("Sample appliedAt: $sampleAppliedAt");
+            error_log("Server time: " . date('Y-m-d H:i:s'));
+            error_log("MySQL NOW: " . $debugInfo['server_time']['mysql_now']);
         }
         
         // Return applicants with server time for reference
         $response = [
             'applicants' => $applicants,
-            'server_time' => [
-                'current_datetime' => date('Y-m-d H:i:s'),
-                'current_timestamp' => time(),
-                'timezone' => date_default_timezone_get()
-            ]
+            'server_time' => $debugInfo['server_time']
         ];
         
         sendSuccess($response, 'Job applicants fetched successfully');

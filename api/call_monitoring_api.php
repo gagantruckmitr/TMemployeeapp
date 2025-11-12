@@ -22,19 +22,24 @@ $password = '825Redp&4';
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // Set timezone to IST for correct NOW() and timestamp display
+    $pdo->exec("SET time_zone = '+05:30'");
 } catch(PDOException $e) {
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => 'Database connection failed']);
     exit;
 }
 
-$action = $_GET['action'] ?? 'get_call_status';
+$action = $_GET['action'] ?? 'get_call_history';
 
 switch($action) {
     case 'get_call_status':
         getCallStatus($pdo);
         break;
     case 'get_call_history':
+    case 'list': // Support both action names
+    default:
+        // Default to showing call history
         getCallHistory($pdo);
         break;
     case 'get_recording':
@@ -43,8 +48,6 @@ switch($action) {
     case 'get_active_calls':
         getActiveCalls($pdo);
         break;
-    default:
-        echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
 
 /**
@@ -111,28 +114,106 @@ function getCallStatus($pdo) {
  */
 function getCallHistory($pdo) {
     $callerId = $_GET['caller_id'] ?? 0;
-    $limit = $_GET['limit'] ?? 50;
+    $limit = $_GET['limit'] ?? 100;
     $offset = $_GET['offset'] ?? 0;
+    // Support both 'filter' (from frontend) and 'date_range' parameters
+    $dateRange = $_GET['filter'] ?? $_GET['date_range'] ?? 'today';
+    $status = $_GET['status'] ?? '';
+    $search = $_GET['search'] ?? '';
     
     try {
+        $conditions = [];
+        $params = [];
+        
+        // Caller filter - if 0, show all callers
+        if ($callerId > 0) {
+            $conditions[] = "cl.caller_id = ?";
+            $params[] = $callerId;
+        }
+        
+        // Date range filter
+        if ($dateRange === 'today') {
+            $conditions[] = "DATE(cl.created_at) = CURDATE()";
+        } elseif ($dateRange === 'yesterday') {
+            $conditions[] = "DATE(cl.created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)";
+        } elseif ($dateRange === 'week') {
+            $conditions[] = "cl.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
+        } elseif ($dateRange === 'month') {
+            $conditions[] = "cl.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+        }
+        
+        // Status filter
+        if (!empty($status)) {
+            $conditions[] = "cl.call_status = ?";
+            $params[] = $status;
+        }
+        
+        // Search filter
+        if (!empty($search)) {
+            $conditions[] = "(u.name LIKE ? OR u.mobile LIKE ? OR cl.reference_id LIKE ?)";
+            $searchTerm = "%$search%";
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+        }
+        
+        $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
+        
         $sql = "SELECT 
-                    cl.*,
+                    cl.id,
+                    cl.created_at as call_time,
+                    cl.call_duration as duration,
+                    cl.call_status as status,
+                    cl.feedback,
                     u.name as driver_name,
-                    u.mobile as driver_mobile
+                    u.mobile as phone,
+                    a.name as telecaller_name
                 FROM call_logs cl
                 LEFT JOIN users u ON cl.user_id = u.id
-                WHERE cl.caller_id = ?
+                LEFT JOIN admins a ON cl.caller_id = a.id
+                $whereClause
                 ORDER BY cl.created_at DESC
                 LIMIT ? OFFSET ?";
         
+        $params[] = $limit;
+        $params[] = $offset;
+        
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$callerId, $limit, $offset]);
-        $calls = $stmt->fetchAll();
+        $stmt->execute($params);
+        $calls = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Calculate stats
+        $statsConditions = $conditions;
+        $statsParams = array_slice($params, 0, -2); // Remove limit and offset
+        $statsWhereClause = !empty($statsConditions) ? 'WHERE ' . implode(' AND ', $statsConditions) : '';
+        
+        $statsSql = "SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE WHEN cl.call_status = 'connected' THEN 1 ELSE 0 END) as connected,
+                        AVG(CASE WHEN cl.call_duration > 0 THEN cl.call_duration ELSE NULL END) as avg_duration_seconds
+                    FROM call_logs cl
+                    LEFT JOIN users u ON cl.user_id = u.id
+                    LEFT JOIN admins a ON cl.caller_id = a.id
+                    $statsWhereClause";
+        
+        $statsStmt = $pdo->prepare($statsSql);
+        $statsStmt->execute($statsParams);
+        $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+        
+        $avgDurationMinutes = $stats['avg_duration_seconds'] ? round($stats['avg_duration_seconds'] / 60, 1) : 0;
+        $successRate = $stats['total'] > 0 ? round(($stats['connected'] / $stats['total']) * 100, 1) : 0;
         
         echo json_encode([
             'success' => true,
-            'data' => $calls,
-            'count' => count($calls)
+            'data' => [
+                'calls' => $calls,
+                'stats' => [
+                    'total' => (int)$stats['total'],
+                    'connected' => (int)$stats['connected'],
+                    'avg_duration' => $avgDurationMinutes . 'm',
+                    'success_rate' => $successRate
+                ]
+            ]
         ]);
         
     } catch(Exception $e) {

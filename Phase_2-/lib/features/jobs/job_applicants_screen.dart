@@ -626,10 +626,32 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     );
   }
 
+  /// Parse datetime string from database and return the exact values
+  /// No timezone conversion - just display what's in the database
+  DateTime _parseISTDateTime(String dateStr) {
+    // Remove microseconds if present
+    final cleanStr = dateStr.split('.')[0];
+    
+    // Parse the components manually
+    final parts = cleanStr.split(' ');
+    final dateParts = parts[0].split('-');
+    final timeParts = parts.length > 1 ? parts[1].split(':') : ['0', '0', '0'];
+    
+    final year = int.parse(dateParts[0]);
+    final month = int.parse(dateParts[1]);
+    final day = int.parse(dateParts[2]);
+    final hour = int.parse(timeParts[0]);
+    final minute = int.parse(timeParts[1]);
+    final second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
+    
+    // Return a DateTime with these EXACT values - no conversion
+    // Using DateTime() constructor (not .utc()) creates a local DateTime
+    // but we're just using it to hold the values for display
+    return DateTime(year, month, day, hour, minute, second);
+  }
+
   String _formatDate(String date) {
     if (date.isEmpty) return 'N/A';
-    
-
     
     try {
       DateTime dt;
@@ -637,7 +659,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       // Try different parsing approaches
       if (date.contains('-')) {
         // Handle YYYY-MM-DD or YYYY-MM-DD HH:MM:SS format
-        dt = DateTime.parse(date);
+        // Database stores in IST, parse directly
+        dt = _parseISTDateTime(date);
       } else if (date.contains('/')) {
         // Handle DD/MM/YYYY format
         final parts = date.split(' ')[0].split('/'); // Take only date part if datetime
@@ -728,15 +751,13 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   String _formatTime(String date) {
     if (date.isEmpty) return 'N/A';
     
-    // Debug: Show original database time
-    print('📅 Original database time: $date');
-    
     try {
       DateTime dt;
       
       // Try parsing the full datetime string
       if (date.contains('-')) {
-        dt = DateTime.parse(date);
+        // Database stores in IST, parse directly
+        dt = _parseISTDateTime(date);
       } else if (date.contains('/') && date.contains(' ')) {
         // Handle DD/MM/YYYY HH:MM:SS format
         final parts = date.split(' ');
@@ -764,15 +785,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
           throw FormatException('No time part found');
         }
       } else {
-        dt = DateTime.parse(date);
-      }
-      
-      // Log if datetime is in the future but keep the original time from database
-      final now = DateTime.now();
-      
-      if (dt.isAfter(now)) {
-        print('ℹ️ Database contains future datetime: $dt, current: $now (keeping original)');
-        // Keep the original database time - don't modify it
+        dt = _parseISTDateTime(date);
       }
       
       // Format time as HH:MM AM/PM
@@ -1161,14 +1174,29 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
         userType: 'driver',
         userName: driver.name,
         userTmid: driver.driverTmid,
+        transporterTmid: driver.transporterTmid.isNotEmpty ? driver.transporterTmid : null,
         jobId: widget.jobId,
         onSubmit: (feedback, matchStatus, notes) async {
           try {
             final callerId = await Phase2AuthService.getUserId();
+            // Debug: Print the data being sent
+            print('=== FEEDBACK SUBMISSION DEBUG ===');
+            print('Caller ID: $callerId');
+            print('Driver TMID: ${driver.driverTmid}');
+            print('Driver Name: ${driver.name}');
+            print('Transporter TMID: ${driver.transporterTmid}');
+            print('Transporter Name: ${driver.transporterName}');
+            print('Job ID: ${widget.jobId}');
+            print('Feedback: $feedback');
+            print('Match Status: $matchStatus');
+            print('================================');
+            
             await Phase2ApiService.saveCallFeedback(
               callerId: callerId,
+              transporterTmid: driver.transporterTmid.isNotEmpty ? driver.transporterTmid : null,
               driverTmid: driver.driverTmid,
               driverName: driver.name,
+              transporterName: driver.transporterName.isNotEmpty ? driver.transporterName : null,
               feedback: feedback,
               matchStatus: matchStatus,
               notes: notes,
@@ -1183,6 +1211,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                   jobId: driver.jobId,
                   jobTitle: driver.jobTitle,
                   contractorId: driver.contractorId,
+                  transporterTmid: driver.transporterTmid,
+                  transporterName: driver.transporterName,
                   driverId: driver.driverId,
                   driverTmid: driver.driverTmid,
                   name: driver.name,

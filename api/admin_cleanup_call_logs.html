@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Logs Cleanup - Admin Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .section p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+            display: none;
+        }
+        
+        .results.show {
+            display: block;
+        }
+        
+        .results h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .stat-card {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .stat-card .label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .success {
+            border-left-color: #28a745;
+        }
+        
+        .warning {
+            border-left-color: #ffc107;
+        }
+        
+        .error {
+            border-left-color: #dc3545;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📞 Call Logs Cleanup Tool</h1>
+            <p>Fix blank fields and remove duplicates from call_logs_match_making table</p>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <h2>🔧 One-Time Fix</h2>
+                <p>Fix all existing records with blank driver names, transporter names, or job IDs. This will look up the missing information from the database.</p>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="runOneTimeFix()">
+                        <span id="fix-text">Run One-Time Fix</span>
+                        <span id="fix-loading" class="loading" style="display:none;"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>🔄 Full Cleanup</h2>
+                <p>Run the complete cleanup process including fixing blank fields, removing duplicates, and updating outdated information.</p>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="runFullCleanup()">
+                        <span id="cleanup-text">Run Full Cleanup</span>
+                        <span id="cleanup-loading" class="loading" style="display:none;"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="results" class="results">
+                <h3>Results</h3>
+                <div id="results-content"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        async function runOneTimeFix() {
+            const btn = event.target.closest('button');
+            const text = document.getElementById('fix-text');
+            const loading = document.getElementById('fix-loading');
+            const results = document.getElementById('results');
+            const resultsContent = document.getElementById('results-content');
+            
+            btn.disabled = true;
+            text.style.display = 'none';
+            loading.style.display = 'inline-block';
+            
+            try {
+                const response = await fetch('fix_blank_call_logs.php');
+                const data = await response.json();
+                
+                results.classList.add('show');
+                
+                if (data.success) {
+                    resultsContent.innerHTML = `
+                        <div class="alert alert-success">
+                            ✅ ${data.message}
+                        </div>
+                        <div class="stat-grid">
+                            <div class="stat-card">
+                                <div class="label">Total Records</div>
+                                <div class="value">${data.stats.total_records}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="label">Records Checked</div>
+                                <div class="value">${data.stats.records_checked}</div>
+                            </div>
+                            <div class="stat-card success">
+                                <div class="label">Driver Names Fixed</div>
+                                <div class="value">${data.stats.driver_names_fixed}</div>
+                            </div>
+                            <div class="stat-card success">
+                                <div class="label">Transporter Names Fixed</div>
+                                <div class="value">${data.stats.transporter_names_fixed}</div>
+                            </div>
+                            <div class="stat-card success">
+                                <div class="label">Job IDs Fixed</div>
+                                <div class="value">${data.stats.job_ids_fixed}</div>
+                            </div>
+                        </div>
+                        ${data.stats.errors.length > 0 ? `
+                            <div class="alert alert-error" style="margin-top: 20px;">
+                                <strong>Errors:</strong>
+                                <pre>${data.stats.errors.join('\n')}</pre>
+                            </div>
+                        ` : ''}
+                    `;
+                } else {
+                    resultsContent.innerHTML = `
+                        <div class="alert alert-error">
+                            ❌ ${data.message}
+                        </div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                results.classList.add('show');
+                resultsContent.innerHTML = `
+                    <div class="alert alert-error">
+                        ❌ Error: ${error.message}
+                    </div>
+                `;
+            } finally {
+                btn.disabled = false;
+                text.style.display = 'inline';
+                loading.style.display = 'none';
+            }
+        }
+        
+        async function runFullCleanup() {
+            const btn = event.target.closest('button');
+            const text = document.getElementById('cleanup-text');
+            const loading = document.getElementById('cleanup-loading');
+            const results = document.getElementById('results');
+            const resultsContent = document.getElementById('results-content');
+            
+            btn.disabled = true;
+            text.style.display = 'none';
+            loading.style.display = 'inline-block';
+            
+            try {
+                const response = await fetch('cleanup_call_logs_cron.php?key=truckmitr_cleanup_2024');
+                const data = await response.json();
+                
+                results.classList.add('show');
+                
+                if (data.success) {
+                    resultsContent.innerHTML = `
+                        <div class="alert alert-success">
+                            ✅ ${data.message}
+                        </div>
+                        <div class="stat-grid">
+                            <div class="stat-card">
+                                <div class="label">Total Records</div>
+                                <div class="value">${data.stats.total_records}</div>
+                            </div>
+                            <div class="stat-card success">
+                                <div class="label">Blank Fields Fixed</div>
+                                <div class="value">${data.stats.blank_fields_fixed}</div>
+                            </div>
+                            <div class="stat-card warning">
+                                <div class="label">Duplicates Removed</div>
+                                <div class="value">${data.stats.duplicates_removed}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <strong>Details:</strong>
+                            <div class="stat-grid" style="margin-top: 10px;">
+                                <div class="stat-card">
+                                    <div class="label">Driver Names</div>
+                                    <div class="value">${data.stats.details.driver_names_fixed}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="label">Transporter Names</div>
+                                    <div class="value">${data.stats.details.transporter_names_fixed}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="label">Job IDs</div>
+                                    <div class="value">${data.stats.details.job_ids_fixed}</div>
+                                </div>
+                            </div>
+                        </div>
+                        ${data.stats.errors.length > 0 ? `
+                            <div class="alert alert-error" style="margin-top: 20px;">
+                                <strong>Errors:</strong>
+                                <pre>${data.stats.errors.join('\n')}</pre>
+                            </div>
+                        ` : ''}
+                    `;
+                } else {
+                    resultsContent.innerHTML = `
+                        <div class="alert alert-error">
+                            ❌ ${data.message}
+                        </div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                results.classList.add('show');
+                resultsContent.innerHTML = `
+                    <div class="alert alert-error">
+                        ❌ Error: ${error.message}
+                    </div>
+                `;
+            } finally {
+                btn.disabled = false;
+                text.style.display = 'inline';
+                loading.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

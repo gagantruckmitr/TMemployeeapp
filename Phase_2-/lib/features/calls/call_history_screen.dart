@@ -21,6 +21,8 @@ class CallHistoryScreen extends StatefulWidget {
 class _CallHistoryScreenState extends State<CallHistoryScreen>
     with SingleTickerProviderStateMixin {
   List<CallHistoryLog> _callLogs = [];
+  Map<String, List<CallHistoryLog>> _groupedCallLogs = {};
+  Map<String, bool> _expandedDrivers = {};
   bool _isLoading = true;
   String _selectedPeriod = 'all';
   String? _selectedFeedback;
@@ -95,6 +97,22 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     super.dispose();
   }
 
+  void _groupCallLogsByDriver() {
+    _groupedCallLogs.clear();
+    for (var log in _callLogs) {
+      final key = log.contactId; // Group by driver TMID
+      if (!_groupedCallLogs.containsKey(key)) {
+        _groupedCallLogs[key] = [];
+      }
+      _groupedCallLogs[key]!.add(log);
+    }
+    
+    // Sort each group by date (most recent first)
+    _groupedCallLogs.forEach((key, logs) {
+      logs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    });
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
@@ -110,6 +128,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
       setState(() {
         _callLogs = logs;
+        _groupCallLogsByDriver();
         _isLoading = false;
       });
     } catch (e) {
@@ -144,9 +163,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
             child: _isLoading
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.primary))
-                : _callLogs.isEmpty
+                : _groupedCallLogs.isEmpty
                     ? _buildEmptyState()
-                    : _buildCallList(),
+                    : _buildGroupedCallList(),
           ),
         ],
       ),
@@ -156,22 +175,23 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
   Widget _buildHeader() {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
       child: SafeArea(
+        bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white, size: 20),
+                icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.darkGray, size: 18),
                 onPressed: () {
                   if (Navigator.of(context).canPop()) {
                     Navigator.of(context).pop();
@@ -185,24 +205,50 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                 },
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
+                visualDensity: VisualDensity.compact,
               ),
-              const SizedBox(width: 12),
-              const Icon(Icons.history_rounded, color: Colors.white, size: 20),
               const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.people_rounded, color: AppColors.primary, size: 18),
+              ),
+              const SizedBox(width: 10),
               const Text(
-                'Call History',
+                'Drivers',
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.darkGray,
+                  letterSpacing: -0.3,
                 ),
               ),
               const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${_groupedCallLogs.length} drivers',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
+                icon: const Icon(Icons.refresh_rounded, color: AppColors.primary, size: 20),
                 onPressed: _loadData,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
+                visualDensity: VisualDensity.compact,
               ),
             ],
           ),
@@ -308,23 +354,613 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     );
   }
 
-  Widget _buildCallList() {
+  Widget _buildGroupedCallList() {
+    final driverKeys = _groupedCallLogs.keys.toList();
+    
     return RefreshIndicator(
       onRefresh: _loadData,
       color: AppColors.primary,
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.all(16),
-        itemCount: _callLogs.length,
+        itemCount: driverKeys.length,
         itemBuilder: (context, index) {
-          final log = _callLogs[index];
-          return _buildCallCard(log);
+          final driverKey = driverKeys[index];
+          final driverLogs = _groupedCallLogs[driverKey]!;
+          final isExpanded = _expandedDrivers[driverKey] ?? false;
+          
+          return _buildDriverCard(driverKey, driverLogs, isExpanded);
         },
       ),
     );
   }
 
-  Widget _buildCallCard(CallHistoryLog log) {
+  Widget _buildDriverCard(String driverKey, List<CallHistoryLog> logs, bool isExpanded) {
+    final latestLog = logs.first;
+    final callCount = logs.length;
+    
+    // Calculate detailed statistics
+    final feedbackCounts = <String, int>{};
+    final jobs = <String>{};
+    final matchStatuses = <String, int>{};
+    int connectedCalls = 0;
+    int notConnectedCalls = 0;
+    int callbackCalls = 0;
+    
+    for (var log in logs) {
+      if (log.feedback.isNotEmpty) {
+        feedbackCounts[log.feedback] = (feedbackCounts[log.feedback] ?? 0) + 1;
+        
+        // Categorize feedback
+        final feedback = log.feedback.toLowerCase();
+        if (feedback.contains('interview') || feedback.contains('selected') || 
+            feedback.contains('interested') || feedback.contains('match making')) {
+          connectedCalls++;
+        } else if (feedback.contains('ringing') || feedback.contains('busy') || 
+                   feedback.contains('switched off') || feedback.contains('not reachable')) {
+          notConnectedCalls++;
+        } else if (feedback.contains('call') || feedback.contains('later') || 
+                   feedback.contains('tomorrow') || feedback.contains('evening')) {
+          callbackCalls++;
+        }
+      }
+      if (log.jobId.isNotEmpty) {
+        jobs.add(log.jobId);
+      }
+      if (log.matchStatus.isNotEmpty) {
+        matchStatuses[log.matchStatus] = (matchStatuses[log.matchStatus] ?? 0) + 1;
+      }
+    }
+    
+    final successRate = callCount > 0 ? (connectedCalls / callCount * 100).round() : 0;
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 0,
+      shadowColor: Colors.black.withOpacity(0.05),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200, width: 1),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _expandedDrivers[driverKey] = !isExpanded;
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Avatar with call count badge
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [AppColors.primary.withOpacity(0.15), AppColors.primary.withOpacity(0.05)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.person_rounded,
+                              color: AppColors.primary,
+                              size: 24,
+                            ),
+                          ),
+                          Positioned(
+                            right: -6,
+                            top: -6,
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.red.shade400, Colors.red.shade600],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.red.withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                '$callCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      
+                      // Driver info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              latestLog.contactName.isEmpty ? 'Unknown Driver' : latestLog.contactName,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.darkGray,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.badge_outlined, size: 10, color: Colors.blue.shade700),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        latestLog.contactId,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(Icons.access_time_rounded, size: 11, color: Colors.grey.shade500),
+                                const SizedBox(width: 3),
+                                Flexible(
+                                  child: Text(
+                                    _formatDateTime(latestLog.createdAt),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Enhanced stats row
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                // Success rate
+                                _buildStatChip(
+                                  icon: Icons.trending_up,
+                                  label: '$successRate% success',
+                                  color: successRate >= 50 ? Colors.green : Colors.orange,
+                                ),
+                                // Jobs count
+                                if (jobs.isNotEmpty)
+                                  _buildStatChip(
+                                    icon: Icons.work_outline,
+                                    label: '${jobs.length} job${jobs.length > 1 ? 's' : ''}',
+                                    color: Colors.blue,
+                                  ),
+                                // Connected calls
+                                if (connectedCalls > 0)
+                                  _buildStatChip(
+                                    icon: Icons.check_circle_outline,
+                                    label: '$connectedCalls connected',
+                                    color: Colors.green,
+                                  ),
+                                // Not connected
+                                if (notConnectedCalls > 0)
+                                  _buildStatChip(
+                                    icon: Icons.phone_disabled_outlined,
+                                    label: '$notConnectedCalls missed',
+                                    color: Colors.red,
+                                  ),
+                                // Callbacks
+                                if (callbackCalls > 0)
+                                  _buildStatChip(
+                                    icon: Icons.schedule_outlined,
+                                    label: '$callbackCalls callback',
+                                    color: Colors.amber,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      // Action buttons
+                      Column(
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.phone, color: Colors.green.shade700, size: 20),
+                              onPressed: () => _makeCall(latestLog),
+                              tooltip: 'Call',
+                              padding: const EdgeInsets.all(8),
+                              constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Icon(
+                            isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                            color: Colors.grey.shade400,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  
+                  // Latest feedback and match status with more details
+                  if (latestLog.feedback.isNotEmpty || latestLog.matchStatus.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            _getFeedbackColor(latestLog.feedback).withOpacity(0.05),
+                            _getFeedbackColor(latestLog.feedback).withOpacity(0.02),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _getFeedbackColor(latestLog.feedback).withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: _getFeedbackColor(latestLog.feedback).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Icon(
+                                  _getFeedbackIcon(latestLog.feedback),
+                                  size: 14,
+                                  color: _getFeedbackColor(latestLog.feedback),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Latest Feedback',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      latestLog.feedback,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: _getFeedbackColor(latestLog.feedback),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (latestLog.matchStatus.isNotEmpty) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: _getMatchStatusColor(latestLog.matchStatus),
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _getMatchStatusColor(latestLog.matchStatus).withOpacity(0.3),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    latestLog.matchStatus,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (latestLog.jobId.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(Icons.work_outline, size: 10, color: Colors.grey.shade500),
+                                const SizedBox(width: 4),
+                                Text(
+                                  latestLog.jobId,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  _formatDateTime(latestLog.createdAt),
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                  
+                  // Feedback breakdown (if multiple feedbacks)
+                  if (feedbackCounts.length > 1 && !isExpanded) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: feedbackCounts.entries.take(3).map((entry) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _getFeedbackColor(entry.key).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: _getFeedbackColor(entry.key).withOpacity(0.3),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Text(
+                            '${entry.key} (${entry.value})',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: _getFeedbackColor(entry.key),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          
+          // Expanded call history
+          if (isExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.history, size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Call History ($callCount calls)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ...logs.map((log) => _buildCompactCallItem(log)).toList(),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatChip({required IconData icon, required String label, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactCallItem(CallHistoryLog log) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      _getFeedbackIcon(log.feedback),
+                      size: 14,
+                      color: _getFeedbackColor(log.feedback),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        log.feedback.isEmpty ? 'No feedback' : log.feedback,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: log.feedback.isEmpty ? Colors.grey.shade500 : AppColors.darkGray,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                _formatDateTime(log.createdAt),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade500,
+                ),
+              ),
+            ],
+          ),
+          if (log.matchStatus.isNotEmpty || log.jobId.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (log.matchStatus.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _getMatchStatusColor(log.matchStatus).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      log.matchStatus,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: _getMatchStatusColor(log.matchStatus),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                if (log.jobId.isNotEmpty)
+                  Text(
+                    log.jobId,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          if (log.remark.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              log.remark,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          if (log.callRecording.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            AudioPlayerWidget(recordingUrl: log.callRecording),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: () => _showEditFeedbackModal(log),
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Edit', style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _confirmDelete(log),
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('Delete', style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Old _buildCallCard method removed - now using _buildDriverCard with grouped calls
+  
+  Widget _buildCallCard_UNUSED(CallHistoryLog log) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 3,
@@ -922,64 +1558,69 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
   // Make a phone call
   Future<void> _makeCall(CallHistoryLog log) async {
-    // First, show feedback modal after call intent
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => CallFeedbackModal(
-        userType: log.contactType.toLowerCase(),
-        userName: log.contactName,
-        userTmid: log.contactId,
-        transporterTmid:
-            log.uniqueIdTransporter.isNotEmpty ? log.uniqueIdTransporter : null,
-        jobId: log.jobId.isNotEmpty ? log.jobId : null,
-        onSubmit: (feedback, matchStatus, notes) async {
-          try {
-            await Phase2ApiService.saveCallFeedback(
-              callerId: _currentUser?.id ?? 0,
-              transporterTmid: log.uniqueIdTransporter.isNotEmpty
-                  ? log.uniqueIdTransporter
-                  : null,
-              driverTmid:
-                  log.uniqueIdDriver.isNotEmpty ? log.uniqueIdDriver : null,
-              driverName: log.driverName,
-              transporterName: log.transporterName,
-              feedback: feedback,
-              matchStatus: matchStatus,
-              notes: notes,
-              jobId: log.jobId.isNotEmpty ? log.jobId : null,
-            );
-
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Call feedback saved successfully'),
-                  backgroundColor: Colors.green,
-                ),
+    try {
+      // Fetch phone number from API based on TMID
+      final tmid = log.contactType == 'Driver' ? log.uniqueIdDriver : log.uniqueIdTransporter;
+      
+      // You'll need to implement this API call to get phone number
+      // For now, show feedback modal directly
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => CallFeedbackModal(
+          userType: log.contactType.toLowerCase(),
+          userName: log.contactName,
+          userTmid: log.contactId,
+          transporterTmid:
+              log.uniqueIdTransporter.isNotEmpty ? log.uniqueIdTransporter : null,
+          jobId: log.jobId.isNotEmpty ? log.jobId : null,
+          onSubmit: (feedback, matchStatus, notes) async {
+            try {
+              await Phase2ApiService.saveCallFeedback(
+                callerId: _currentUser?.id ?? 0,
+                transporterTmid: log.uniqueIdTransporter.isNotEmpty
+                    ? log.uniqueIdTransporter
+                    : null,
+                driverTmid:
+                    log.uniqueIdDriver.isNotEmpty ? log.uniqueIdDriver : null,
+                driverName: log.driverName,
+                transporterName: log.transporterName,
+                feedback: feedback,
+                matchStatus: matchStatus,
+                notes: notes,
+                jobId: log.jobId.isNotEmpty ? log.jobId : null,
               );
-              _loadData();
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error saving feedback: $e')),
-              );
-            }
-          }
-        },
-      ),
-    );
 
-    // Attempt to make the call (this will open the phone dialer)
-    // Note: You'll need to extract phone number from the contact
-    // For now, we'll show a message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening dialer for ${log.contactName}...'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Call feedback saved successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+                _loadData();
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error saving feedback: $e')),
+                );
+              }
+            }
+          },
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // Show edit feedback modal with role-based options

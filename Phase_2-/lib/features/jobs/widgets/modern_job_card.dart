@@ -262,9 +262,8 @@ class _ModernJobCardState extends State<ModernJobCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    // Show assignment badge in search results
-                    if (widget.isSearchResult &&
-                        widget.job.assignedTo != null) ...[
+                    // Show assignment badge for all jobs
+                    if (widget.job.assignedTo != null) ...[
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(

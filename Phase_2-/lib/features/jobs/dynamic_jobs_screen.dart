@@ -31,7 +31,8 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
     'active',
     'pending',
     'inactive',
-    'expired'
+    'expired',
+    'closed'
   ];
   final List<String> _filterLabels = [
     'All',
@@ -39,7 +40,8 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
     'Active',
     'Pending',
     'Inactive',
-    'Expired'
+    'Expired',
+    'Closed'
   ];
 
   @override

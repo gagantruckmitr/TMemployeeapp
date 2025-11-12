@@ -4,7 +4,7 @@ class ApiConfig {
   // ⚠️ DEPLOYMENT MODE: Switch between LOCAL and ONLINE
   // LOCAL DEVELOPMENT: (Commented out)
   // static const String serverIp = '192.168.29.149';
-  // static const String baseUrl = 'http://$serverIp/api';
+  // static const String baseUrl = 'http://$serverIp/truckmitr-app/api';
 
   // PRODUCTION: Plesk Server (Active)
   static const String baseUrl = 'https://truckmitr.com/truckmitr-app/api';

@@ -105,6 +105,12 @@ function saveJobBrief() {
     $callStatusFeedback = isset($data['callStatusFeedback']) ? $conn->real_escape_string($data['callStatusFeedback']) : NULL;
     $callRecording = isset($data['callRecording']) ? $conn->real_escape_string($data['callRecording']) : NULL;
     
+    // Check if job should be closed (when feedback is "Not a Transporter")
+    $closedJob = 0;
+    if ($callStatusFeedback !== NULL && stripos($callStatusFeedback, 'Not a Transporter') !== false) {
+        $closedJob = 1;
+    }
+    
     try {
         // First check if a record exists for this unique_id and job_id combination
         $checkQuery = "SELECT id FROM job_brief_table WHERE unique_id = '$uniqueId' AND job_id = '$jobId' LIMIT 1";
@@ -133,6 +139,7 @@ function saveJobBrief() {
             $updateFields[] = "fast_tag_road_kharcha = '$fastTagRoadKharcha'";
             if ($callStatusFeedback !== NULL) $updateFields[] = "call_status_feedback = '$callStatusFeedback'";
             if ($callRecording !== NULL) $updateFields[] = "call_recording = '$callRecording'";
+            $updateFields[] = "closed_job = $closedJob";
             $updateFields[] = "updated_at = NOW()";
             
             $query = "UPDATE job_brief_table SET " . implode(', ', $updateFields) . " WHERE id = $existingId";
@@ -153,7 +160,7 @@ function saveJobBrief() {
                 unique_id, job_id, caller_id, name, job_location, route, vehicle_type, license_type, 
                 experience, salary_fixed, salary_variable, esi_pf, food_allowance, 
                 trip_incentive, rehne_ki_suvidha, mileage, fast_tag_road_kharcha, 
-                call_status_feedback, call_recording, created_at, updated_at
+                call_status_feedback, call_recording, closed_job, created_at, updated_at
             ) VALUES (
                 '$uniqueId', '$jobId', " . ($callerId !== NULL ? $callerId : "NULL") . ", " . 
                 ($name ? "'$name'" : "NULL") . ", " .
@@ -172,6 +179,7 @@ function saveJobBrief() {
                 "'$fastTagRoadKharcha', " .
                 ($callStatusFeedback ? "'$callStatusFeedback'" : "NULL") . ", " .
                 ($callRecording ? "'$callRecording'" : "NULL") . ", " .
+                "$closedJob, " .
                 "NOW(), NOW()
             )";
             
@@ -249,6 +257,7 @@ function getCallHistory() {
     }
     
     $uniqueId = isset($_GET['unique_id']) ? $conn->real_escape_string($_GET['unique_id']) : '';
+    $callerId = isset($_GET['caller_id']) ? (int)$_GET['caller_id'] : 0;
     
     if (empty($uniqueId)) {
         sendError('Transporter ID is required', 400);
@@ -256,13 +265,20 @@ function getCallHistory() {
     
     try {
         // Query with JOIN to get transporter name from users table
+        // Filter by caller_id so each telecaller only sees their own call history
         $query = "SELECT 
                     jb.*,
                     COALESCE(jb.name, u.Transport_Name, u.name_eng, u.name) as transporter_name
                   FROM job_brief_table jb
                   LEFT JOIN users u ON jb.unique_id = u.unique_id AND u.role = 'transporter'
-                  WHERE jb.unique_id = '$uniqueId'
-                  ORDER BY jb.created_at DESC";
+                  WHERE jb.unique_id = '$uniqueId'";
+        
+        // Add caller_id filter if provided
+        if ($callerId > 0) {
+            $query .= " AND jb.caller_id = $callerId";
+        }
+        
+        $query .= " ORDER BY jb.created_at DESC";
         
         $result = $conn->query($query);
         
@@ -303,24 +319,24 @@ function getTransportersList() {
         sendError('Database connection not available', 500);
     }
     
+    $callerId = isset($_GET['caller_id']) ? (int)$_GET['caller_id'] : 0;
+    
     try {
+        // Build the WHERE clause for caller_id filtering
+        $whereClause = $callerId > 0 ? "WHERE jb.caller_id = $callerId" : "";
+        
         // Query to get transporters with their names from users table
-        // Use COALESCE to get name from Transport_Name, name_eng, or name fields
+        // Filter by caller_id so each telecaller only sees transporters they called
         $query = "SELECT 
                     jb.unique_id as tmid,
                     COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown') as name,
-                    (SELECT job_location 
-                     FROM job_brief_table 
-                     WHERE unique_id = jb.unique_id 
-                     AND job_location IS NOT NULL 
-                     AND job_location != ''
-                     ORDER BY created_at DESC 
-                     LIMIT 1) as location,
+                    jb.job_location as location,
                     COUNT(jb.id) as call_count,
                     MAX(jb.created_at) as last_call_date
                   FROM job_brief_table jb
                   LEFT JOIN users u ON jb.unique_id = u.unique_id AND u.role = 'transporter'
-                  GROUP BY jb.unique_id, COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown')
+                  $whereClause
+                  GROUP BY jb.unique_id, COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown'), jb.job_location
                   ORDER BY last_call_date DESC";
         
         $result = $conn->query($query);

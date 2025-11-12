@@ -85,7 +85,17 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
     setState(() => _isSubmitting = true);
 
     try {
-      // First, upload recording if selected
+      // First submit feedback to create/update the call log entry
+      widget.onSubmit(
+        _selectedFeedback!,
+        _selectedMatchStatus ?? '',
+        _notesController.text,
+      );
+
+      // Wait a moment for the feedback to be saved
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Then upload recording if selected
       if (_selectedRecordingFile != null && widget.jobId != null) {
         try {
           final callerId = await Phase2AuthService.getUserId();
@@ -117,21 +127,33 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
           if (response.statusCode == 200) {
             final responseData = json.decode(response.body);
             if (responseData['success'] == true) {
-              print('Recording uploaded successfully');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Recording uploaded successfully'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            } else {
+              throw Exception(responseData['message'] ?? 'Upload failed');
             }
+          } else {
+            throw Exception('Server error: ${response.statusCode}');
           }
         } catch (e) {
-          print('Recording upload failed: $e');
-          // Continue with feedback submission even if recording fails
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Recording upload failed: $e'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         }
       }
-
-      // Then submit feedback
-      widget.onSubmit(
-        _selectedFeedback!,
-        _selectedMatchStatus ?? '',
-        _notesController.text,
-      );
 
       if (mounted) {
         Navigator.pop(context);

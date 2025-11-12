@@ -167,6 +167,9 @@ function logRequest($endpoint, $method, $userId = null) {
 // ============================================
 date_default_timezone_set('Asia/Kolkata'); // Set to Indian timezone
 
+// Log timezone for debugging
+error_log('PHP Timezone: ' . date_default_timezone_get() . ' | Current time: ' . date('Y-m-d H:i:s'));
+
 // ============================================
 // ERROR REPORTING
 // ============================================
@@ -193,7 +196,8 @@ define('ALLOWED_ORIGINS', ['*']); // In production, specify your app's domain
 // ============================================
 $conn = getDBConnection();
 
-// Set MySQL timezone to IST (+05:30)
+// Set MySQL timezone to IST so NOW() returns IST time strings
+// MySQL stores in UTC but NOW() will return IST format
 $conn->query("SET time_zone = '+05:30'");
 
 // ============================================
@@ -211,7 +215,7 @@ try {
         ]
     );
     
-    // Set MySQL timezone to IST (+05:30)
+    // Set MySQL timezone to IST so NOW() returns IST time strings
     $pdo->exec("SET time_zone = '+05:30'");
     
 } catch(PDOException $e) {

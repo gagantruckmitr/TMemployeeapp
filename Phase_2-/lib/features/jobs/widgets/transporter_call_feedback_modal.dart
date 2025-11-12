@@ -35,7 +35,7 @@ class _TransporterCallFeedbackModalState
     'Connected': [
       'Call Back Later',
       'Details Received',
-      'Not a Genuine Transporter',
+      'Not a Transporter',
       'He is Driver, mistakenly registered as Transporter',
       'Hire from other source',
       'Hired from TruckMitr',
@@ -201,8 +201,7 @@ class _TransporterCallFeedbackModalState
                 ),
               ),
               const SizedBox(height: 12),
-              ..._statusOptions[_selectedMainStatus]!
-                  .map((option) => _buildSubStatusOption(option)),
+              _buildSubStatusGrid(_statusOptions[_selectedMainStatus]!),
               const SizedBox(height: 24),
             ],
 
@@ -429,6 +428,23 @@ class _TransporterCallFeedbackModalState
     );
   }
 
+  Widget _buildSubStatusGrid(List<String> options) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 2.5, // Adjust for slim appearance
+      ),
+      itemCount: options.length,
+      itemBuilder: (context, index) {
+        return _buildSubStatusOption(options[index]);
+      },
+    );
+  }
+
   Widget _buildSubStatusOption(String option) {
     final isSelected = _selectedSubStatus == option;
 
@@ -448,8 +464,7 @@ class _TransporterCallFeedbackModalState
         }
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.primary.withValues(alpha: 0.1)
@@ -458,26 +473,29 @@ class _TransporterCallFeedbackModalState
             color: isSelected ? AppColors.primary : const Color(0xFFE5E7EB),
             width: isSelected ? 2 : 1,
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
               color: isSelected ? AppColors.primary : const Color(0xFF9CA3AF),
-              size: 20,
+              size: 18,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 option,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 12,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   color: isSelected
                       ? AppColors.primary
                       : const Color(0xFF374151),
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

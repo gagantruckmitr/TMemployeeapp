@@ -42,40 +42,67 @@ function getJobs() {
         LEFT JOIN vehicle_type vt ON j.vehicle_type = vt.id
         WHERE j.assigned_to = $userId";
         
+        // Check if job_brief_table exists and has closed_job column
+        $jobBriefCheck = $conn->query("SHOW TABLES LIKE 'job_brief_table'");
+        $hasJobBriefTable = $jobBriefCheck && $jobBriefCheck->num_rows > 0;
+        
         // Apply filters
-        if ($hasDeadlineColumn) {
-            // Use deadline-aware filters
-            if ($filter === 'approved') {
-                $query .= " AND j.status = '1' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
-            } elseif ($filter === 'pending') {
-                $query .= " AND j.status = '0' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
-            } elseif ($filter === 'active') {
-                $query .= " AND j.active_inactive = 1 AND j.status = '1' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
-            } elseif ($filter === 'inactive') {
-                $query .= " AND j.active_inactive = 0 AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
-            } elseif ($filter === 'expired') {
-                $query .= " AND j.Application_Deadline IS NOT NULL AND j.Application_Deadline != '' AND j.Application_Deadline < NOW()";
-            } elseif ($filter === 'all') {
-                // For 'all' filter, exclude expired jobs by default to show only active jobs
-                $query .= " AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+        if ($filter === 'closed') {
+            // Show only closed jobs from job_brief_table
+            if ($hasJobBriefTable) {
+                $query = "SELECT DISTINCT
+                    j.*,
+                    COALESCE(vt.vehicle_name, j.vehicle_type) as vehicle_type_name
+                FROM jobs j
+                LEFT JOIN vehicle_type vt ON j.vehicle_type = vt.id
+                INNER JOIN job_brief_table jb ON j.job_id = jb.job_id
+                WHERE j.assigned_to = $userId AND jb.closed_job = 1";
+                // Skip the ORDER BY at the end, add it here
+                $query .= " ORDER BY jb.updated_at DESC LIMIT 50";
+            } else {
+                // No job_brief_table, return empty
+                $query .= " AND 1 = 0 ORDER BY j.Created_at DESC LIMIT 50";
             }
         } else {
-            // Use simple filters without deadline checks
-            if ($filter === 'approved') {
-                $query .= " AND j.status = '1'";
-            } elseif ($filter === 'pending') {
-                $query .= " AND j.status = '0'";
-            } elseif ($filter === 'active') {
-                $query .= " AND j.active_inactive = 1 AND j.status = '1'";
-            } elseif ($filter === 'inactive') {
-                $query .= " AND j.active_inactive = 0";
-            } elseif ($filter === 'expired') {
-                // Return no results if no deadline column
-                $query .= " AND 1 = 0";
+            // For all other filters, exclude closed jobs
+            if ($hasJobBriefTable) {
+                $query .= " AND j.job_id NOT IN (SELECT job_id FROM job_brief_table WHERE closed_job = 1)";
             }
+            
+            if ($hasDeadlineColumn) {
+                // Use deadline-aware filters
+                if ($filter === 'approved') {
+                    $query .= " AND j.status = '1' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+                } elseif ($filter === 'pending') {
+                    $query .= " AND j.status = '0' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+                } elseif ($filter === 'active') {
+                    $query .= " AND j.active_inactive = 1 AND j.status = '1' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+                } elseif ($filter === 'inactive') {
+                    $query .= " AND j.active_inactive = 0 AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+                } elseif ($filter === 'expired') {
+                    $query .= " AND j.Application_Deadline IS NOT NULL AND j.Application_Deadline != '' AND j.Application_Deadline < NOW()";
+                } elseif ($filter === 'all') {
+                    // For 'all' filter, exclude expired jobs by default to show only active jobs
+                    $query .= " AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
+                }
+            } else {
+                // Use simple filters without deadline checks
+                if ($filter === 'approved') {
+                    $query .= " AND j.status = '1'";
+                } elseif ($filter === 'pending') {
+                    $query .= " AND j.status = '0'";
+                } elseif ($filter === 'active') {
+                    $query .= " AND j.active_inactive = 1 AND j.status = '1'";
+                } elseif ($filter === 'inactive') {
+                    $query .= " AND j.active_inactive = 0";
+                } elseif ($filter === 'expired') {
+                    // Return no results if no deadline column
+                    $query .= " AND 1 = 0";
+                }
+            }
+            
+            $query .= " ORDER BY j.Created_at DESC LIMIT 50";
         }
-        
-        $query .= " ORDER BY j.Created_at DESC LIMIT 50";
         
         $result = $conn->query($query);
         

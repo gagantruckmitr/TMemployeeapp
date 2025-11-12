@@ -31,8 +31,7 @@ function searchJobs() {
         $searchQuery = isset($_GET['query']) ? $conn->real_escape_string($_GET['query']) : '';
         $filter = isset($_GET['filter']) ? $conn->real_escape_string($_GET['filter']) : 'all';
         
-        // Build search query with JOINs - SEARCH ALL JOBS (not filtered by user)
-        // Include assigned_to info and telecaller name from jobs table
+        // Build search query with JOINs - SHOW ALL JOBS with assignment info
         $query = "SELECT 
             j.*,
             COALESCE(vt.vehicle_name, j.vehicle_type) as vehicle_type_name,
@@ -47,6 +46,17 @@ function searchJobs() {
         LEFT JOIN users u ON j.transporter_id = u.id
         LEFT JOIN admins a ON j.assigned_to = a.id
         WHERE 1=1";
+        
+        // Check if job_brief_table exists for closed jobs filtering
+        $jobBriefCheck = $conn->query("SHOW TABLES LIKE 'job_brief_table'");
+        $hasJobBriefTable = $jobBriefCheck && $jobBriefCheck->num_rows > 0;
+        
+        // Exclude closed jobs from search (unless searching for closed jobs specifically)
+        if ($hasJobBriefTable && $filter !== 'closed') {
+            $query .= " AND j.job_id NOT IN (SELECT job_id FROM job_brief_table WHERE closed_job = 1)";
+        } elseif ($hasJobBriefTable && $filter === 'closed') {
+            $query .= " AND j.job_id IN (SELECT job_id FROM job_brief_table WHERE closed_job = 1)";
+        }
         
         // Add search conditions if query provided
         if (!empty($searchQuery)) {

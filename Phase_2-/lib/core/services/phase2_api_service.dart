@@ -6,7 +6,10 @@ import 'phase2_auth_service.dart';
 
 class Phase2ApiService {
   // Update this to your actual API URL
+  // For local development, use your machine's IP address
+  // For production, use the domain
   static const String baseUrl = 'https://truckmitr.com/truckmitr-app/api';
+  // static const String baseUrl = 'http://192.168.1.X/TMemployeeApp/api'; // For local testing
 
   // Fetch jobs with optional filter
   static Future<List<JobModel>> fetchJobs({String filter = 'all'}) async {
@@ -148,7 +151,13 @@ class Phase2ApiService {
             // New format with server time
             applicantsJson = responseData['applicants'];
             final serverTime = responseData['server_time'];
+            print('=== API RESPONSE DEBUG ===');
             print('Server time: ${serverTime['current_datetime']}');
+            print('Server timezone: ${serverTime['timezone']}');
+            if (applicantsJson.isNotEmpty) {
+              print('Sample appliedAt from API: ${applicantsJson[0]['appliedAt']}');
+            }
+            print('========================');
           } else {
             // Old format - direct array
             applicantsJson = responseData;
@@ -468,9 +477,18 @@ class Phase2ApiService {
   static Future<List<Map<String, dynamic>>> getTransporterCallHistory(
       String uniqueId) async {
     try {
+      // Get current user's caller_id
+      final user = await Phase2AuthService.getCurrentUser();
+      final callerId = user?.id ?? 0;
+      
+      print('=== FETCHING CALL HISTORY ===');
+      print('Caller ID: $callerId');
+      print('Transporter ID: $uniqueId');
+      print('URL: $baseUrl/phase2_job_brief_api.php?action=history&unique_id=$uniqueId&caller_id=$callerId');
+      
       final response = await http.get(
         Uri.parse(
-            '$baseUrl/phase2_job_brief_api.php?action=history&unique_id=$uniqueId'),
+            '$baseUrl/phase2_job_brief_api.php?action=history&unique_id=$uniqueId&caller_id=$callerId'),
       );
 
       if (response.statusCode == 200) {
@@ -492,8 +510,18 @@ class Phase2ApiService {
   static Future<List<Map<String, dynamic>>>
       getTransportersWithCallHistory() async {
     try {
+      // Get current user's caller_id
+      final user = await Phase2AuthService.getCurrentUser();
+      final callerId = user?.id ?? 0;
+      
+      print('=== FETCHING TRANSPORTERS LIST ===');
+      print('User: ${user?.name ?? "NULL"}');
+      print('User ID: ${user?.id ?? "NULL"}');
+      print('Caller ID: $callerId');
+      print('URL: $baseUrl/phase2_job_brief_api.php?action=transporters_list&caller_id=$callerId');
+      
       final response = await http.get(
-        Uri.parse('$baseUrl/phase2_job_brief_api.php?action=transporters_list'),
+        Uri.parse('$baseUrl/phase2_job_brief_api.php?action=transporters_list&caller_id=$callerId'),
       );
 
       if (response.statusCode == 200) {

@@ -158,27 +158,40 @@ class JobModel {
     try {
       DateTime deadline;
       
+      // Clean up the deadline string - fix malformed dates like "2025-11-1500:00:00"
+      String cleanDeadline = applicationDeadline.trim();
+      
+      // Fix missing space between date and time (e.g., "2025-11-1500:00:00" -> "2025-11-15 00:00:00")
+      if (cleanDeadline.contains('-') && !cleanDeadline.contains(' ') && !cleanDeadline.contains('T')) {
+        // Match pattern: YYYY-MM-DDHH:MM:SS
+        final regex = RegExp(r'(\d{4}-\d{2}-\d{2})(\d{2}:\d{2}:\d{2})');
+        final match = regex.firstMatch(cleanDeadline);
+        if (match != null) {
+          cleanDeadline = '${match.group(1)} ${match.group(2)}';
+        }
+      }
+      
       // Try different date formats
-      if (applicationDeadline.contains('T')) {
+      if (cleanDeadline.contains('T')) {
         // ISO format: 2024-01-15T23:59:59
-        deadline = DateTime.parse(applicationDeadline);
-      } else if (applicationDeadline.contains('-')) {
+        deadline = DateTime.parse(cleanDeadline);
+      } else if (cleanDeadline.contains(' ')) {
+        // SQL datetime format: 2024-01-15 23:59:59
+        deadline = DateTime.parse(cleanDeadline.replaceFirst(' ', 'T'));
+      } else if (cleanDeadline.contains('-')) {
         // Date only format: 2024-01-15
-        deadline = DateTime.parse('${applicationDeadline}T23:59:59');
+        deadline = DateTime.parse('${cleanDeadline}T23:59:59');
       } else {
         // Other formats, try direct parsing
-        deadline = DateTime.parse(applicationDeadline);
+        deadline = DateTime.parse(cleanDeadline);
       }
       
       final now = DateTime.now();
       final isExpired = now.isAfter(deadline);
       
-      // Debug print to help troubleshoot
-      print('📅 Job: $jobTitle - Deadline: $applicationDeadline -> Parsed: $deadline, Now: $now, Expired: $isExpired');
-      
       return isExpired;
     } catch (e) {
-      print('❌ Error parsing deadline for job $jobTitle: $applicationDeadline - Error: $e');
+      // Silently fail for invalid dates - don't spam console
       return false;
     }
   }

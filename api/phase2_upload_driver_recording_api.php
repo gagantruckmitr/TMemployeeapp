@@ -179,40 +179,72 @@ try {
     $rowsAffected = 0;
     
     if (isset($conn)) {
-        // First, try to find existing call log
+        // Build the WHERE clause based on which TMID is provided
+        $whereClause = "";
+        $params = [];
+        $types = "";
+        
+        if ($isDriver) {
+            $whereClause = "unique_id_driver = ? AND caller_id = ?";
+            $params = [$driverTmid, $callerId];
+            $types = "si";
+        } else {
+            $whereClause = "unique_id_transporter = ? AND caller_id = ?";
+            $params = [$transporterTmid, $callerId];
+            $types = "si";
+        }
+        
+        // Add job_id to the search if provided
+        if (!empty($jobId)) {
+            $whereClause .= " AND job_id = ?";
+            $params[] = $jobId;
+            $types .= "s";
+        }
+        
+        // First, try to find existing call log (within last 10 minutes)
         $findQuery = "SELECT id FROM call_logs_match_making 
-                      WHERE unique_id_driver = ? 
-                      AND caller_id = ? 
+                      WHERE $whereClause 
+                      AND created_at >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
                       ORDER BY created_at DESC 
                       LIMIT 1";
         
         $findStmt = $conn->prepare($findQuery);
-        $findStmt->bind_param("si", $driverTmid, $callerId);
+        $findStmt->bind_param($types, ...$params);
         $findStmt->execute();
         $result = $findStmt->get_result();
         
         if ($result->num_rows > 0) {
             // Update existing record
+            $row = $result->fetch_assoc();
+            $existingId = $row['id'];
+            
             $updateQuery = "UPDATE call_logs_match_making 
-                            SET call_recording = ? 
-                            WHERE unique_id_driver = ? 
-                            AND caller_id = ? 
-                            ORDER BY created_at DESC 
-                            LIMIT 1";
+                            SET call_recording = ?, updated_at = NOW() 
+                            WHERE id = ?";
             
             $stmt = $conn->prepare($updateQuery);
-            $stmt->bind_param("ssi", $recordingUrl, $driverTmid, $callerId);
+            $stmt->bind_param("si", $recordingUrl, $existingId);
             $dbUpdateSuccess = $stmt->execute();
             $rowsAffected = $stmt->affected_rows;
-            logDebug("Database update - Success: " . ($dbUpdateSuccess ? 'true' : 'false') . ", Rows affected: $rowsAffected");
+            logDebug("Database update - Success: " . ($dbUpdateSuccess ? 'true' : 'false') . ", Rows affected: $rowsAffected, ID: $existingId");
         } else {
-            // Create new call log entry
-            $insertQuery = "INSERT INTO call_logs_match_making 
-                            (unique_id_driver, caller_id, job_id, call_recording, created_at) 
-                            VALUES (?, ?, ?, ?, NOW())";
+            // Create new call log entry with recording
+            if ($isDriver) {
+                $insertQuery = "INSERT INTO call_logs_match_making 
+                                (unique_id_driver, caller_id, job_id, call_recording, feedback, created_at, updated_at) 
+                                VALUES (?, ?, ?, ?, 'pending', NOW(), NOW())";
+                
+                $stmt = $conn->prepare($insertQuery);
+                $stmt->bind_param("siss", $driverTmid, $callerId, $jobId, $recordingUrl);
+            } else {
+                $insertQuery = "INSERT INTO call_logs_match_making 
+                                (unique_id_transporter, caller_id, job_id, call_recording, feedback, created_at, updated_at) 
+                                VALUES (?, ?, ?, ?, 'pending', NOW(), NOW())";
+                
+                $stmt = $conn->prepare($insertQuery);
+                $stmt->bind_param("siss", $transporterTmid, $callerId, $jobId, $recordingUrl);
+            }
             
-            $stmt = $conn->prepare($insertQuery);
-            $stmt->bind_param("siss", $driverTmid, $callerId, $jobId, $recordingUrl);
             $dbUpdateSuccess = $stmt->execute();
             $rowsAffected = $stmt->affected_rows;
             logDebug("Database insert - Success: " . ($dbUpdateSuccess ? 'true' : 'false') . ", Rows affected: $rowsAffected");

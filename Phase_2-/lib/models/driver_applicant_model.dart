@@ -2,6 +2,8 @@ class DriverApplicant {
   final int jobId;
   final String jobTitle;
   final int contractorId;
+  final String transporterTmid;
+  final String transporterName;
   final int driverId;
   final String driverTmid;
   final String name;
@@ -34,6 +36,8 @@ class DriverApplicant {
     required this.jobId,
     required this.jobTitle,
     required this.contractorId,
+    this.transporterTmid = '',
+    this.transporterName = '',
     required this.driverId,
     required this.driverTmid,
     required this.name,
@@ -68,6 +72,8 @@ class DriverApplicant {
       jobId: json['jobId'] ?? 0,
       jobTitle: json['jobTitle'] ?? '',
       contractorId: json['contractorId'] ?? 0,
+      transporterTmid: json['transporterTmid'] ?? '',
+      transporterName: json['transporterName'] ?? '',
       driverId: json['driverId'] ?? 0,
       driverTmid: json['driverTmid'] ?? '',
       name: json['name'] ?? '',
