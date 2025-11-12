@@ -660,6 +660,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   String _formatDate(String date) {
     if (date.isEmpty) return 'N/A';
     
+
+    
     try {
       DateTime dt;
 
@@ -757,6 +759,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   String _formatTime(String date) {
     if (date.isEmpty) return 'N/A';
     
+    // Debug: Show original database time
+    print('📅 Original database time: $date');
+    
     try {
       DateTime dt;
 
@@ -791,20 +796,15 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
           throw FormatException('No time part found');
         }
       } else {
-<<<<<<< HEAD
-        dt = _parseISTDateTime(date);
-=======
         dt = DateTime.parse(date);
       }
-
+      
       // Log if datetime is in the future but keep the original time from database
       final now = DateTime.now();
-
+      
       if (dt.isAfter(now)) {
-        print(
-            'ℹ️ Database contains future datetime: $dt, current: $now (keeping original)');
+        print('ℹ️ Database contains future datetime: $dt, current: $now (keeping original)');
         // Keep the original database time - don't modify it
->>>>>>> 57ce2aefec2dfd14301be683b7cb30b04f982127
       }
 
       // Format time as HH:MM AM/PM
