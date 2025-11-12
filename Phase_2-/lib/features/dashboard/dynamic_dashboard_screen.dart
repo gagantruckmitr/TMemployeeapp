@@ -86,31 +86,33 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
     final userName = _currentUser?.name ?? 'User';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFFF8F9FD),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 6, // Stronger shadow to emphasize fixed positioning
-        shadowColor: Colors.black.withValues(alpha: 0.2),
-        automaticallyImplyLeading: false, // Remove back button
-        toolbarHeight: 80, // Increase height for greeting text
+        elevation: 1, // Subtle shadow
+        shadowColor: Colors.black.withValues(alpha: 0.05),
+        automaticallyImplyLeading: false,
+        toolbarHeight: 80,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               'Hi ${userName.split(' ').first}!',
               style: const TextStyle(
-                color: AppColors.primary,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1F3A), // Dark blue
+                fontSize: 24,
+                fontWeight: FontWeight.w600, // Semi-bold
                 height: 1.2,
               ),
             ),
+            const SizedBox(height: 2),
             Text(
               _getGreeting(),
-              style: TextStyle(
-                color: Colors.grey.shade600,
+              style: const TextStyle(
+                color: Color(0xFF6B7280), // Grey
                 fontSize: 14,
-                fontWeight: FontWeight.normal,
+                fontWeight: FontWeight.w400, // Regular
                 height: 1.2,
               ),
             ),
@@ -118,37 +120,35 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
         ),
         actions: [
           // Notification bell icon
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              icon: Icon(
-                Icons.notifications_outlined,
-                color: Colors.grey.shade700,
-                size: 24,
-              ),
-              onPressed: () {
-                // Add notification functionality here
-              },
+          IconButton(
+            icon: const Icon(
+              Icons.notifications_outlined,
+              color: Color(0xFF6B7280),
+              size: 24,
             ),
+            onPressed: () {
+              // Add notification functionality here
+            },
           ),
+          const SizedBox(width: 8),
           // Profile circle avatar
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 16),
               child: CircleAvatar(
-                radius: 20,
-                backgroundColor: AppColors.primary,
+                radius: 22, // 44dp diameter
+                backgroundColor: const Color(0xFF5B86E5), // Accent blue
                 child: Text(
                   userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -214,49 +214,70 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
 
   Widget _buildSearchBar() {
     return Container(
+      height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF8F9FD), // Light background
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: AppColors.primary.withValues(alpha: 0.1), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+          color: const Color(0xFFE5E7EB), // Light grey border
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Search icon
+          const Icon(
+            Icons.search_rounded,
+            color: Color(0xFF6B7280), // Grey
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+
+          // Search text field
+          Expanded(
+            child: TextField(
+              decoration: const InputDecoration(
+                hintText: 'Search jobs, drivers, transporters...',
+                hintStyle: TextStyle(
+                  color: Color(0xFF9CA3AF), // Light grey
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                ),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onTap: () {
+                // Navigate to search screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const DynamicJobsScreen(initialFilter: 'all'),
+                  ),
+                );
+              },
+              readOnly: true,
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Filter button
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6), // Light grey
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.tune_rounded,
+              color: Color(0xFF6B7280), // Grey
+              size: 20,
+            ),
           ),
         ],
-      ),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Search jobs, drivers, transporters...',
-          hintStyle:
-              TextStyle(color: AppColors.softGray.withValues(alpha: 0.6)),
-          prefixIcon: const Icon(Icons.search_rounded,
-              color: AppColors.primary, size: 22),
-          suffixIcon: Container(
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.tune_rounded,
-                color: AppColors.primary, size: 20),
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16),
-        ),
-        onTap: () {
-          // Navigate to search screen
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const DynamicJobsScreen(initialFilter: 'all'),
-            ),
-          );
-        },
-        readOnly: true,
       ),
     );
   }
@@ -267,59 +288,67 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Job Status Overview',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1A1A1A),
-            fontFamily: 'Inter',
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Job Status Overview',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A1A),
+            ),
           ),
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 130,
+          height: 170,
           child: ListView(
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
               _buildKPICard(
                 'Total Jobs',
                 _stats!.totalJobs.toString(),
-                Icons.work,
-                const Color(0xFF2563EB),
+                Icons.work_outline_rounded,
+                const Color(0xFF6366F1), // Indigo
+                const Color(0xFFEEF2FF), // Indigo light
                 () => _navigateToJobs('all'),
               ),
               const SizedBox(width: 12),
               _buildKPICard(
-                'Approved Jobs',
+                'Approved',
                 _stats!.approvedJobs.toString(),
-                Icons.check_circle,
-                const Color(0xFF10B981),
+                Icons.check_circle_outline_rounded,
+                const Color(0xFF10B981), // Green
+                const Color(0xFFECFDF5), // Green light
                 () => _navigateToJobs('approved'),
               ),
               const SizedBox(width: 12),
               _buildKPICard(
-                'Pending Jobs',
+                'Pending',
                 _stats!.pendingJobs.toString(),
-                Icons.schedule,
-                const Color(0xFFF59E0B),
+                Icons.schedule_rounded,
+                const Color(0xFFF59E0B), // Amber
+                const Color(0xFFFEF3C7), // Amber light
                 () => _navigateToJobs('pending'),
               ),
               const SizedBox(width: 12),
               _buildKPICard(
-                'Inactive Jobs',
+                'Inactive',
                 _stats!.inactiveJobs.toString(),
-                Icons.pause_circle,
-                const Color(0xFF6B7280),
+                Icons.pause_circle_outline_rounded,
+                const Color(0xFF6B7280), // Grey
+                const Color(0xFFF3F4F6), // Grey light
                 () => _navigateToJobs('inactive'),
               ),
               const SizedBox(width: 12),
               _buildKPICard(
-                'Expired Jobs',
+                'Expired',
                 _stats!.expiredJobs.toString(),
-                Icons.cancel,
-                const Color(0xFFEF4444),
+                Icons.cancel_outlined,
+                const Color(0xFFEF4444), // Red
+                const Color(0xFFFEE2E2), // Red light
                 () => _navigateToJobs('expired'),
               ),
             ],
@@ -329,99 +358,76 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
     );
   }
 
-  Widget _buildKPICard(String title, String value, IconData icon, Color color,
-      VoidCallback onTap) {
-    // Define color-coded backgrounds based on the icon/purpose
-    Color backgroundColor;
-    Color borderColor;
-    
-    if (title.contains('Total')) {
-      // Purple theme for Total Jobs (phone icon equivalent)
-      backgroundColor = const Color(0xFFF3F0FF);
-      borderColor = const Color(0xFF7C5CFF);
-    } else if (title.contains('Approved')) {
-      // Green theme for Approved Jobs (checkmark equivalent)
-      backgroundColor = const Color(0xFFF0FFF4);
-      borderColor = const Color(0xFF4CAF50);
-    } else if (title.contains('Pending')) {
-      // Orange theme for Pending Jobs (hourglass equivalent)
-      backgroundColor = const Color(0xFFFFF8E1);
-      borderColor = const Color(0xFFFF9800);
-    } else if (title.contains('Inactive')) {
-      // Gray theme for Inactive Jobs
-      backgroundColor = const Color(0xFFF5F5F5);
-      borderColor = const Color(0xFF6B7280);
-    } else {
-      // Red theme for Expired Jobs
-      backgroundColor = const Color(0xFFFFF5F5);
-      borderColor = const Color(0xFFEF4444);
-    }
-
+  Widget _buildKPICard(
+    String title,
+    String value,
+    IconData icon,
+    Color iconColor,
+    Color iconBackground,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 110,
-        height: 110,
-        padding: const EdgeInsets.all(12),
+        width: 140,
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: backgroundColor, // Light tinted background
-          borderRadius: BorderRadius.circular(12), // Consistent rounded corners
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: borderColor, // Darker border of same color family
-            width: 1.5, // 1.5px border width
+            color: iconColor,
+            width: 2,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15), // 15% black opacity
-              blurRadius: 8, // 8px blur radius
-              offset: const Offset(0, 4), // 4px vertical offset for 3D effect
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Stack(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Positioned(
-              top: 0,
-              left: 0,
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: borderColor.withValues(alpha: 0.1), // Match border color with transparency
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: borderColor, size: 16), // Use border color for icon
+            // Icon circle
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: iconBackground,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: iconColor,
+                size: 24,
               ),
             ),
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 8),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: borderColor, // Use border color for consistency
-                      fontFamily: 'Inter',
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF6B7280),
-                      fontFamily: 'Inter',
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+            const SizedBox(height: 12),
+
+            // Number
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A1A),
+                height: 1.0,
               ),
+            ),
+            const SizedBox(height: 6),
+
+            // Label
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF6B7280),
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -468,41 +474,55 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
   }
 
   Widget _buildActionCard(
-      String title, IconData icon, Color color, VoidCallback onTap) {
+      String title, IconData icon, Color iconColor, VoidCallback onTap) {
+    // Determine background color based on icon color
+    final Color iconBackground = iconColor == const Color(0xFF3B82F6)
+        ? const Color(0xFFDBEAFE) // Blue light for Call History
+        : const Color(0xFFF3E8FF); // Purple light for Analytics
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(20),
+        height: 140,
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: color.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Circular icon background
             Container(
-              padding: const EdgeInsets.all(12),
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+                color: iconBackground,
+                shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: color, size: 28),
+              child: Icon(
+                icon,
+                color: iconColor,
+                size: 32,
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+
+            // Title
             Text(
               title,
-              style: TextStyle(
-                fontSize: 14,
+              style: const TextStyle(
+                fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: AppColors.darkGray,
+                color: Color(0xFF1A1F3A),
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),

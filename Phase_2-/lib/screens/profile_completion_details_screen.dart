@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../core/theme/app_colors.dart';
+import '../widgets/progress_ring_avatar.dart';
 
 class ProfileCompletionDetailsScreen extends StatefulWidget {
   final int userId;
@@ -16,10 +17,12 @@ class ProfileCompletionDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<ProfileCompletionDetailsScreen> createState() => _ProfileCompletionDetailsScreenState();
+  State<ProfileCompletionDetailsScreen> createState() =>
+      _ProfileCompletionDetailsScreenState();
 }
 
-class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetailsScreen> {
+class _ProfileCompletionDetailsScreenState
+    extends State<ProfileCompletionDetailsScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _profileData;
   String _error = '';
@@ -124,44 +127,9 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
 
     return Column(
       children: [
-        // Completion Summary Card
-        Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.mediumBeige),
-          ),
-          child: Column(
-            children: [
-              Text(
-                'Profile Completion',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppColors.darkGray,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: percentage / 100,
-                backgroundColor: AppColors.lightBeige,
-                valueColor: AlwaysStoppedAnimation(_getCompletionColor(percentage)),
-                minHeight: 8,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '$filledFields of $totalFields fields completed',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        
+        // Profile Avatar Header - Clean & Minimal
+        _buildAvatarHeader(percentage, filledFields, totalFields),
+
         // Horizontal Scrollable Tabs
         Container(
           height: 60,
@@ -173,7 +141,7 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
             itemBuilder: (context, index) {
               final category = _tabCategories[index];
               final isSelected = index == _selectedTabIndex;
-              
+
               return GestureDetector(
                 onTap: () {
                   setState(() {
@@ -183,21 +151,25 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.only(right: 12),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
                     color: isSelected ? AppColors.primary : Colors.white,
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(
-                      color: isSelected ? AppColors.primary : Colors.grey.shade300,
+                      color:
+                          isSelected ? AppColors.primary : Colors.grey.shade300,
                       width: 2,
                     ),
-                    boxShadow: isSelected ? [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ] : [],
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : [],
                   ),
                   child: Center(
                     child: Text(
@@ -214,9 +186,9 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
             },
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Selected Category Content
         Expanded(
           child: SingleChildScrollView(
@@ -227,8 +199,6 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
       ],
     );
   }
-
-
 
   Widget _buildFieldRow(Map<String, dynamic> field) {
     final label = field['label'] as String;
@@ -323,10 +293,10 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
     if (_tabCategories.isEmpty || _selectedTabIndex >= _tabCategories.length) {
       return const Center(child: Text('No data available'));
     }
-    
+
     final selectedCategory = _tabCategories[_selectedTabIndex];
     final fields = completion[selectedCategory] as List;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -338,11 +308,12 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
           final index = entry.key;
           final field = entry.value as Map<String, dynamic>;
           final isLast = index == fields.length - 1;
-          
+
           return Column(
             children: [
               _buildFieldRow(field),
-              if (!isLast) const Divider(color: AppColors.mediumBeige, height: 1),
+              if (!isLast)
+                const Divider(color: AppColors.mediumBeige, height: 1),
             ],
           );
         }).toList(),
@@ -350,9 +321,44 @@ class _ProfileCompletionDetailsScreenState extends State<ProfileCompletionDetail
     );
   }
 
-  Color _getCompletionColor(int percentage) {
-    if (percentage >= 80) return Colors.green;
-    if (percentage >= 50) return Colors.orange;
-    return Colors.red;
+  Widget _buildAvatarHeader(int percentage, int filledFields, int totalFields) {
+    return Container(
+      padding: const EdgeInsets.only(top: 32, bottom: 32),
+      child: Column(
+        children: [
+          // Large Profile Avatar with Progress Ring
+          ProgressRingAvatar(
+            profileImageUrl: null, // TODO: Add profile photo URL when available
+            userName: widget.userName,
+            profileCompletion: percentage,
+            size: 120,
+            onTap: () {
+              // TODO: Add photo change/upload functionality
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Photo upload coming soon!'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+
+          // Large Percentage Display - Clean & Minimal
+          Text(
+            '$percentage%',
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: percentage >= 80
+                  ? Colors.green
+                  : percentage >= 50
+                      ? const Color(0xFFFFA726)
+                      : const Color(0xFFF44336),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

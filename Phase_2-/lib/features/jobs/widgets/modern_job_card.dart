@@ -148,7 +148,9 @@ class _ModernJobCardState extends State<ModernJobCard> {
             userId: int.tryParse(widget.job.transporterId) ?? 0,
             userType: 'transporter',
             completionPercentage: widget.job.transporterProfileCompletion,
-            size: 44,
+            profileImageUrl: widget.job.transporterProfilePhoto,
+            gender: widget.job.transporterGender,
+            size: 70,
           ),
           const SizedBox(width: 12),
           Expanded(
