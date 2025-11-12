@@ -9,6 +9,8 @@ class JobModel {
   final String transporterCity;
   final String transporterState;
   final int transporterProfileCompletion;
+  final String? transporterProfilePhoto;
+  final String? transporterGender;
   final String jobLocation;
   final String jobDescription;
   final String salaryRange;
@@ -45,6 +47,8 @@ class JobModel {
     required this.transporterCity,
     required this.transporterState,
     required this.transporterProfileCompletion,
+    this.transporterProfilePhoto,
+    this.transporterGender,
     required this.jobLocation,
     required this.jobDescription,
     required this.salaryRange,
@@ -83,6 +87,8 @@ class JobModel {
       transporterCity: json['transporterCity'] ?? '',
       transporterState: json['transporterState'] ?? '',
       transporterProfileCompletion: json['transporterProfileCompletion'] ?? 0,
+      transporterProfilePhoto: json['transporterProfilePhoto'],
+      transporterGender: json['transporterGender'],
       jobLocation: json['jobLocation'] ?? '',
       jobDescription: json['jobDescription'] ?? '',
       salaryRange: json['salaryRange'] ?? '',
@@ -126,6 +132,8 @@ class JobModel {
       'transporterCity': transporterCity,
       'transporterState': transporterState,
       'transporterProfileCompletion': transporterProfileCompletion,
+      'transporterProfilePhoto': transporterProfilePhoto,
+      'transporterGender': transporterGender,
       'jobLocation': jobLocation,
       'jobDescription': jobDescription,
       'salaryRange': salaryRange,
