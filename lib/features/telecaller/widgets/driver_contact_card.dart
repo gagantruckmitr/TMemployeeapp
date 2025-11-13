@@ -10,12 +10,14 @@ class DriverContactCard extends StatefulWidget {
   final DriverContact contact;
   final VoidCallback onCallPressed;
   final bool isCallInProgress;
+  final VoidCallback? onTap;
 
   const DriverContactCard({
     super.key,
     required this.contact,
     required this.onCallPressed,
     this.isCallInProgress = false,
+    this.onTap,
   });
 
   @override
@@ -65,26 +67,26 @@ class _DriverContactCardState extends State<DriverContactCard>
 
   bool _hasSubscription() {
     return widget.contact.subscriptionStatus == SubscriptionStatus.active ||
-           widget.contact.paymentInfo?.paymentStatus == PaymentStatus.success;
+        widget.contact.paymentInfo?.paymentStatus == PaymentStatus.success;
   }
 
   String _getSubscriptionText() {
     final paymentInfo = widget.contact.paymentInfo;
-    
+
     if (paymentInfo != null && paymentInfo.subscriptionType != null) {
       return paymentInfo.subscriptionType!;
     }
-    
+
     if (_hasSubscription()) {
       return 'Active';
     }
-    
+
     return 'No Subscription';
   }
 
   Color _getSubscriptionColor() {
     final paymentInfo = widget.contact.paymentInfo;
-    
+
     if (paymentInfo?.paymentStatus == PaymentStatus.success) {
       return const Color(0xFF4CAF50); // Green
     } else if (paymentInfo?.paymentStatus == PaymentStatus.pending) {
@@ -92,7 +94,7 @@ class _DriverContactCardState extends State<DriverContactCard>
     } else if (paymentInfo?.paymentStatus == PaymentStatus.failed) {
       return const Color(0xFFF44336); // Red
     }
-    
+
     return Colors.grey.shade600; // Default
   }
 
@@ -102,6 +104,7 @@ class _DriverContactCardState extends State<DriverContactCard>
       onTapDown: _onTapDown,
       onTapUp: _onTapUp,
       onTapCancel: _onTapCancel,
+      onTap: widget.onTap,
       child: AnimatedBuilder(
         animation: _scaleAnimation,
         builder: (context, child) {
@@ -130,15 +133,17 @@ class _DriverContactCardState extends State<DriverContactCard>
                       // Avatar with profile completion - Tap to view details
                       ProfileCompletionAvatar(
                         name: widget.contact.name,
-                        completionPercentage: widget.contact.profileCompletion?.percentage ?? 0,
+                        completionPercentage:
+                            widget.contact.profileCompletion?.percentage ?? 0,
                         onTap: () {
                           HapticFeedback.lightImpact();
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ProfileCompletionDetailsPage(
-                                contact: widget.contact,
-                              ),
+                              builder:
+                                  (context) => ProfileCompletionDetailsPage(
+                                    contact: widget.contact,
+                                  ),
                             ),
                           );
                         },
@@ -150,10 +155,14 @@ class _DriverContactCardState extends State<DriverContactCard>
                       Expanded(
                         child: GestureDetector(
                           onLongPress: () {
-                            Clipboard.setData(ClipboardData(text: widget.contact.name));
+                            Clipboard.setData(
+                              ClipboardData(text: widget.contact.name),
+                            );
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Name copied: ${widget.contact.name}'),
+                                content: Text(
+                                  'Name copied: ${widget.contact.name}',
+                                ),
                                 duration: const Duration(seconds: 1),
                                 behavior: SnackBarBehavior.floating,
                                 margin: const EdgeInsets.all(8),
@@ -179,50 +188,55 @@ class _DriverContactCardState extends State<DriverContactCard>
 
                       // Call Button
                       GestureDetector(
-                        onTap: widget.isCallInProgress
-                            ? null
-                            : () {
-                                HapticFeedback.mediumImpact();
-                                widget.onCallPressed();
-                              },
+                        onTap:
+                            widget.isCallInProgress
+                                ? null
+                                : () {
+                                  HapticFeedback.mediumImpact();
+                                  widget.onCallPressed();
+                                },
                         child: Container(
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: widget.isCallInProgress
-                                ? Colors.grey.shade300
-                                : const Color(0xFF2196F3),
+                            color:
+                                widget.isCallInProgress
+                                    ? Colors.grey.shade300
+                                    : const Color(0xFF2196F3),
                             shape: BoxShape.circle,
-                            boxShadow: widget.isCallInProgress
-                                ? []
-                                : [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFF2196F3,
-                                      ).withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
+                            boxShadow:
+                                widget.isCallInProgress
+                                    ? []
+                                    : [
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFF2196F3,
+                                        ).withValues(alpha: 0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
                           ),
-                          child: widget.isCallInProgress
-                              ? const Center(
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
+                          child:
+                              widget.isCallInProgress
+                                  ? const Center(
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
                                       ),
                                     ),
+                                  )
+                                  : const Icon(
+                                    Icons.phone,
+                                    color: Colors.white,
+                                    size: 22,
                                   ),
-                                )
-                              : const Icon(
-                                  Icons.phone,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
                         ),
                       ),
                     ],
@@ -255,14 +269,12 @@ class _DriverContactCardState extends State<DriverContactCard>
                       ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   Row(
                     children: [
-                      Expanded(
-                        child: _buildSubscriptionItem(),
-                      ),
+                      Expanded(child: _buildSubscriptionItem()),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _buildDetailItem(
@@ -273,16 +285,16 @@ class _DriverContactCardState extends State<DriverContactCard>
                       ),
                     ],
                   ),
-                  
+
                   // Show feedback if available
-                  if (widget.contact.lastFeedback != null && 
+                  if (widget.contact.lastFeedback != null &&
                       widget.contact.lastFeedback!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _buildFeedbackSection(),
                   ],
-                  
+
                   // Show remarks if available
-                  if (widget.contact.remarks != null && 
+                  if (widget.contact.remarks != null &&
                       widget.contact.remarks!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _buildRemarksSection(),
@@ -346,11 +358,7 @@ class _DriverContactCardState extends State<DriverContactCard>
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Icon(
-                Icons.copy,
-                size: 12,
-                color: Colors.grey.shade400,
-              ),
+              Icon(Icons.copy, size: 12, color: Colors.grey.shade400),
             ],
           ),
         ],
@@ -422,18 +430,11 @@ class _DriverContactCardState extends State<DriverContactCard>
       decoration: BoxDecoration(
         color: Colors.blue.shade50,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.blue.shade200,
-          width: 1,
-        ),
+        border: Border.all(color: Colors.blue.shade200, width: 1),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.feedback_outlined,
-            size: 16,
-            color: Colors.blue.shade700,
-          ),
+          Icon(Icons.feedback_outlined, size: 16, color: Colors.blue.shade700),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -472,18 +473,11 @@ class _DriverContactCardState extends State<DriverContactCard>
       decoration: BoxDecoration(
         color: Colors.amber.shade50,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.amber.shade200,
-          width: 1,
-        ),
+        border: Border.all(color: Colors.amber.shade200, width: 1),
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.note_outlined,
-            size: 16,
-            color: Colors.amber.shade700,
-          ),
+          Icon(Icons.note_outlined, size: 16, color: Colors.amber.shade700),
           const SizedBox(width: 8),
           Expanded(
             child: Column(

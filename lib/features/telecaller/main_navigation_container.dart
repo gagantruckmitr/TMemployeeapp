@@ -4,7 +4,6 @@ import '../../core/theme/app_theme.dart';
 import '../../models/smart_calling_models.dart';
 import '../../widgets/navigation_drawer.dart';
 import 'dashboard_page.dart';
-import 'performance_analytics_page.dart';
 import 'screens/dynamic_profile_screen.dart';
 import 'screens/interested_screen.dart';
 import 'screens/connected_calls_screen.dart';
@@ -12,22 +11,20 @@ import 'screens/call_backs_screen.dart';
 import 'screens/call_back_later_screen.dart';
 import 'screens/pending_calls_screen.dart';
 import 'screens/call_history_screen.dart';
+import 'callback_requests/callback_requests_screen.dart';
 
-enum MainNavigationTab {
-  home,
-  analytics,
-  profile,
-}
+enum MainNavigationTab { welcomeCall, tollFree, matchMaking, callback, social }
 
 class MainNavigationContainer extends StatefulWidget {
   const MainNavigationContainer({super.key});
 
   @override
-  State<MainNavigationContainer> createState() => _MainNavigationContainerState();
+  State<MainNavigationContainer> createState() =>
+      _MainNavigationContainerState();
 }
 
 class _MainNavigationContainerState extends State<MainNavigationContainer> {
-  MainNavigationTab _currentTab = MainNavigationTab.home;
+  MainNavigationTab _currentTab = MainNavigationTab.welcomeCall;
   NavigationSection _currentSection = NavigationSection.home;
   bool _isDrawerOpen = false;
   late PageController _pageController;
@@ -66,20 +63,22 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       setState(() {
         _currentTab = tab;
       });
-      
+
       _pageController.animateToPage(
         tab.index,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
       );
-      
+
       HapticFeedback.selectionClick();
     }
   }
 
   void _onSectionChanged(NavigationSection section, {String? filter}) {
-    print('🔍 MainNav: section=$section, index=${section.index}, filter=$filter');
-    
+    print(
+      '🔍 MainNav: section=$section, index=${section.index}, filter=$filter',
+    );
+
     setState(() {
       _currentSection = section;
       // Store filter for call history
@@ -87,14 +86,14 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         _callHistoryFilter = filter;
       }
     });
-    
+
     // Animate to the new sub-page
     _subPageController.animateToPage(
       section.index,
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic,
     );
-    
+
     HapticFeedback.selectionClick();
   }
 
@@ -108,126 +107,127 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       },
       child: Scaffold(
         body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          // Swipe right to open drawer
-          if (details.primaryVelocity! > 0 && !_isDrawerOpen) {
-            _openDrawer();
-          }
-          // Swipe left to close drawer
-          else if (details.primaryVelocity! < 0 && _isDrawerOpen) {
-            _closeDrawer();
-          }
-        },
-        child: Stack(
-          children: [
-            // Main content with bottom navigation
-            Column(
-              children: [
-                // Main pages
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      // Home tab - contains dashboard and sub-screens
-                      _buildHomeTabContent(),
-                      // Analytics tab
-                      PerformanceAnalyticsPage(
-                        onNavigateBack: () => _onTabChanged(MainNavigationTab.home),
-                      ),
-                      // Profile tab
-                      DynamicProfileScreen(
-                        onNavigateBack: () => _onTabChanged(MainNavigationTab.home),
-                      ),
-                    ],
+          onHorizontalDragEnd: (details) {
+            // Swipe right to open drawer
+            if (details.primaryVelocity! > 0 && !_isDrawerOpen) {
+              _openDrawer();
+            }
+            // Swipe left to close drawer
+            else if (details.primaryVelocity! < 0 && _isDrawerOpen) {
+              _closeDrawer();
+            }
+          },
+          child: Stack(
+            children: [
+              // Main content with bottom navigation
+              Column(
+                children: [
+                  // Main pages
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+                        // Welcome Call tab - contains dashboard and sub-screens
+                        _buildHomeTabContent(),
+                        // Toll-free tab content
+                        const ConnectedCallsScreen(),
+                        // Matchmaking tab content
+                        const InterestedScreen(),
+                        // Callback tab content
+                        const CallbackRequestsScreen(),
+                        // Social tab content
+                        const DynamicProfileScreen(),
+                      ],
+                    ),
                   ),
-                ),
-                // Bottom Navigation
-                _buildBottomNavigation(),
-              ],
-            ),
-            
-            // Drawer overlay
-            if (_isDrawerOpen)
-              NavigationDrawerWidget(
-                currentSection: _currentSection,
-                onSectionChanged: _onSectionChanged,
-                onClose: _closeDrawer,
+                  // Bottom Navigation
+                  _buildBottomNavigation(),
+                ],
               ),
-            
-            // Menu button for home tab
-            if (_currentTab == MainNavigationTab.home && !_isDrawerOpen)
-              Positioned(
-                top: MediaQuery.of(context).padding.top + 16,
-                left: 16,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _openDrawer,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.menu_rounded,
-                        color: Colors.grey,
-                        size: 20,
+
+              // Drawer overlay
+              if (_isDrawerOpen)
+                NavigationDrawerWidget(
+                  currentSection: _currentSection,
+                  onSectionChanged: _onSectionChanged,
+                  onClose: _closeDrawer,
+                ),
+
+              // Menu button for home tab
+              if (_currentTab == MainNavigationTab.welcomeCall &&
+                  !_isDrawerOpen)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  left: 16,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _openDrawer,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.menu_rounded,
+                          color: Colors.grey,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            
-            // Back button for sub-screens
-            if (_currentTab == MainNavigationTab.home && 
-                _currentSection != NavigationSection.home && 
-                !_isDrawerOpen)
-              Positioned(
-                top: MediaQuery.of(context).padding.top + 16,
-                left: 16,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _onSectionChanged(NavigationSection.home),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back_rounded,
-                        color: Colors.grey,
-                        size: 20,
+
+              // Back button for sub-screens
+              if (_currentTab == MainNavigationTab.welcomeCall &&
+                  _currentSection != NavigationSection.home &&
+                  !_isDrawerOpen)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  left: 16,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _onSectionChanged(NavigationSection.home),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_rounded,
+                          color: Colors.grey,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ), // End of Stack
-      ), // End of GestureDetector
-    ), // End of Scaffold
+            ],
+          ), // End of Stack
+        ), // End of GestureDetector
+      ), // End of Scaffold
     ); // End of PopScope
   }
 
@@ -238,7 +238,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       children: [
         DashboardPage(
           onOpenDrawer: _openDrawer,
-          onNavigateToProfile: () => _onTabChanged(MainNavigationTab.profile),
+          onNavigateToProfile: () => _onTabChanged(MainNavigationTab.social),
           onNavigateToSection: _onSectionChanged,
         ),
         const InterestedScreen(),
@@ -274,25 +274,32 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
           height: 70,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildNavItem(
-                MainNavigationTab.home,
-                Icons.home_outlined,
-                Icons.home_rounded,
-                'Home',
+                MainNavigationTab.welcomeCall,
+                Icons.handshake_outlined,
+                Icons.handshake_outlined,
               ),
               _buildNavItem(
-                MainNavigationTab.analytics,
-                Icons.analytics_outlined,
-                Icons.analytics_rounded,
-                'Analytics',
+                MainNavigationTab.tollFree,
+                Icons.headset_mic_outlined,
+                Icons.headset_mic,
               ),
               _buildNavItem(
-                MainNavigationTab.profile,
-                Icons.person_outline,
-                Icons.person_rounded,
-                'Profile',
+                MainNavigationTab.matchMaking,
+                Icons.group_outlined,
+                Icons.group,
+              ),
+              _buildNavItem(
+                MainNavigationTab.callback,
+                Icons.call_missed_outgoing_outlined,
+                Icons.call_missed_outgoing,
+              ),
+              _buildNavItem(
+                MainNavigationTab.social,
+                Icons.people_outline,
+                Icons.people,
               ),
             ],
           ),
@@ -305,7 +312,6 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     MainNavigationTab tab,
     IconData icon,
     IconData activeIcon,
-    String label,
   ) {
     final isSelected = _currentTab == tab;
 
@@ -314,40 +320,25 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              transitionBuilder: (child, animation) =>
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          transitionBuilder:
+              (child, animation) =>
                   ScaleTransition(scale: animation, child: child),
-              child: Icon(
-                isSelected ? activeIcon : icon,
-                key: ValueKey(isSelected),
-                color: isSelected
+          child: Icon(
+            isSelected ? activeIcon : icon,
+            key: ValueKey('${tab.name}_$isSelected'),
+            color:
+                isSelected
                     ? Colors.white
                     : AppTheme.gray.withValues(alpha: 0.7),
-                size: isSelected ? 22 : 20,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: AppTheme.bodyMedium.copyWith(
-                color: isSelected
-                    ? Colors.white
-                    : AppTheme.gray.withValues(alpha: 0.8),
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                fontSize: 10,
-              ),
-            ),
-          ],
+            size: isSelected ? 24 : 22,
+          ),
         ),
       ),
     );
@@ -358,12 +349,13 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     if (_isDrawerOpen) {
       // Close drawer if open
       _closeDrawer();
-    } else if (_currentTab == MainNavigationTab.home && _currentSection != NavigationSection.home) {
+    } else if (_currentTab == MainNavigationTab.welcomeCall &&
+        _currentSection != NavigationSection.home) {
       // Navigate back to home section if in sub-screen
       _onSectionChanged(NavigationSection.home);
-    } else if (_currentTab != MainNavigationTab.home) {
+    } else if (_currentTab != MainNavigationTab.welcomeCall) {
       // Navigate back to home tab if in other tabs
-      _onTabChanged(MainNavigationTab.home);
+      _onTabChanged(MainNavigationTab.welcomeCall);
     } else {
       // If already on home tab and home section, show exit dialog
       _showExitDialog();
@@ -387,9 +379,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
           ),
           content: Text(
             'Are you sure you want to exit the app?',
-            style: AppTheme.bodyLarge.copyWith(
-              color: Colors.grey.shade600,
-            ),
+            style: AppTheme.bodyLarge.copyWith(color: Colors.grey.shade600),
           ),
           actions: [
             TextButton(
@@ -426,12 +416,16 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
 extension MainNavigationTabExtension on MainNavigationTab {
   int get index {
     switch (this) {
-      case MainNavigationTab.home:
+      case MainNavigationTab.welcomeCall:
         return 0;
-      case MainNavigationTab.analytics:
+      case MainNavigationTab.tollFree:
         return 1;
-      case MainNavigationTab.profile:
+      case MainNavigationTab.matchMaking:
         return 2;
+      case MainNavigationTab.callback:
+        return 3;
+      case MainNavigationTab.social:
+        return 4;
     }
   }
 }
