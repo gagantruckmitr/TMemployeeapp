@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/smart_calling_models.dart';
 import '../../widgets/navigation_drawer.dart';
+import '../../widgets/full_width_bottom_nav.dart';
 import '../../features/dashboard/interested_dashboard_wrapper.dart';
 import 'dashboard_page.dart';
 import 'screens/dynamic_profile_screen.dart';
@@ -257,91 +258,9 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   }
 
   Widget _buildBottomNavigation() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-            spreadRadius: -3,
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Container(
-          height: 70,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildNavItem(
-                MainNavigationTab.welcomeCall,
-                Icons.handshake_outlined,
-                Icons.handshake_outlined,
-              ),
-              _buildNavItem(
-                MainNavigationTab.tollFree,
-                Icons.headset_mic_outlined,
-                Icons.headset_mic,
-              ),
-              _buildNavItem(
-                MainNavigationTab.matchMaking,
-                Icons.group_outlined,
-                Icons.group,
-              ),
-              _buildNavItem(
-                MainNavigationTab.callback,
-                Icons.call_missed_outgoing_outlined,
-                Icons.call_missed_outgoing,
-              ),
-              _buildNavItem(
-                MainNavigationTab.social,
-                Icons.people_outline,
-                Icons.people,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(
-    MainNavigationTab tab,
-    IconData icon,
-    IconData activeIcon,
-  ) {
-    final isSelected = _currentTab == tab;
-
-    return GestureDetector(
-      onTap: () => _onTabChanged(tab),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOutCubic,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          transitionBuilder:
-              (child, animation) =>
-                  ScaleTransition(scale: animation, child: child),
-          child: Icon(
-            isSelected ? activeIcon : icon,
-            key: ValueKey('${tab.name}_$isSelected'),
-            color:
-                isSelected
-                    ? Colors.white
-                    : AppTheme.gray.withValues(alpha: 0.7),
-            size: isSelected ? 24 : 22,
-          ),
-        ),
-      ),
+    return FullWidthBottomNavBar(
+      initialIndex: _currentTab.index,
+      onIndexChanged: (index) => _onTabChanged(MainNavigationTab.values[index]),
     );
   }
 
