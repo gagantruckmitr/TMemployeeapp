@@ -5,6 +5,7 @@ import '../../../models/smart_calling_models.dart';
 import '../../../core/services/smart_calling_service.dart';
 import '../widgets/driver_contact_card.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/tab_page_header.dart';
 
 class InterestedScreen extends StatefulWidget {
   const InterestedScreen({super.key});
@@ -249,14 +250,23 @@ class _InterestedScreenState extends State<InterestedScreen>
   Widget build(BuildContext context) {
     super.build(context);
     
+    final totalInterested = _interestedContacts?.length ?? 0;
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       body: Column(
         children: [
-          _InterestedHeader(
-            contactCount: _interestedContacts?.length ?? 0,
-            onRefresh: _refreshData,
-            isRefreshing: _isRefreshing,
+          TelecallerTabHeader(
+            icon: Icons.star_rounded,
+            iconColor: Colors.orange.shade600,
+            title: 'Interested Contacts',
+            subtitle: '$totalInterested showing interest',
+            trailing: TelecallerHeaderActionButton(
+              isLoading: _isRefreshing,
+              onPressed: _refreshData,
+              icon: Icons.refresh_rounded,
+              color: Colors.orange.shade600,
+            ),
           ),
           Expanded(
             child: _isLoading
@@ -280,89 +290,6 @@ class _InterestedScreenState extends State<InterestedScreen>
 }
 
 // Optimized separate widgets to prevent unnecessary rebuilds
-class _InterestedHeader extends StatelessWidget {
-  final int contactCount;
-  final VoidCallback onRefresh;
-  final bool isRefreshing;
-
-  const _InterestedHeader({
-    required this.contactCount,
-    required this.onRefresh,
-    required this.isRefreshing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.amber.withValues(alpha: 0.2),
-                  Colors.orange.withValues(alpha: 0.1),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.star_rounded,
-              color: Colors.amber,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Interested Contacts',
-                  style: AppTheme.headingMedium.copyWith(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  '$contactCount showing interest',
-                  style: AppTheme.bodyLarge.copyWith(
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: isRefreshing ? null : onRefresh,
-            icon: isRefreshing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh_rounded),
-            color: Colors.amber,
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 
 class _ContactsList extends StatelessWidget {
   final List<DriverContact> contacts;

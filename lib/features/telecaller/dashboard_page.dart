@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -157,20 +159,33 @@ class _DashboardPageState extends State<DashboardPage>
 
   // Calculate dynamic max Y value for chart
   double _getMaxYValue() {
-    final totalCalls = (_dashboardStats['total_calls'] ?? 35).toDouble();
-    final connectedCalls = (_dashboardStats['connected_calls'] ?? 28)
-        .toDouble();
-    final callbacks = (_dashboardStats['callbacks_scheduled'] ?? 22).toDouble();
+    final totalCalls = (_dashboardStats['total_calls'] ?? 0).toDouble();
+    final connectedCalls = (_dashboardStats['connected_calls'] ?? 0).toDouble();
+    final callbacks = (_dashboardStats['callbacks_scheduled'] ?? 0).toDouble();
 
-    final maxValue = [
-      totalCalls,
-      connectedCalls,
-      callbacks,
-    ].reduce((a, b) => a > b ? a : b);
+    final maxValue = [totalCalls, connectedCalls, callbacks].reduce(math.max);
+
+    if (maxValue <= 0) {
+      return 0;
+    }
 
     // Add 20% padding to the max value and round up to nearest 10
     final paddedMax = maxValue * 1.2;
     return ((paddedMax / 10).ceil() * 10).toDouble();
+  }
+
+  double _getYAxisInterval(double maxY) {
+    if (maxY <= 0) return 1;
+    final interval = maxY / 5;
+    return interval <= 0 ? 1 : interval;
+  }
+
+  bool _hasPerformanceData() {
+    final totalCalls = _dashboardStats['total_calls'] ?? 0;
+    final connectedCalls = _dashboardStats['connected_calls'] ?? 0;
+    final callbacksScheduled = _dashboardStats['callbacks_scheduled'] ?? 0;
+
+    return totalCalls > 0 || connectedCalls > 0 || callbacksScheduled > 0;
   }
 
   @override
@@ -494,19 +509,20 @@ class _DashboardPageState extends State<DashboardPage>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Row(
-          children: kpiData.map((kpi) {
-            final index = kpiData.indexOf(kpi);
-            return Padding(
-              padding: EdgeInsets.only(
-                left: index == 0 ? 0 : 8,
-                right: index == kpiData.length - 1 ? 0 : 8,
-              ),
-              child: SizedBox(
-                width: 100, // Reduced width to prevent overflow
-                child: _buildKPICard(kpi),
-              ),
-            );
-          }).toList(),
+          children:
+              kpiData.map((kpi) {
+                final index = kpiData.indexOf(kpi);
+                return Padding(
+                  padding: EdgeInsets.only(
+                    left: index == 0 ? 0 : 8,
+                    right: index == kpiData.length - 1 ? 0 : 8,
+                  ),
+                  child: SizedBox(
+                    width: 100, // Reduced width to prevent overflow
+                    child: _buildKPICard(kpi),
+                  ),
+                );
+              }).toList(),
         ),
       ),
     );
@@ -832,198 +848,244 @@ class _DashboardPageState extends State<DashboardPage>
                   horizontal: 8,
                   vertical: 16,
                 ),
-                child: BarChart(
-                  BarChartData(
-                    alignment: BarChartAlignment.spaceEvenly,
-                    maxY: _getMaxYValue(),
-                    minY: 0,
-                    groupsSpace: 20,
-                    barTouchData: BarTouchData(
-                      enabled: true,
-                      touchTooltipData: BarTouchTooltipData(
-                        getTooltipColor: (group) =>
-                            AppTheme.primaryBlue.withOpacity(0.9),
-                        tooltipPadding: const EdgeInsets.all(8),
-                        tooltipRoundedRadius: 8,
-                        getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                          const labels = ['Calls', 'Leads', 'Follow-ups'];
-                          return BarTooltipItem(
-                            '${labels[group.x.toInt()]}\n${rod.toY.round()}',
-                            AppTheme.bodyMedium.copyWith(
-                              color: AppTheme.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    titlesData: FlTitlesData(
-                      show: true,
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            const labels = ['Calls', 'Leads', 'F/Ups'];
-                            if (value.toInt() < labels.length) {
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Text(
-                                  labels[value.toInt()],
-                                  style: AppTheme.bodyMedium.copyWith(
-                                    color: AppTheme.gray,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              );
-                            }
-                            return const Text('');
-                          },
-                        ),
-                      ),
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 40,
-                          interval: _getMaxYValue() / 5,
-                          getTitlesWidget: (value, meta) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: Text(
-                                value.toInt().toString(),
-                                style: AppTheme.bodyMedium.copyWith(
-                                  color: AppTheme.gray.withOpacity(0.7),
-                                  fontWeight: FontWeight.w400,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                    ),
-                    borderData: FlBorderData(show: false),
-                    barGroups: [
-                      BarChartGroupData(
-                        x: 0,
-                        barRods: [
-                          BarChartRodData(
-                            toY: (_dashboardStats['total_calls'] ?? 35)
-                                .toDouble(),
-                            gradient: LinearGradient(
-                              colors: [
-                                AppTheme.primaryBlue.withOpacity(0.8),
-                                AppTheme.primaryBlue,
-                              ],
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                            ),
-                            width: 16,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(6),
-                              topRight: Radius.circular(6),
-                            ),
-                          ),
-                        ],
-                      ),
-                      BarChartGroupData(
-                        x: 1,
-                        barRods: [
-                          BarChartRodData(
-                            toY: (_dashboardStats['connected_calls'] ?? 28)
-                                .toDouble(),
-                            gradient: LinearGradient(
-                              colors: [
-                                AppTheme.accentPurple.withOpacity(0.8),
-                                AppTheme.accentPurple,
-                              ],
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                            ),
-                            width: 16,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(6),
-                              topRight: Radius.circular(6),
-                            ),
-                          ),
-                        ],
-                      ),
-                      BarChartGroupData(
-                        x: 2,
-                        barRods: [
-                          BarChartRodData(
-                            toY: (_dashboardStats['callbacks_scheduled'] ?? 22)
-                                .toDouble(),
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF66BB6A), Color(0xFF4CAF50)],
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                            ),
-                            width: 16,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(6),
-                              topRight: Radius.circular(6),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    gridData: FlGridData(
-                      show: true,
-                      drawVerticalLine: false,
-                      horizontalInterval: _getMaxYValue() / 5,
-                      getDrawingHorizontalLine: (value) {
-                        return FlLine(
-                          color: AppTheme.gray.withOpacity(0.1),
-                          strokeWidth: 1,
-                        );
-                      },
-                    ),
-                  ),
-                ),
+                child:
+                    _hasPerformanceData()
+                        ? _buildPerformanceChart()
+                        : _buildNoPerformanceState(),
               ),
             ),
             const SizedBox(height: 20),
-            // Performance Metrics Row
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetricCard(
-                    'Success Rate',
-                    _getSuccessRate(),
-                    Icons.check_circle_rounded,
-                    const Color(0xFF4CAF50),
+            if (_hasPerformanceData())
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildMetricCard(
+                      'Success Rate',
+                      _getSuccessRate(),
+                      Icons.check_circle_rounded,
+                      const Color(0xFF4CAF50),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildMetricCard(
-                    'Total Calls',
-                    (_dashboardStats['total_calls'] ?? 0).toString(),
-                    Icons.phone,
-                    AppTheme.primaryBlue,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildMetricCard(
+                      'Total Calls',
+                      (_dashboardStats['total_calls'] ?? 0).toString(),
+                      Icons.phone,
+                      AppTheme.primaryBlue,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildMetricCard(
-                    'Connected',
-                    (_dashboardStats['connected_calls'] ?? 0).toString(),
-                    Icons.check_circle,
-                    AppTheme.accentPurple,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildMetricCard(
+                      'Connected',
+                      (_dashboardStats['connected_calls'] ?? 0).toString(),
+                      Icons.check_circle,
+                      AppTheme.accentPurple,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPerformanceChart() {
+    final maxY = _getMaxYValue();
+    final yAxisInterval = _getYAxisInterval(maxY);
+
+    final effectiveMaxY = maxY == 0 ? 1.0 : maxY;
+
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceEvenly,
+        maxY: effectiveMaxY,
+        minY: 0,
+        groupsSpace: 20,
+        barTouchData: BarTouchData(
+          enabled: true,
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (group) => AppTheme.primaryBlue.withOpacity(0.9),
+            tooltipPadding: const EdgeInsets.all(8),
+            tooltipRoundedRadius: 8,
+            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+              const labels = ['Calls', 'Leads', 'Follow-ups'];
+              return BarTooltipItem(
+                '${labels[group.x.toInt()]}\n${rod.toY.round()}',
+                AppTheme.bodyMedium.copyWith(
+                  color: AppTheme.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              );
+            },
+          ),
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                const labels = ['Calls', 'Leads', 'F/Ups'];
+                if (value.toInt() < labels.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      labels[value.toInt()],
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: AppTheme.gray,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              interval: yAxisInterval,
+              getTitlesWidget: (value, meta) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    value.toInt().toString(),
+                    style: AppTheme.bodyMedium.copyWith(
+                      color: AppTheme.gray.withOpacity(0.7),
+                      fontWeight: FontWeight.w400,
+                      fontSize: 10,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        barGroups: [
+          BarChartGroupData(
+            x: 0,
+            barRods: [
+              BarChartRodData(
+                toY: (_dashboardStats['total_calls'] ?? 0).toDouble(),
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.primaryBlue.withOpacity(0.8),
+                    AppTheme.primaryBlue,
+                  ],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+                width: 16,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(6),
+                  topRight: Radius.circular(6),
+                ),
+              ),
+            ],
+          ),
+          BarChartGroupData(
+            x: 1,
+            barRods: [
+              BarChartRodData(
+                toY: (_dashboardStats['connected_calls'] ?? 0).toDouble(),
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.accentPurple.withOpacity(0.8),
+                    AppTheme.accentPurple,
+                  ],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+                width: 16,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(6),
+                  topRight: Radius.circular(6),
+                ),
+              ),
+            ],
+          ),
+          BarChartGroupData(
+            x: 2,
+            barRods: [
+              BarChartRodData(
+                toY: (_dashboardStats['callbacks_scheduled'] ?? 0).toDouble(),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF66BB6A), Color(0xFF4CAF50)],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+                width: 16,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(6),
+                  topRight: Radius.circular(6),
+                ),
+              ),
+            ],
+          ),
+        ],
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: yAxisInterval,
+          getDrawingHorizontalLine: (value) {
+            return FlLine(
+              color: AppTheme.gray.withOpacity(0.1),
+              strokeWidth: 1,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoPerformanceState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryBlue.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Icon(
+              Icons.inbox_outlined,
+              color: AppTheme.primaryBlue.withOpacity(0.9),
+              size: 32,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No welcome calls yet',
+            style: AppTheme.headingMedium.copyWith(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Once you start calling, your performance stats will appear here.',
+            style: AppTheme.bodyLarge.copyWith(color: AppTheme.gray),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -1520,127 +1582,133 @@ class _DashboardPageState extends State<DashboardPage>
   void _initiateCall(Lead lead) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryBlue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.phone_in_talk_rounded,
-                color: AppTheme.primaryBlue,
-                size: 18,
-              ),
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                'Call ${lead.companyName}',
-                style: AppTheme.headingMedium.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Contact: ${lead.contactPerson}',
-              style: AppTheme.bodyLarge.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Action: ${lead.notes}',
-              style: AppTheme.bodyMedium.copyWith(
-                color: AppTheme.gray,
-                fontStyle: FontStyle.italic,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.accentPurple.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: AppTheme.accentPurple.withOpacity(0.2),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.security_rounded,
-                    color: AppTheme.accentPurple,
-                    size: 16,
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Privacy Notice: IVR-controlled call. Phone number remains concealed.',
-                      style: AppTheme.bodyMedium.copyWith(
-                        color: AppTheme.accentPurple.withOpacity(0.9),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
+                  child: Icon(
+                    Icons.phone_in_talk_rounded,
+                    color: AppTheme.primaryBlue,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    'Call ${lead.companyName}',
+                    style: AppTheme.headingMedium.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Contact: ${lead.contactPerson}',
+                  style: AppTheme.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Action: ${lead.notes}',
+                  style: AppTheme.bodyMedium.copyWith(
+                    color: AppTheme.gray,
+                    fontStyle: FontStyle.italic,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentPurple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppTheme.accentPurple.withOpacity(0.2),
                     ),
                   ),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.security_rounded,
+                        color: AppTheme.accentPurple,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Privacy Notice: IVR-controlled call. Phone number remains concealed.',
+                          style: AppTheme.bodyMedium.copyWith(
+                            color: AppTheme.accentPurple.withOpacity(0.9),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: AppTheme.bodyLarge.copyWith(
-                color: AppTheme.gray,
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Cancel',
+                  style: AppTheme.bodyLarge.copyWith(
+                    color: AppTheme.gray,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
               ),
-            ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _startSmartCalling();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryBlue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+                child: Text(
+                  'Start Call',
+                  style: AppTheme.bodyLarge.copyWith(
+                    color: AppTheme.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _startSmartCalling();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryBlue,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            child: Text(
-              'Start Call',
-              style: AppTheme.bodyLarge.copyWith(
-                color: AppTheme.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

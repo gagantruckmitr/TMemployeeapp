@@ -32,9 +32,10 @@ class Admin {
       name: json['name'] as String,
       mobile: json['mobile'] as String,
       email: json['email'] as String,
-      emailVerifiedAt: json['email_verified_at'] != null 
-          ? DateTime.parse(json['email_verified_at']) 
-          : null,
+      emailVerifiedAt:
+          json['email_verified_at'] != null
+              ? DateTime.parse(json['email_verified_at'])
+              : null,
       password: json['password'] as String,
       rememberToken: json['remember_token'] as String,
       createdAt: DateTime.parse(json['created_at']),
@@ -78,7 +79,7 @@ class User {
   final String? provider;
   final String? providerId;
   final String? avatar;
-  
+
   // Driver specific fields
   final String? fatherName;
   final String? dob;
@@ -98,7 +99,7 @@ class User {
   final String? previousEmployer;
   final String? aadharPhoto;
   final String? drivingLicense;
-  
+
   // Transporter specific fields
   final String? transportName;
   final String? yearOfEstablishment;
@@ -111,7 +112,7 @@ class User {
   final String? referralCode;
   final String? panImage;
   final String? gstCertificate;
-  
+
   final String status;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -181,9 +182,10 @@ class User {
       mobile: json['mobile'] as String?,
       otp: json['otp'] as String?,
       email: json['email'] as String?,
-      emailVerifiedAt: json['email_verified_at'] != null 
-          ? DateTime.parse(json['email_verified_at']) 
-          : null,
+      emailVerifiedAt:
+          json['email_verified_at'] != null
+              ? DateTime.parse(json['email_verified_at'])
+              : null,
       password: json['password'] as String?,
       city: json['city'] as String?,
       states: json['states'] as String?,
@@ -223,12 +225,14 @@ class User {
       panImage: json['PAN_Image'] as String?,
       gstCertificate: json['GST_Certificate'] as String?,
       status: json['status'] as String? ?? '0',
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
-          : null,
-      updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at']) 
-          : null,
+      createdAt:
+          json['created_at'] != null
+              ? DateTime.parse(json['created_at'])
+              : null,
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'])
+              : null,
     );
   }
 
@@ -340,6 +344,8 @@ class CallbackRequest {
   final String? notes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String? profileCompletion;
+  final String? subscribeDate;
 
   CallbackRequest({
     required this.id,
@@ -354,6 +360,8 @@ class CallbackRequest {
     this.notes,
     this.createdAt,
     this.updatedAt,
+    this.profileCompletion,
+    this.subscribeDate,
   });
 
   factory CallbackRequest.fromJson(Map<String, dynamic> json) {
@@ -368,12 +376,16 @@ class CallbackRequest {
       appType: AppType.fromString(json['app_type'] as String),
       status: CallbackStatus.fromString(json['status'] as String),
       notes: json['notes'] as String?,
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
-          : null,
-      updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at']) 
-          : null,
+      createdAt:
+          json['created_at'] != null
+              ? DateTime.parse(json['created_at'])
+              : null,
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'])
+              : null,
+      profileCompletion: json['profile_completion'] as String?,
+      subscribeDate: json['subscribe_date'] as String?,
     );
   }
 
@@ -391,6 +403,8 @@ class CallbackRequest {
       'notes': notes,
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
+      'profile_completion': profileCompletion,
+      'subscribe_date': subscribeDate,
     };
   }
 }
@@ -430,12 +444,14 @@ class CallLog {
       callTime: DateTime.parse(json['call_time']),
       referenceId: json['reference_id'] as String?,
       apiResponse: json['api_response'] as String?,
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
-          : null,
-      updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at']) 
-          : null,
+      createdAt:
+          json['created_at'] != null
+              ? DateTime.parse(json['created_at'])
+              : null,
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'])
+              : null,
     );
   }
 
