@@ -372,6 +372,7 @@ class _CallbackRequestCard extends StatelessWidget {
                   completionPercentage: _profilePercentage(),
                   onTap: () {},
                   size: 52,
+                  imageUrl: request.profileImage,
                 ),
                 const SizedBox(width: 14),
                 Expanded(

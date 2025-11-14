@@ -456,14 +456,19 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
                         CircleAvatar(
                           radius: 32,
                           backgroundColor: AppTheme.primaryBlue.withOpacity(0.1),
-                          child: Text(
-                            user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                            style: TextStyle(
-                              color: AppTheme.primaryBlue,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          backgroundImage: user.profileImage != null 
+                              ? NetworkImage(user.profileImage!)
+                              : null,
+                          child: user.profileImage == null
+                              ? Text(
+                                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                                  style: TextStyle(
+                                    color: AppTheme.primaryBlue,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                )
+                              : null,
                         ),
                         if (user.profileCompletion != null)
                           Positioned(

@@ -346,6 +346,7 @@ class CallbackRequest {
   final DateTime? updatedAt;
   final String? profileCompletion;
   final String? subscribeDate;
+  final String? profileImage;
 
   CallbackRequest({
     required this.id,
@@ -362,6 +363,7 @@ class CallbackRequest {
     this.updatedAt,
     this.profileCompletion,
     this.subscribeDate,
+    this.profileImage,
   });
 
   factory CallbackRequest.fromJson(Map<String, dynamic> json) {
@@ -386,6 +388,9 @@ class CallbackRequest {
               : null,
       profileCompletion: json['profile_completion'] as String?,
       subscribeDate: json['subscribe_date'] as String?,
+      profileImage: json['images'] != null && json['images'].toString().isNotEmpty
+          ? 'https://truckmitr.com/public/${json['images']}'
+          : null,
     );
   }
 

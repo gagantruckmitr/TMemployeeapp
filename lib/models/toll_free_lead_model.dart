@@ -7,6 +7,7 @@ class TollFreeUser {
   final String role;
   final String? states;
   final String? profileCompletion;
+  final String? profileImage;
   final bool hasSubscription;
   final Map<String, dynamic>? latestPayment;
   final List<Map<String, dynamic>> appliedJobs;
@@ -21,6 +22,7 @@ class TollFreeUser {
     required this.role,
     this.states,
     this.profileCompletion,
+    this.profileImage,
     required this.hasSubscription,
     this.latestPayment,
     required this.appliedJobs,
@@ -40,6 +42,12 @@ class TollFreeUser {
       hasSubscription = true;
     }
     
+    // Get profile image URL
+    String? imageUrl;
+    if (user['images'] != null && user['images'].toString().isNotEmpty) {
+      imageUrl = 'https://truckmitr.com/public/${user['images']}';
+    }
+    
     return TollFreeUser(
       id: int.parse(user['id'].toString()),
       uniqueId: user['unique_id'] ?? '',
@@ -49,6 +57,7 @@ class TollFreeUser {
       role: user['role'] ?? 'driver',
       states: user['states'],
       profileCompletion: user['profile_completion'],
+      profileImage: imageUrl,
       hasSubscription: hasSubscription,
       latestPayment: payment,
       appliedJobs: List<Map<String, dynamic>>.from(user['applied_jobs'] ?? []),

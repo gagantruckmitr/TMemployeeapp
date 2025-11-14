@@ -6,6 +6,7 @@ class ProfileCompletionAvatar extends StatelessWidget {
   final int completionPercentage;
   final VoidCallback onTap;
   final double size;
+  final String? imageUrl;
 
   const ProfileCompletionAvatar({
     super.key,
@@ -13,6 +14,7 @@ class ProfileCompletionAvatar extends StatelessWidget {
     required this.completionPercentage,
     required this.onTap,
     this.size = 54,
+    this.imageUrl,
   });
 
   Color _getProgressColor() {
@@ -61,6 +63,12 @@ class ProfileCompletionAvatar extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFF2196F3),
                   shape: BoxShape.circle,
+                  image: imageUrl != null
+                      ? DecorationImage(
+                          image: NetworkImage(imageUrl!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF2196F3).withValues(alpha: 0.2),
@@ -69,16 +77,18 @@ class ProfileCompletionAvatar extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Center(
-                  child: Text(
-                    name.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+                child: imageUrl == null
+                    ? Center(
+                        child: Text(
+                          name.substring(0, 1).toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    : null,
               ),
             ),
 
