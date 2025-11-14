@@ -40,7 +40,18 @@ function searchJobs() {
             u.mobile as transporter_phone,
             u.city as transporter_city,
             u.states as transporter_state_id,
-            a.name as assigned_to_name
+            (SELECT p.created_at 
+             FROM payments p 
+             WHERE p.unique_id = u.unique_id 
+             AND p.payment_status = 'captured' 
+             ORDER BY p.created_at ASC 
+             LIMIT 1) as transporter_created_at,
+            a.name as assigned_to_name,
+            CASE 
+                WHEN j.assigned_to = $userId THEN 1
+                WHEN j.assigned_to IS NULL THEN 0
+                ELSE 0
+            END as is_assigned_to_me
         FROM jobs j
         LEFT JOIN vehicle_type vt ON j.vehicle_type = vt.id
         LEFT JOIN users u ON j.transporter_id = u.id
@@ -149,6 +160,18 @@ function searchJobs() {
                 }
             }
             
+            // CRITICAL: Ensure assignedTo is properly cast to integer
+            $assignedToValue = null;
+            if (isset($row['assigned_to']) && $row['assigned_to'] !== null && $row['assigned_to'] !== '') {
+                $assignedToValue = (int)$row['assigned_to'];
+            }
+            
+            // CRITICAL: Ensure assignedToName is properly retrieved
+            $assignedToNameValue = null;
+            if (isset($row['assigned_to_name']) && $row['assigned_to_name'] !== null && $row['assigned_to_name'] !== '') {
+                $assignedToNameValue = trim($row['assigned_to_name']);
+            }
+            
             $jobs[] = [
                 'id' => (int)($row['id'] ?? 0),
                 'jobId' => $row['job_id'] ?? '',
@@ -181,8 +204,9 @@ function searchJobs() {
                 'isApproved' => $row['status'] === '1',
                 'isActive' => (int)($row['active_inactive'] ?? 1) === 1,
                 'isExpired' => false,
-                'assignedTo' => !empty($row['assigned_to']) ? (int)$row['assigned_to'] : null,
-                'assignedToName' => $row['assigned_to_name'] ?? null,
+                'assignedTo' => $assignedToValue,
+                'assignedToName' => $assignedToNameValue,
+                'isAssignedToMe' => (int)($row['is_assigned_to_me'] ?? 0) === 1,
             ];
         }
         

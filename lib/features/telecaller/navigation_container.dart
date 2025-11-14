@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import '../../models/smart_calling_models.dart';
 import '../../widgets/navigation_drawer.dart';
 import '../../core/services/pending_feedback_service.dart';
@@ -67,7 +66,8 @@ class _NavigationContainerState extends State<NavigationContainer> with WidgetsB
         
         // Navigate to smart calling page with pending feedback
         if (mounted) {
-          context.push('/smart-calling');
+          // Use internal navigation instead of go_router
+          _onSectionChanged(NavigationSection.home);
         }
       }
     }

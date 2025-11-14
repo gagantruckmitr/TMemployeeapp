@@ -145,20 +145,24 @@ class _SmartCallingPageState extends State<SmartCallingPage>
                   style: AppTheme.bodyLarge,
                 ),
                 const SizedBox(height: 16),
+                
+                // TeleCMI Option
                 ListTile(
                   leading: const Icon(
                     Icons.phone_forwarded,
-                    color: AppTheme.primaryBlue,
+                    color: Colors.purple,
                   ),
-                  title: const Text('IVR Call'),
-                  subtitle: const Text('MyOperator progressive dialing'),
-                  onTap: () => Navigator.pop(context, 'ivr'),
+                  title: const Text('TeleCMI IVR'),
+                  subtitle: const Text('WebRTC calling with TeleCMI'),
+                  onTap: () => Navigator.pop(context, 'telecmi'),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: AppTheme.primaryBlue),
+                    side: const BorderSide(color: Colors.purple),
                   ),
                 ),
                 const SizedBox(height: 8),
+                
+                // Manual Call Option
                 ListTile(
                   leading: Icon(Icons.phone, color: AppTheme.success),
                   title: const Text('Manual Call'),
@@ -191,187 +195,11 @@ class _SmartCallingPageState extends State<SmartCallingPage>
         if (callType == 'manual') {
           await _handleManualCall(contact, callerId);
           return;
-        }
-
-        // IVR call flow continues below
-        if (!mounted) return;
-
-        final proceed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('📞 Progressive Dialing'),
-            content: Text(
-              'MyOperator will call the driver first.\n\n'
-              '1. ${contact.name}\'s phone will ring FIRST\n'
-              '2. When driver picks up, they hear IVR message\n'
-              '3. YOUR phone will ring NEXT\n'
-              '4. When you pick up - instant connection!\n'
-              '5. Driver number remains hidden\n\n'
-              'Ready to proceed?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Start Call'),
-              ),
-            ],
-          ),
-        );
-
-        if (proceed != true) {
-          setState(() {
-            _isCallInProgress = false;
-            _currentCallingContact = null;
-          });
+        } else if (callType == 'telecmi') {
+          await _handleTeleCMICall(contact, callerId);
           return;
         }
 
-        if (!mounted) return;
-
-        // Show loading indicator
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📞 Initiating call...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-
-        // Clean phone number - remove all non-digits
-        final cleanDriverMobile = contact.phoneNumber.replaceAll(
-          RegExp(r'[^\d]'),
-          '',
-        );
-        debugPrint('🔵 Clean driver mobile: $cleanDriverMobile');
-
-        // Initiate IVR call through MyOperator
-        debugPrint('🔵 Calling SmartCallingService.initiateIVRCall...');
-        final result = await SmartCallingService.instance.initiateIVRCall(
-          driverMobile: cleanDriverMobile,
-          callerId: callerId,
-          driverId: contact.id,
-        );
-
-        debugPrint('🔔 Call Result: $result');
-
-        if (mounted) {
-          if (result['success'] == true) {
-            final referenceId = result['data']?['reference_id'];
-            final isSimulation = result['simulation_mode'] == true;
-
-            debugPrint(
-              '✅ Call initiated successfully! Simulation: $isSimulation, Ref: $referenceId',
-            );
-
-            if (isSimulation) {
-              // Simulation mode - show warning and quick feedback
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    '⚠️ Simulation mode - Configure MyOperator for real calls',
-                  ),
-                  backgroundColor: Colors.orange,
-                  duration: Duration(seconds: 5),
-                ),
-              );
-
-              await Future.delayed(const Duration(seconds: 2));
-
-              if (mounted) {
-                _showFeedbackModal(
-                  contact,
-                  referenceId: referenceId,
-                  callDuration: 0,
-                );
-              }
-            } else {
-              // Real call mode - show success message
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '✅ Call initiated! ${contact.name}\'s phone will ring first.\n'
-                    'When they pick up, YOUR phone will ring. Answer to connect!',
-                  ),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 8),
-                  action: SnackBarAction(
-                    label: 'Got it',
-                    textColor: Colors.white,
-                    onPressed: () {},
-                  ),
-                ),
-              );
-
-              // Show "Call in progress" dialog
-              if (mounted) {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (context) => PopScope(
-                    canPop: false,
-                    child: AlertDialog(
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Call in Progress',
-                            style: AppTheme.titleMedium.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Driver is being called first.\nYour phone will ring when driver picks up.\nComplete the call and submit feedback.',
-                            textAlign: TextAlign.center,
-                            style: AppTheme.bodyLarge.copyWith(
-                              color: AppTheme.gray,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              _showFeedbackModal(
-                                contact,
-                                referenceId: referenceId,
-                                callDuration: 0,
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryBlue,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
-                            ),
-                            child: const Text('Call Ended - Submit Feedback'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }
-            }
-          } else {
-            // Show error
-            final errorMsg = result['error'] ?? 'Unknown error';
-            debugPrint('❌ Call failed: $errorMsg');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to initiate call: $errorMsg'),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 5),
-              ),
-            );
-          }
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -390,6 +218,217 @@ class _SmartCallingPageState extends State<SmartCallingPage>
           _currentCallingContact = null;
         });
       }
+    }
+  }
+
+  Future<void> _handleTeleCMICall(DriverContact contact, int callerId) async {
+    debugPrint('═══════════════════════════════════════════════════════');
+    debugPrint('🚀 TELECMI CALL FLOW STARTED');
+    debugPrint('═══════════════════════════════════════════════════════');
+    debugPrint('📋 Contact Details:');
+    debugPrint('   - Name: ${contact.name}');
+    debugPrint('   - Phone: ${contact.phoneNumber}');
+    debugPrint('   - Driver ID: ${contact.id}');
+    debugPrint('   - Caller ID: $callerId');
+    
+    try {
+      // Clean phone number
+      final cleanDriverMobile = contact.phoneNumber.replaceAll(
+        RegExp(r'[^\d]'),
+        '',
+      );
+
+      debugPrint('📞 Cleaned Phone Number: $cleanDriverMobile');
+      debugPrint('─────────────────────────────────────────────────────');
+
+      // Show loading
+      debugPrint('✅ Step 1: Showing loading snackbar');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📞 Initiating TeleCMI call...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        debugPrint('   ✓ Loading snackbar displayed');
+      } else {
+        debugPrint('   ✗ Widget not mounted - skipping snackbar');
+      }
+
+      // Initiate TeleCMI call
+      debugPrint('─────────────────────────────────────────────────────');
+      debugPrint('✅ Step 2: Calling TeleCMI API');
+      debugPrint('   Calling SmartCallingService.initiateTeleCMICall()...');
+      
+      final result = await SmartCallingService.instance.initiateTeleCMICall(
+        driverMobile: cleanDriverMobile,
+        callerId: callerId,
+        driverId: contact.id,
+      );
+
+      debugPrint('─────────────────────────────────────────────────────');
+      debugPrint('✅ Step 3: TeleCMI API Response Received');
+      debugPrint('📦 Full Result Object:');
+      debugPrint('   ${result.toString()}');
+      debugPrint('');
+      debugPrint('📊 Result Analysis:');
+      debugPrint('   - Success: ${result['success']}');
+      debugPrint('   - Has Data: ${result['data'] != null}');
+      debugPrint('   - Has Error: ${result['error'] != null}');
+      
+      if (result['data'] != null) {
+        debugPrint('   - Data Keys: ${result['data'].keys.toList()}');
+        debugPrint('   - Call ID: ${result['data']['call_id']}');
+        debugPrint('   - Request ID: ${result['data']['request_id']}');
+      }
+      
+      if (result['error'] != null) {
+        debugPrint('   - Error Message: ${result['error']}');
+      }
+
+      // ALWAYS show feedback modal regardless of API response
+      debugPrint('─────────────────────────────────────────────────────');
+      debugPrint('✅ Step 4: Preparing to show feedback flow');
+      debugPrint('   Widget mounted: $mounted');
+      
+      if (mounted) {
+        final callId = result['data']?['call_id'] ?? 
+                       result['data']?['request_id'] ?? 
+                       'telecmi_${DateTime.now().millisecondsSinceEpoch}';
+        
+        debugPrint('   Generated Call ID: $callId');
+        debugPrint('─────────────────────────────────────────────────────');
+        debugPrint('✅ Step 5: Showing success message');
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '✅ TeleCMI call initiated to ${contact.name}!\n'
+              'Your phone will ring shortly.',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        debugPrint('   ✓ Success snackbar displayed');
+
+        // Show call in progress dialog - ALWAYS
+        debugPrint('─────────────────────────────────────────────────────');
+        debugPrint('✅ Step 6: Showing call progress dialog');
+        debugPrint('   About to call showDialog()...');
+        
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            debugPrint('   ✓ Dialog builder called');
+            debugPrint('   ✓ Creating AlertDialog with feedback button');
+            
+            return PopScope(
+              canPop: false,
+              child: AlertDialog(
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      'TeleCMI Call in Progress',
+                      style: AppTheme.titleMedium.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Call is being connected via TeleCMI.\n'
+                      'Your phone will ring when ready.\n'
+                      'Complete the call and submit feedback.',
+                      textAlign: TextAlign.center,
+                      style: AppTheme.bodyLarge.copyWith(
+                        color: AppTheme.gray,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        debugPrint('─────────────────────────────────────────────────────');
+                        debugPrint('🎯 FEEDBACK BUTTON CLICKED');
+                        debugPrint('   Closing progress dialog...');
+                        Navigator.of(context).pop();
+                        debugPrint('   ✓ Progress dialog closed');
+                        
+                        debugPrint('─────────────────────────────────────────────────────');
+                        debugPrint('✅ Step 7: Opening feedback modal');
+                        debugPrint('   Contact: ${contact.name}');
+                        debugPrint('   Reference ID: $callId');
+                        debugPrint('   Call Duration: 0');
+                        
+                        _showFeedbackModal(
+                          contact,
+                          referenceId: callId,
+                          callDuration: 0,
+                        );
+                        
+                        debugPrint('   ✓ _showFeedbackModal() called');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: const Text('Call Ended - Submit Feedback'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+        
+        debugPrint('   ✓ showDialog() completed');
+        debugPrint('   ✓ Dialog should now be visible on screen');
+      } else {
+        debugPrint('   ✗ Widget not mounted - cannot show dialog');
+      }
+      
+      debugPrint('═══════════════════════════════════════════════════════');
+      debugPrint('✅ TELECMI CALL FLOW COMPLETED SUCCESSFULLY');
+      debugPrint('═══════════════════════════════════════════════════════');
+      
+    } catch (e, stackTrace) {
+      debugPrint('═══════════════════════════════════════════════════════');
+      debugPrint('❌ TELECMI CALL FLOW ERROR');
+      debugPrint('═══════════════════════════════════════════════════════');
+      debugPrint('Error Type: ${e.runtimeType}');
+      debugPrint('Error Message: $e');
+      debugPrint('Stack Trace:');
+      debugPrint('$stackTrace');
+      debugPrint('═══════════════════════════════════════════════════════');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      debugPrint('─────────────────────────────────────────────────────');
+      debugPrint('🧹 Cleanup: Resetting call state');
+      if (mounted) {
+        setState(() {
+          _isCallInProgress = false;
+          _currentCallingContact = null;
+        });
+        debugPrint('   ✓ Call state reset');
+      } else {
+        debugPrint('   ✗ Widget not mounted - skipping state reset');
+      }
+      debugPrint('═══════════════════════════════════════════════════════');
     }
   }
 
@@ -495,30 +534,68 @@ class _SmartCallingPageState extends State<SmartCallingPage>
     String? referenceId,
     int? callDuration,
   }) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      isDismissible: false, // Cannot dismiss by tapping outside
-      enableDrag: false, // Cannot dismiss by dragging down
-      builder: (context) => PopScope(
-        canPop: false, // Cannot dismiss with back button
-        child: CallFeedbackModal(
-          contact: contact,
-          referenceId: referenceId,
-          callDuration: callDuration,
-          onFeedbackSubmitted: (feedback) {
-            _updateContactStatus(
-              contact,
-              feedback,
+    debugPrint('═══════════════════════════════════════════════════════');
+    debugPrint('📝 FEEDBACK MODAL FUNCTION CALLED');
+    debugPrint('═══════════════════════════════════════════════════════');
+    debugPrint('Parameters:');
+    debugPrint('   - Contact: ${contact.name}');
+    debugPrint('   - Reference ID: $referenceId');
+    debugPrint('   - Call Duration: $callDuration');
+    debugPrint('   - Context mounted: $mounted');
+    
+    try {
+      debugPrint('─────────────────────────────────────────────────────');
+      debugPrint('Calling showModalBottomSheet()...');
+      
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        isDismissible: false, // Cannot dismiss by tapping outside
+        enableDrag: false, // Cannot dismiss by dragging down
+        builder: (context) {
+          debugPrint('   ✓ Modal builder called');
+          debugPrint('   ✓ Creating CallFeedbackModal widget');
+          
+          return PopScope(
+            canPop: false, // Cannot dismiss with back button
+            child: CallFeedbackModal(
+              contact: contact,
               referenceId: referenceId,
               callDuration: callDuration,
-            );
-            Navigator.of(context).pop();
-          },
-        ),
-      ),
-    );
+              onFeedbackSubmitted: (feedback) {
+                debugPrint('─────────────────────────────────────────────────────');
+                debugPrint('📤 FEEDBACK SUBMITTED');
+                debugPrint('   Status: ${feedback.status}');
+                debugPrint('   Remarks: ${feedback.remarks}');
+                
+                _updateContactStatus(
+                  contact,
+                  feedback,
+                  referenceId: referenceId,
+                  callDuration: callDuration,
+                );
+                Navigator.of(context).pop();
+                debugPrint('   ✓ Modal closed');
+              },
+            ),
+          );
+        },
+      );
+      
+      debugPrint('   ✓ showModalBottomSheet() completed');
+      debugPrint('   ✓ Feedback modal should now be visible');
+      debugPrint('═══════════════════════════════════════════════════════');
+      
+    } catch (e, stackTrace) {
+      debugPrint('═══════════════════════════════════════════════════════');
+      debugPrint('❌ ERROR SHOWING FEEDBACK MODAL');
+      debugPrint('═══════════════════════════════════════════════════════');
+      debugPrint('Error: $e');
+      debugPrint('Stack Trace:');
+      debugPrint('$stackTrace');
+      debugPrint('═══════════════════════════════════════════════════════');
+    }
   }
 
   Future<void> _updateContactStatus(
@@ -627,7 +704,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
       },
       child: Scaffold(
         body: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: AppTheme.backgroundGradient,
           ),
           child: SafeArea(

@@ -79,7 +79,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: AppTheme.backgroundGradient,
         ),
         child: SafeArea(

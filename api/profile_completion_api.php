@@ -91,7 +91,8 @@ function getProfileDetails($conn) {
         $isPresent = false;
         $displayValue = null;
         
-        if ($value !== null && $value !== '') {
+        // Check for null, empty string, invalid date, or "0"
+        if ($value !== null && $value !== '' && $value !== '0000-00-00' && $value !== '0') {
             // Check if it's a JSON array with content
             $decoded = json_decode($value, true);
             if (is_array($decoded) && count($decoded) > 0) {

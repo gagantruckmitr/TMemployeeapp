@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
 import '../../../core/services/real_auth_service.dart';
 import '../../../core/services/api_service.dart';
-import '../../../routes/app_router.dart';
-import '../../../models/leave_models.dart';
+import '../../../features/auth/unified_login_screen.dart';
 import '../widgets/enhanced_leave_break_widget.dart';
 import '../widgets/apply_leave_dialog.dart';
 import 'leave_requests_screen.dart';
@@ -434,7 +432,11 @@ class _DynamicProfileScreenState extends State<DynamicProfileScreen> {
       try {
         await RealAuthService.instance.logout();
         if (mounted) {
-          context.go(AppRouter.login);
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const UnifiedLoginScreen()),
+            (route) => false,
+          );
         }
       } catch (e) {
         if (mounted) {
@@ -456,7 +458,7 @@ class _DynamicProfileScreenState extends State<DynamicProfileScreen> {
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (mounted) {
-          context.go(AppRouter.dashboard);
+          Navigator.of(context).pop();
         }
       },
       child: Scaffold(
@@ -530,7 +532,7 @@ class _DynamicProfileScreenState extends State<DynamicProfileScreen> {
                 if (widget.onNavigateBack != null) {
                   widget.onNavigateBack!();
                 } else if (mounted) {
-                  context.go(AppRouter.dashboard);
+                  Navigator.of(context).pop();
                 }
               },
               icon: Container(

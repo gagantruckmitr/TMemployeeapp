@@ -177,7 +177,7 @@ class _LeaveApprovalScreenState extends State<LeaveApprovalScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: AppTheme.backgroundGradient,
         ),
         child: SafeArea(

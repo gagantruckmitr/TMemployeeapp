@@ -118,6 +118,7 @@ function getJobs() {
             $transporterPhone = '';
             $transporterCity = '';
             $transporterState = '';
+            $transporterCreatedAt = '';
             $profileCompletion = 0;
             
             if (!empty($row['transporter_id'])) {
@@ -133,6 +134,22 @@ function getJobs() {
                     $transporterPhone = $user['mobile'] ?? '';
                     $transporterCity = $user['city'] ?? '';
                     $transporterState = $user['state_name'] ?? '';
+                    
+                    // Get subscription date from payments table where payment_status = 'captured'
+                    $transporterCreatedAt = '';
+                    if (!empty($transporterTmid)) {
+                        $paymentQuery = "SELECT created_at 
+                                        FROM payments 
+                                        WHERE unique_id = '" . $conn->real_escape_string($transporterTmid) . "' 
+                                        AND payment_status = 'captured' 
+                                        ORDER BY created_at ASC 
+                                        LIMIT 1";
+                        $paymentResult = $conn->query($paymentQuery);
+                        if ($paymentResult && $paymentResult->num_rows > 0) {
+                            $payment = $paymentResult->fetch_assoc();
+                            $transporterCreatedAt = $payment['created_at'] ?? '';
+                        }
+                    }
                     
                     // Calculate profile completion for transporter (EXACT same logic as profile_completion_api.php)
                     $transporterFields = [
@@ -177,6 +194,7 @@ function getJobs() {
                 'transporterPhone' => $transporterPhone,
                 'transporterCity' => $transporterCity,
                 'transporterState' => $transporterState,
+                'transporterCreatedAt' => $transporterCreatedAt,
                 'transporterProfileCompletion' => $profileCompletion,
                 'jobLocation' => $row['job_location'] ?? '',
                 'jobDescription' => $row['Job_Description'] ?? '',
@@ -202,6 +220,7 @@ function getJobs() {
                 'isExpired' => $hasDeadlineColumn && !empty($row['Application_Deadline']) && strtotime($row['Application_Deadline']) < time(),
                 'assignedTo' => $userId, // Since we filtered by assigned_to, all jobs are assigned to this user
                 'assignedToName' => null, // Current user's own jobs
+                'isAssignedToMe' => true, // All jobs in this API are assigned to the current user
             ];
         }
         

@@ -12,6 +12,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     sendError('Method not allowed', 405);
 }
 
+// Helper function to check if field is filled (EXACT same as profile_completion_api.php)
+function isFieldFilledInApplicants($value) {
+    // Check for null, empty string, invalid date, or "0"
+    if ($value === null || $value === '' || $value === '0000-00-00' || $value === '0') {
+        return false;
+    }
+    
+    // Check if it's a JSON array with content
+    $decoded = json_decode($value, true);
+    if (is_array($decoded) && count($decoded) > 0) {
+        return true;
+    } elseif (!is_array($decoded)) {
+        return true;
+    }
+    
+    return false;
+}
+
 function getJobApplicants() {
     global $conn;
     
@@ -22,8 +40,14 @@ function getJobApplicants() {
     // Get job_id parameter (this is the string like TMJB00418)
     $jobIdString = isset($_GET['job_id']) ? $conn->real_escape_string($_GET['job_id']) : '';
     
+    // Debug logging
+    error_log("=== JOB APPLICANTS API DEBUG ===");
+    error_log("Received job_id: " . ($jobIdString ?: 'EMPTY'));
+    error_log("GET parameters: " . json_encode($_GET));
+    
     if (empty($jobIdString)) {
-        sendError('job_id parameter is required', 400);
+        error_log("ERROR: job_id is empty");
+        sendError('job_id parameter is required. Received: ' . json_encode($_GET), 400);
     }
     
     try {
@@ -76,7 +100,27 @@ function getJobApplicants() {
             p.payment_type as payment_type,
             cl.feedback as call_feedback,
             cl.match_status as match_status,
-            cl.remark as feedback_notes
+            cl.remark as feedback_notes,
+            telecaller.name as telecaller_name,
+            u.sex,
+            u.father_name,
+            u.images,
+            u.address,
+            u.dob,
+            u.type_of_license,
+            u.driving_experience,
+            u.highest_education,
+            u.license_number,
+            u.expiry_date_of_license,
+            u.expected_monthly_income,
+            u.current_monthly_income,
+            u.marital_status,
+            u.preferred_location,
+            u.aadhar_number,
+            u.aadhar_photo,
+            u.driving_license,
+            u.previous_employer,
+            u.job_placement
         FROM applyjobs a
         INNER JOIN users u ON a.driver_id = u.id
         INNER JOIN jobs j ON a.job_id = j.id
@@ -107,6 +151,7 @@ function getJobApplicants() {
                   AND cl1.job_id = cl2.job_id 
                   AND cl1.created_at = cl2.max_created
         ) cl ON u.unique_id = cl.unique_id_driver AND j.job_id = cl.job_id
+        LEFT JOIN admins telecaller ON cl.caller_id = telecaller.id
         WHERE a.job_id = $numericJobId
         GROUP BY a.id, u.id
         ORDER BY a.created_at DESC";
@@ -119,34 +164,24 @@ function getJobApplicants() {
         
         $applicants = [];
         while ($row = $result->fetch_assoc()) {
-            // Calculate profile completion using EXACT same logic as profile_completion_api.php
-            $driverId = $row['driver_id'];
-            
-            // Fetch full user data
-            $userQuery = "SELECT * FROM users WHERE id = $driverId";
-            $userResult = $conn->query($userQuery);
-            $userData = $userResult->fetch_assoc();
-            
-            // Use EXACT same fields and logic as phase2_profile_completion_api.php
-            // Define fields in same structure - using exact database column names (case-sensitive)
-            $fields = [
-                'Basic Info' => ['name', 'email', 'city', 'sex', 'father_name', 'address', 'dob'],
-                'Professional' => ['vehicle_type', 'Type_of_License', 'Driving_Experience', 'highest_education', 'License_Number', 'expiry_date_of_license'],
-                'Income' => ['expected_monthly_income', 'current_monthly_income', 'marital_status', 'Preferred_Location'],
-                'Documents' => ['Aadhar_Number', 'aadhar_photo', 'driving_license', 'images'],
-                'Employment' => ['previous_employer', 'job_placement']
+            // Calculate profile completion from the row data (already has all fields from main query)
+            // Use EXACT same fields as profile_completion_api.php (NO system fields)
+            $requiredFields = [
+                'name', 'email', 'city', 'sex', 'vehicle_type',
+                'father_name', 'images', 'address', 'dob',
+                'type_of_license', 'driving_experience', 'highest_education', 'license_number',
+                'expiry_date_of_license', 'expected_monthly_income', 'current_monthly_income',
+                'marital_status', 'preferred_location', 'aadhar_number', 'aadhar_photo',
+                'driving_license', 'previous_employer', 'job_placement'
             ];
             
-            $totalFields = 0;
+            $totalFields = count($requiredFields);
             $filledFields = 0;
             
-            foreach ($fields as $category => $fieldList) {
-                foreach ($fieldList as $field) {
-                    $value = $userData[$field] ?? null;
-                    $isFilled = !empty($value) && $value !== '0000-00-00';
-                    
-                    $totalFields++;
-                    if ($isFilled) $filledFields++;
+            foreach ($requiredFields as $field) {
+                $value = $row[$field] ?? null;
+                if (isFieldFilledInApplicants($value)) {
+                    $filledFields++;
                 }
             }
             
@@ -165,6 +200,24 @@ function getJobApplicants() {
                 } else {
                     $subscriptionStatus = 'active';
                 }
+            }
+            
+            // Get full profile image URL
+            $profileImageUrl = null;
+            $imagePath = $row['images'] ?? null;
+            error_log("DEBUG: Processing images for driver " . ($row['name'] ?? 'unknown'));
+            error_log("DEBUG: Raw images value: " . ($imagePath ?? 'NULL'));
+            if (!empty($imagePath)) {
+                // If already a full URL, use as is
+                if (strpos($imagePath, 'http://') === 0 || strpos($imagePath, 'https://') === 0) {
+                    $profileImageUrl = $imagePath;
+                } else {
+                    // Otherwise, prepend the base URL
+                    $profileImageUrl = 'https://truckmitr.com/public/' . $imagePath;
+                }
+                error_log("DEBUG: Final profileImageUrl: " . $profileImageUrl);
+            } else {
+                error_log("DEBUG: No image path found");
             }
             
             // Get timestamps from database
@@ -216,6 +269,7 @@ function getJobApplicants() {
                 'updatedAt' => $row['Updated_at'] ?? '',
                 'appliedAt' => $appliedAt,
                 'profileCompletion' => $profileCompletion,
+                'profileImageUrl' => $profileImageUrl,
                 'subscriptionAmount' => $row['subscription_amount'] ?? null,
                 'subscriptionStartDate' => $subscriptionStartDate,
                 'subscriptionEndDate' => $row['subscription_end_date'] ?? null,
@@ -223,6 +277,7 @@ function getJobApplicants() {
                 'callFeedback' => $row['call_feedback'] ?? null,
                 'matchStatus' => $row['match_status'] ?? null,
                 'feedbackNotes' => $row['feedback_notes'] ?? null,
+                'telecallerName' => $row['telecaller_name'] ?? null,
             ];
         }
         

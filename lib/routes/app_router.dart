@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/onboarding/onboarding_page.dart';
-import '../features/auth/login_page.dart';
+import '../features/auth/unified_login_screen.dart';
 import '../features/telecaller/main_navigation_container.dart';
 import '../features/telecaller/smart_calling_page.dart';
 import '../features/telecaller/performance_analytics_page.dart';
@@ -94,7 +94,7 @@ class AppRouter {
         name: 'login',
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: const LoginPage(),
+          child: const UnifiedLoginScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
               position: Tween<Offset>(

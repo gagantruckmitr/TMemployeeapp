@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeleCMI API Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .response.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .response.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .links {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            text-align: center;
+        }
+        
+        .links a {
+            display: inline-block;
+            margin: 5px 10px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📞 TeleCMI API Demo</h1>
+        <p class="subtitle">Test your TeleCMI integration</p>
+        
+        <!-- SDK Token Section -->
+        <div class="section">
+            <h2>1. Get SDK Token</h2>
+            <div class="form-group">
+                <label for="userId">User ID:</label>
+                <input type="text" id="userId" placeholder="e.g., telecaller_123" value="test_user_123">
+            </div>
+            <button onclick="getSdkToken()">
+                <span id="tokenBtn">Get SDK Token</span>
+            </button>
+            <div id="tokenResponse"></div>
+        </div>
+        
+        <!-- Click-to-Call Section -->
+        <div class="section">
+            <h2>2. Click-to-Call</h2>
+            <div class="form-group">
+                <label for="toNumber">To Number (with country code):</label>
+                <input type="tel" id="toNumber" placeholder="e.g., 919876543210">
+            </div>
+            <div class="form-group">
+                <label for="callerIdNumber">Caller ID:</label>
+                <input type="tel" id="callerIdNumber" placeholder="e.g., 919123456789">
+            </div>
+            <button onclick="makeCall()">
+                <span id="callBtn">Make Call</span>
+            </button>
+            <div id="callResponse"></div>
+        </div>
+        
+        <!-- Links -->
+        <div class="links">
+            <a href="test_telecmi_api.php" target="_blank">Run Full Tests</a>
+            <a href="setup_telecmi_table.php" target="_blank">Setup Database</a>
+            <a href="../TELECMI_API_SETUP.md" target="_blank">Documentation</a>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = window.location.origin + window.location.pathname.replace('telecmi_demo.html', '');
+        
+        async function getSdkToken() {
+            const userId = document.getElementById('userId').value;
+            const btn = document.getElementById('tokenBtn');
+            const responseDiv = document.getElementById('tokenResponse');
+            
+            if (!userId) {
+                alert('Please enter a User ID');
+                return;
+            }
+            
+            btn.innerHTML = '<span class="loading"></span>';
+            responseDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_BASE}telecmi_api.php?action=sdk_token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ user_id: userId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    responseDiv.className = 'response success';
+                    responseDiv.textContent = '✅ Success!\n\n' + JSON.stringify(data, null, 2);
+                } else {
+                    responseDiv.className = 'response error';
+                    responseDiv.textContent = '❌ Error!\n\n' + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = '❌ Network Error!\n\n' + error.message;
+            } finally {
+                btn.textContent = 'Get SDK Token';
+            }
+        }
+        
+        async function makeCall() {
+            const to = document.getElementById('toNumber').value;
+            const callerid = document.getElementById('callerIdNumber').value;
+            const btn = document.getElementById('callBtn');
+            const responseDiv = document.getElementById('callResponse');
+            
+            if (!to || !callerid) {
+                alert('Please enter both phone numbers');
+                return;
+            }
+            
+            btn.innerHTML = '<span class="loading"></span>';
+            responseDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_BASE}telecmi_api.php?action=click_to_call`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ to, callerid })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    responseDiv.className = 'response success';
+                    responseDiv.textContent = '✅ Call Initiated!\n\n' + JSON.stringify(data, null, 2);
+                } else {
+                    responseDiv.className = 'response error';
+                    responseDiv.textContent = '❌ Call Failed!\n\n' + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = '❌ Network Error!\n\n' + error.message;
+            } finally {
+                btn.textContent = 'Make Call';
+            }
+        }
+    </script>
+</body>
+</html>
