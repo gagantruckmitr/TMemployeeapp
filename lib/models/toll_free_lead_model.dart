@@ -29,6 +29,16 @@ class TollFreeUser {
 
   factory TollFreeUser.fromJson(Map<String, dynamic> json) {
     final user = json['user'] ?? json;
+    final paymentData = user['latest_successful_payment'];
+    
+    // Handle payment data - it can be null, false, or a Map
+    Map<String, dynamic>? payment;
+    bool hasSubscription = false;
+    
+    if (paymentData != null && paymentData is Map<String, dynamic>) {
+      payment = paymentData;
+      hasSubscription = true;
+    }
     
     return TollFreeUser(
       id: int.parse(user['id'].toString()),
@@ -39,8 +49,8 @@ class TollFreeUser {
       role: user['role'] ?? 'driver',
       states: user['states'],
       profileCompletion: user['profile_completion'],
-      hasSubscription: user['latest_successful_payment'] != null,
-      latestPayment: user['latest_successful_payment'] as Map<String, dynamic>?,
+      hasSubscription: hasSubscription,
+      latestPayment: payment,
       appliedJobs: List<Map<String, dynamic>>.from(user['applied_jobs'] ?? []),
       callLogs: List<Map<String, dynamic>>.from(user['call_logs'] ?? []),
     );

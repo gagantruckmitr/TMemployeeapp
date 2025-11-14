@@ -470,17 +470,17 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
                             bottom: 0,
                             right: 0,
                             child: Container(
-                              padding: const EdgeInsets.all(4),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                               decoration: BoxDecoration(
                                 color: AppTheme.success,
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white, width: 2),
                               ),
                               child: Text(
-                                user.profileCompletion!.replaceAll('%', ''),
+                                user.profileCompletion!,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 10,
+                                  fontSize: 9,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -532,15 +532,13 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
                 ),
                 const SizedBox(height: 16),
                 
-                // Contact Info
-                _buildDetailRow(Icons.phone, 'Mobile', user.mobile),
+                // Contact Info (Email only, no mobile)
                 if (user.email != null) ...[
-                  const SizedBox(height: 8),
                   _buildDetailRow(Icons.email, 'Email', user.email!),
+                  const SizedBox(height: 8),
                 ],
                 
                 // Subscription
-                const SizedBox(height: 8),
                 _buildDetailRow(
                   user.hasSubscription ? Icons.check_circle : Icons.cancel,
                   'Subscription',
