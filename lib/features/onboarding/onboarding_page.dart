@@ -118,7 +118,7 @@ class _OnboardingPageState extends State<OnboardingPage> with TickerProviderStat
             // Title with shimmer effect
             Text(
               content.title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.black,

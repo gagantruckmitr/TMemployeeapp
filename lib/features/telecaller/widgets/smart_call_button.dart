@@ -207,7 +207,7 @@ class _SmartCallButtonState extends State<SmartCallButton>
                                   ),
                                   child: const Icon(
                                     Icons.phone,
-                                    color: AppTheme.white,
+                                    color: Colors.white,
                                     size: 32,
                                   ),
                                 ),

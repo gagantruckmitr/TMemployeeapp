@@ -189,11 +189,7 @@ class _NavigationDrawerWidgetState extends State<NavigationDrawerWidget>
           ),
           IconButton(
             onPressed: _closeDrawer,
-            icon: const Icon(
-              Icons.close,
-              color: Colors.white,
-              size: 24,
-            ),
+            icon: const Icon(Icons.close, color: Colors.white, size: 24),
           ),
         ],
       ),
@@ -320,11 +316,7 @@ class _NavigationDrawerWidgetState extends State<NavigationDrawerWidget>
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
           ),
           ListTile(
-            leading: Icon(
-              Icons.logout,
-              color: Colors.red.shade600,
-              size: 24,
-            ),
+            leading: Icon(Icons.logout, color: Colors.red.shade600, size: 24),
             title: Text(
               'Logout',
               style: TextStyle(

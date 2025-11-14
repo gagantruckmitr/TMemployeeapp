@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/smart_calling_models.dart';
 import '../../widgets/navigation_drawer.dart';
+import '../../features/dashboard/interested_dashboard_wrapper.dart';
 import 'dashboard_page.dart';
 import 'screens/dynamic_profile_screen.dart';
 import 'screens/interested_screen.dart';
@@ -132,8 +133,8 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                         _buildHomeTabContent(),
                         // Toll-free tab content
                         const ConnectedCallsScreen(),
-                        // Matchmaking tab content
-                        const InterestedScreen(),
+                        // Matchmaking tab content - Phase 2 Dynamic Dashboard
+                        const InterestedDashboardWrapper(),
                         // Callback tab content
                         const CallbackRequestsScreen(),
                         // Social tab content

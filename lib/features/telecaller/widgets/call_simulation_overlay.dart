@@ -368,7 +368,7 @@ class _CallSimulationOverlayState extends State<CallSimulationOverlay>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.phone,
                             color: AppTheme.white,
                             size: 16,
@@ -432,7 +432,7 @@ class _CallSimulationOverlayState extends State<CallSimulationOverlay>
                     ),
                     child: const Icon(
                       Icons.call_end,
-                      color: AppTheme.white,
+                      color: Colors.white,
                       size: 32,
                     ),
                   ),

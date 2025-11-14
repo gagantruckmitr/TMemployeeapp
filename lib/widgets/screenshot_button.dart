@@ -59,7 +59,7 @@ class ScreenshotFab extends StatelessWidget {
       },
       tooltip: 'Take Screenshot',
       backgroundColor: AppTheme.primaryBlue,
-      child: const Icon(Icons.camera_alt, color: AppTheme.white),
+      child: Icon(Icons.camera_alt, color: AppTheme.white),
     );
   }
 }

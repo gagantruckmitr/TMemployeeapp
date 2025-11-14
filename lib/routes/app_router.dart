@@ -13,6 +13,7 @@ import '../features/telecaller/screens/driver_full_detail_page.dart';
 import '../features/manager/manager_dashboard_page.dart';
 import '../core/services/real_auth_service.dart';
 import '../test_db_connection.dart';
+import '../features/dashboard/interested_dashboard_wrapper.dart';
 
 // Wrapper to get manager info from auth service
 class ManagerDashboardWrapper extends StatelessWidget {
@@ -44,6 +45,7 @@ class AppRouter {
   static const String settings = '/dashboard/profile/settings';
   static const String driverDetail = '/dashboard/driver-detail';
   static const String testDb = '/test-db';
+  static const String interestedDashboard = '/dashboard/interested-dashboard';
 
   static final GoRouter router = GoRouter(
     initialLocation: splash,
@@ -198,6 +200,23 @@ class AppRouter {
                 },
               );
             },
+          ),
+          GoRoute(
+            path: 'interested-dashboard',
+            name: 'interested-dashboard',
+            pageBuilder: (context, state) => CustomTransitionPage(
+              key: state.pageKey,
+              child: const InterestedDashboardWrapper(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(1.0, 0.0),
+                    end: Offset.zero,
+                  ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
+                  child: child,
+                );
+              },
+            ),
           ),
           GoRoute(
             path: 'profile',

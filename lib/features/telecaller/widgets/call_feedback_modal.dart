@@ -320,7 +320,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
       position: _slideAnimation,
       child: Container(
         height: MediaQuery.of(context).size.height * 0.85,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppTheme.white,
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(24),
@@ -388,7 +388,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
               color: AppTheme.primaryBlue.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.phone_callback,
               color: AppTheme.primaryBlue,
               size: 24,
@@ -691,7 +691,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
                 ),
               ),
               child: isSelected
-                  ? const Icon(Icons.check, color: AppTheme.white, size: 12)
+                  ? Icon(Icons.check, color: AppTheme.white, size: 12)
                   : null,
             ),
             const SizedBox(width: 12),

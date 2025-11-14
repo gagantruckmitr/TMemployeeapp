@@ -146,7 +146,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
                 ),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.phone_forwarded,
                     color: AppTheme.primaryBlue,
                   ),
@@ -155,7 +155,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
                   onTap: () => Navigator.pop(context, 'ivr'),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: AppTheme.primaryBlue),
+                    side: BorderSide(color: AppTheme.primaryBlue),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -627,7 +627,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
       },
       child: Scaffold(
         body: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: AppTheme.backgroundGradient,
           ),
           child: SafeArea(
@@ -695,7 +695,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
               children: [
                 const Icon(
                   Icons.phone_in_talk,
-                  color: AppTheme.white,
+                  color: Colors.white,
                   size: 16,
                 ),
                 const SizedBox(width: 4),
@@ -744,7 +744,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
   }
 
   Widget _buildLoadingState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

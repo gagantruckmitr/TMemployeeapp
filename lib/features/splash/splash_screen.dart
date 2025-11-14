@@ -109,7 +109,7 @@ class _SplashScreenState extends State<SplashScreen>
                   width: 200,
                   height: 200,
                   errorBuilder: (context, error, stackTrace) {
-                    return const Icon(
+                    return Icon(
                       Icons.local_shipping,
                       size: 120,
                       color: AppTheme.primaryBlue,

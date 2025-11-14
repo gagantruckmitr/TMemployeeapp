@@ -391,7 +391,7 @@ class _CallbackRequestCard extends StatelessWidget {
                           Icon(
                             Icons.confirmation_number_outlined,
                             size: 16,
-                            color: AppTheme.primaryBlue.withOpacity(0.7),
+                            color: AppTheme.primaryBlue.withValues(alpha: 0.7),
                           ),
                           const SizedBox(width: 6),
                           Expanded(
@@ -443,10 +443,10 @@ class _CallbackRequestCard extends StatelessWidget {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryBlue.withOpacity(0.12),
+                      color: AppTheme.primaryBlue.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.message_outlined,
                       color: AppTheme.primaryBlue,
                       size: 16,
@@ -485,7 +485,7 @@ class _CallbackRequestCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.access_time,
                       size: 16,
                       color: AppTheme.gray,
@@ -499,7 +499,7 @@ class _CallbackRequestCard extends StatelessWidget {
                 ),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.badge_outlined,
                       size: 16,
                       color: AppTheme.primaryBlue,
@@ -544,7 +544,7 @@ class _CallbackRequestCard extends StatelessWidget {
                       foregroundColor: AppTheme.primaryBlue,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       side: BorderSide(
-                        color: AppTheme.primaryBlue.withOpacity(0.2),
+                        color: AppTheme.primaryBlue.withValues(alpha: 0.2),
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -607,7 +607,7 @@ class _ErrorView extends StatelessWidget {
                 color: AppTheme.error.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(45),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.error_outline,
                 color: AppTheme.error,
                 size: 38,
@@ -669,7 +669,7 @@ class _EmptyView extends StatelessWidget {
                 color: AppTheme.primaryBlue.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(45),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.celebration_outlined,
                 color: AppTheme.primaryBlue,
                 size: 38,
@@ -716,7 +716,7 @@ class _InfoChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         margin: EdgeInsets.only(right: isLast ? 0 : 12),
         decoration: BoxDecoration(
-          color: AppTheme.primaryBlue.withOpacity(0.06),
+          color: AppTheme.primaryBlue.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(

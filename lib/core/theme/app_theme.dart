@@ -1,222 +1,192 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'app_colors.dart';
 
 class AppTheme {
-  // Modern Brand Colors - Purple Theme
-  static const Color lightPurple = Color(0xFFCCCCFF);
-  static const Color mediumPurple = Color(0xFFA3A3CC);
-  static const Color darkPurple = Color(0xFF5C5C99);
-  static const Color veryDarkPurple = Color(0xFF292966);
-  static const Color accentPurple = Color(0xFF5C5C99);
-  static const Color lightGray = Color(0xFFF8FAFC);
-  static const Color white = Color(0xFFFFFFFF);
-  static const Color black = Color(0xFF0F172A);
-  static const Color gray = Color(0xFF64748B);
+  // Color getters for backward compatibility with Phase 2
+  static Color get primaryBlue => AppColors.primary;
+  static Color get primaryColor => AppColors.primary;
+  static Color get accentPurple => AppColors.accent;
+  static Color get accentColor => AppColors.accent;
+  static Color get accentOrange => const Color(0xFFFF6B35);
+  static Color get accentBlue => const Color(0xFF4A90E2);
+  static Color get primaryPurple => AppColors.accent;
+  static Color get lightPurple => const Color(0xFFF3E8FF);
+  static Color get darkGray => AppColors.darkGray;
+  static Color get gray => AppColors.softGray;
+  static Color get softGray => AppColors.softGray;
+  static Color get lightGray => const Color(0xFFF5F5F5);
+  static Color get white => Colors.white;
+  static Color get black => Colors.black;
+  static Color get success => const Color(0xFF10B981);
+  static Color get error => const Color(0xFFEF4444);
+  static Color get warning => const Color(0xFFF59E0B);
+  static Color get textPrimary => AppColors.darkGray;
+  static Color get textSecondary => AppColors.softGray;
   
-  // Legacy support
-  static const Color primaryBlue = darkPurple;
-  static const Color primaryPurple = veryDarkPurple;
-  static const Color accentBlue = lightPurple;
-  static const Color darkBlue = veryDarkPurple;
-  static const Color lightBlue = lightPurple;
-  static const Color primaryTeal = darkPurple;
-  static const Color darkTeal = veryDarkPurple;
-  static const Color lightTeal = lightPurple;
-  static const Color mediumTeal = mediumPurple;
-
-  // Modern Gradients
-  static const LinearGradient primaryGradient = LinearGradient(
-    colors: [darkPurple, veryDarkPurple],
+  // Gradient getters
+  static LinearGradient get primaryGradient => LinearGradient(
+    colors: [AppColors.primary, AppColors.primary.withValues(alpha: 0.8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-
-  static const LinearGradient accentGradient = LinearGradient(
-    colors: [lightPurple, mediumPurple],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [
-      Color(0xFFF1F5F9),
-      Color(0xFFE2E8F0),
-    ],
+  
+  static LinearGradient get backgroundGradient => const LinearGradient(
+    colors: [Color(0xFFF8F9FD), Colors.white],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
-
-  static const LinearGradient glassGradient = LinearGradient(
-    colors: [
-      Color(0x20FFFFFF),
-      Color(0x10FFFFFF),
-    ],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  static const LinearGradient onboardingGradient = LinearGradient(
-    colors: [veryDarkPurple, darkPurple, mediumPurple],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  );
-
-  static const LinearGradient cardGradient = LinearGradient(
-    colors: [
-      Color(0x15FFFFFF),
-      Color(0x05FFFFFF),
-    ],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  // Text Styles
-  static TextStyle get headingLarge => GoogleFonts.poppins(
-        fontSize: 24,
-        fontWeight: FontWeight.bold,
-        color: white,
-      );
-
-  static TextStyle get headingMedium => GoogleFonts.poppins(
-        fontSize: 20,
-        fontWeight: FontWeight.bold,
-        color: black,
-      );
-
-  static TextStyle get headlineMedium => GoogleFonts.poppins(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-        color: black,
-      );
-
-  static TextStyle get titleMedium => GoogleFonts.poppins(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: black,
-      );
-
-  static TextStyle get bodyLarge => GoogleFonts.poppins(
-        fontSize: 14,
-        fontWeight: FontWeight.normal,
-        color: gray,
-      );
-
-  static TextStyle get bodyMedium => GoogleFonts.poppins(
-        fontSize: 12,
-        fontWeight: FontWeight.normal,
-        color: gray,
-      );
-
-  static TextStyle get bodySmall => GoogleFonts.poppins(
-        fontSize: 10,
-        fontWeight: FontWeight.normal,
-        color: gray,
-      );
-
-  static TextStyle get headlineSmall => GoogleFonts.poppins(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        color: black,
-      );
-
-  // Additional colors for better compatibility
-  static const Color accentOrange = Color(0xFFFF6B35);
-  static const Color success = Color(0xFF4CAF50);
-  static const Color warning = Color(0xFFFF9800);
-  static const Color error = Color(0xFFF44336);
   
-  // Primary color getter for backward compatibility
-  static Color get primaryColor => darkPurple;
-  
-  // Additional color getters for backward compatibility
-  static Color get accentColor => mediumPurple;
-  static Color get textPrimary => black;
-  static Color get textSecondary => gray;
-
-  // Theme Data
-  static ThemeData get lightTheme => ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: darkPurple,
-          brightness: Brightness.light,
-        ),
-        textTheme: GoogleFonts.poppinsTextTheme(),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: darkPurple,
-            foregroundColor: white,
-            elevation: 8,
-            shadowColor: darkPurple.withValues(alpha: 0.3),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: white.withValues(alpha: 0.1),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: white.withValues(alpha: 0.3)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: mediumPurple, width: 2),
-          ),
-        ),
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          titleTextStyle: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: black,
-          ),
-        ),
-      );
-
-  // Border Radius
-  static const double radiusSmall = 8.0;
-  static const double radiusMedium = 12.0;
-  static const double radiusLarge = 16.0;
-  static const double radiusXLarge = 24.0;
-
-  // Modern Shadows
+  // Shadow getters
   static List<BoxShadow> get cardShadow => [
-        BoxShadow(
-          color: darkPurple.withValues(alpha: 0.08),
-          blurRadius: 25,
-          offset: const Offset(0, 10),
-          spreadRadius: -5,
-        ),
-        BoxShadow(
-          color: veryDarkPurple.withValues(alpha: 0.05),
-          blurRadius: 50,
-          offset: const Offset(0, 20),
-          spreadRadius: -10,
-        ),
-      ];
-
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.08),
+      blurRadius: 12,
+      offset: const Offset(0, 2),
+    ),
+  ];
+  
   static List<BoxShadow> get buttonShadow => [
-        BoxShadow(
-          color: darkPurple.withValues(alpha: 0.25),
-          blurRadius: 20,
-          offset: const Offset(0, 8),
-          spreadRadius: -2,
-        ),
-      ];
+    BoxShadow(
+      color: AppColors.primary.withValues(alpha: 0.3),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+  ];
+  
+  // Border radius getters
+  static double get radiusSmall => 8.0;
+  static double get radiusMedium => 12.0;
+  static double get radiusLarge => 16.0;
+  
+  // Text style getters for backward compatibility
+  static TextStyle get headingLarge => TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.bold,
+    color: AppColors.darkGray,
+  );
+  
+  static TextStyle get headingMedium => TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    color: AppColors.darkGray,
+  );
+  
+  static TextStyle get titleMedium => TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+    color: AppColors.darkGray,
+  );
+  
+  static TextStyle get bodyLarge => TextStyle(
+    fontSize: 16,
+    color: AppColors.darkGray,
+  );
+  
+  static TextStyle get bodyMedium => TextStyle(
+    fontSize: 14,
+    color: AppColors.softGray,
+  );
+  
+  static TextStyle get bodySmall => TextStyle(
+    fontSize: 12,
+    color: AppColors.softGray,
+  );
+  
+  static TextStyle get headlineSmall => TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+    color: AppColors.darkGray,
+  );
 
-  static List<BoxShadow> get glassShadow => [
-        BoxShadow(
-          color: black.withValues(alpha: 0.1),
-          blurRadius: 30,
-          offset: const Offset(0, 15),
-          spreadRadius: -5,
+  static ThemeData get lightTheme {
+    return ThemeData(
+      useMaterial3: true,
+      scaffoldBackgroundColor: AppColors.background,
+      primaryColor: AppColors.primary,
+      colorScheme: ColorScheme.light(
+        primary: AppColors.primary,
+        secondary: AppColors.accent,
+        surface: Colors.white,
+        error: Colors.red.shade400,
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: IconThemeData(color: AppColors.darkGray),
+        titleTextStyle: TextStyle(
+          color: AppColors.darkGray,
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
         ),
-      ];
+      ),
+      cardTheme: CardThemeData(
+        color: Colors.white,
+        elevation: 2,
+        shadowColor: Colors.black.withOpacity(0.08),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      textTheme: TextTheme(
+        displayLarge: TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+          color: AppColors.darkGray,
+        ),
+        displayMedium: TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.bold,
+          color: AppColors.darkGray,
+        ),
+        displaySmall: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w600,
+          color: AppColors.darkGray,
+        ),
+        headlineMedium: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: AppColors.darkGray,
+        ),
+        titleLarge: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: AppColors.darkGray,
+        ),
+        titleMedium: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: AppColors.darkGray,
+        ),
+        bodyLarge: TextStyle(
+          fontSize: 16,
+          color: AppColors.darkGray,
+        ),
+        bodyMedium: TextStyle(
+          fontSize: 14,
+          color: AppColors.softGray,
+        ),
+        labelLarge: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: AppColors.darkGray,
+        ),
+      ),
+    );
+  }
 }

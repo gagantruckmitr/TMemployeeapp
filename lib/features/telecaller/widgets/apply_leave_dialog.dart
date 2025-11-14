@@ -41,7 +41,7 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
+            colorScheme: ColorScheme.light(
               primary: AppTheme.primaryBlue,
             ),
           ),
@@ -69,7 +69,7 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
+            colorScheme: ColorScheme.light(
               primary: AppTheme.primaryBlue,
             ),
           ),
@@ -276,7 +276,7 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.calendar_today_rounded, size: 18, color: AppTheme.primaryBlue),
+                                      Icon(Icons.calendar_today_rounded, size: 18, color: AppTheme.primaryBlue),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
@@ -322,7 +322,7 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.calendar_today_rounded, size: 18, color: AppTheme.primaryBlue),
+                                      Icon(Icons.calendar_today_rounded, size: 18, color: AppTheme.primaryBlue),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
@@ -366,7 +366,7 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
                               color: AppTheme.primaryBlue.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.event_note_rounded, color: AppTheme.primaryBlue, size: 20),
+                            child: Icon(Icons.event_note_rounded, color: AppTheme.primaryBlue, size: 20),
                           ),
                           const SizedBox(width: 12),
                           const Text(
@@ -380,7 +380,7 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
                           const SizedBox(width: 6),
                           Text(
                             '$_totalDays ${_totalDays == 1 ? 'Day' : 'Days'}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.primaryBlue,
@@ -427,7 +427,7 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: AppTheme.primaryBlue, width: 2),
+                          borderSide: BorderSide(color: AppTheme.primaryBlue, width: 2),
                         ),
                         contentPadding: const EdgeInsets.all(14),
                       ),
@@ -449,7 +449,7 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
                           elevation: 0,
                         ),
                         child: _isSubmitting
-                            ? const SizedBox(
+                            ? SizedBox(
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(

@@ -177,7 +177,7 @@ class _LeaveApprovalScreenState extends State<LeaveApprovalScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: AppTheme.backgroundGradient,
         ),
         child: SafeArea(
@@ -318,7 +318,7 @@ class _LeaveApprovalScreenState extends State<LeaveApprovalScreen> {
   }
 
   Widget _buildLoadingState() {
-    return const Center(
+    return Center(
       child: CircularProgressIndicator(
         valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue),
       ),

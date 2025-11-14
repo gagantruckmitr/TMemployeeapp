@@ -6,6 +6,7 @@ import '../../core/utils/assets.dart';
 import '../../core/services/real_auth_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/telecaller_status_service.dart';
+import '../../core/services/phase2_auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -448,22 +449,18 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       setState(() => _isLoading = true);
 
       try {
-        final result = await RealAuthService.instance.login(
-          _mobileController.text.trim(),
-          _passwordController.text,
-        );
+        final mobile = _mobileController.text.trim();
+        final password = _passwordController.text;
+
+        // Login to Phase 1 (Main System)
+        final result = await RealAuthService.instance.login(mobile, password);
 
         if (!mounted) return;
-
-        setState(() => _isLoading = false);
 
         if (result.isSuccess) {
           // Save credentials if remember me is checked
           if (_rememberMe) {
-            await RealAuthService.instance.saveCredentials(
-              _mobileController.text.trim(),
-              _passwordController.text,
-            );
+            await RealAuthService.instance.saveCredentials(mobile, password);
           } else {
             await RealAuthService.instance.clearSavedCredentials();
           }
@@ -480,16 +477,29 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             }
           }
 
+          // Auto-login to Phase 2 (Job Matchmaking System) in background
+          _autoLoginToPhase2(mobile, password);
+
           if (!mounted) return;
+
+          setState(() => _isLoading = false);
 
           // Navigate based on user role
           final userRole = result.user?.role.toLowerCase() ?? 'telecaller';
+          
           if (userRole == 'manager' || userRole == 'admin') {
+            // Managers go to manager dashboard
             context.go(AppRouter.managerDashboard);
+          } else if (userRole == 'telecaller') {
+            // Telecallers go to main dashboard
+            context.go(AppRouter.dashboard);
           } else {
+            // Default to dashboard
             context.go(AppRouter.dashboard);
           }
         } else {
+          setState(() => _isLoading = false);
+
           if (!mounted) return;
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -543,6 +553,21 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           ),
         );
       }
+    }
+  }
+
+  // Auto-login to Phase 2 in background (non-blocking)
+  void _autoLoginToPhase2(String mobile, String password) async {
+    try {
+      debugPrint('🔐 Auto-logging into Phase 2 (Job Matchmaking)...');
+      final success = await Phase2AuthService.login(mobile, password);
+      if (success) {
+        debugPrint('✅ Phase 2 auto-login successful');
+      } else {
+        debugPrint('⚠️ Phase 2 auto-login failed (will retry when accessing Phase 2 features)');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Phase 2 auto-login error: $e (will retry when accessing Phase 2 features)');
     }
   }
 }
