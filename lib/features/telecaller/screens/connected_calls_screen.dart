@@ -198,10 +198,10 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
     });
 
     try {
-      final result = await TollFreeService.instance.search(cacheKey);
+      final result = await TollFreeService.instance.searchUser(cacheKey);
       if (!mounted || _lastRemoteQuery != cacheKey) return;
       setState(() {
-        _remoteSearchResult = result;
+        _remoteSearchResult = result != null ? _convertToTollFreeDetail(result) : null;
         _isRemoteSearching = false;
       });
     } catch (e) {
@@ -466,10 +466,11 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
     );
 
     try {
-      final detail = await TollFreeService.instance.search(contact.tmid);
+      final result = await TollFreeService.instance.searchUser(contact.tmid);
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
-      if (detail != null) {
+      if (result != null) {
+        final detail = _convertToTollFreeDetail(result);
         _showRemoteDetail(detail);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -491,6 +492,43 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
         ),
       );
     }
+  }
+
+  TollFreeContactDetail _convertToTollFreeDetail(Map<String, dynamic> data) {
+    // This is a simplified conversion - adjust based on actual API response structure
+    final userData = data['user'] ?? data;
+    
+    return TollFreeContactDetail(
+      driver: DriverContact(
+        id: userData['id']?.toString() ?? '',
+        tmid: userData['unique_id'] ?? '',
+        name: userData['name'] ?? '',
+        company: '',
+        phoneNumber: userData['mobile'] ?? '',
+        state: userData['states'] ?? '',
+        subscriptionStatus: userData['latest_successful_payment'] != null 
+            ? SubscriptionStatus.active 
+            : SubscriptionStatus.inactive,
+        status: CallStatus.pending,
+        lastFeedback: null,
+        lastCallTime: null,
+        remarks: null,
+        paymentInfo: PaymentInfo.none(),
+        registrationDate: null,
+        profileCompletion: null,
+      ),
+      email: userData['email'],
+      language: userData['user_lang'],
+      stateName: userData['states'],
+      profileCompletionLabel: userData['profile_completion'],
+      latestPayment: null,
+      appliedJobs: [],
+      canCall: true,
+      callLabel: 'Call',
+      callEndpoint: null,
+      callPayload: null,
+      rawUserData: userData,
+    );
   }
 
   void _showRemoteDetail(TollFreeContactDetail detail) {

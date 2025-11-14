@@ -14,6 +14,8 @@ import 'screens/call_back_later_screen.dart';
 import 'screens/pending_calls_screen.dart';
 import 'screens/call_history_screen.dart';
 import 'callback_requests/callback_requests_screen.dart';
+import 'social_media/social_media_screen.dart';
+import 'toll_free/toll_free_search_screen.dart';
 
 enum MainNavigationTab { welcomeCall, tollFree, matchMaking, callback, social }
 
@@ -133,13 +135,13 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                         // Welcome Call tab - contains dashboard and sub-screens
                         _buildHomeTabContent(),
                         // Toll-free tab content
-                        const ConnectedCallsScreen(),
+                        const TollFreeSearchScreen(),
                         // Matchmaking tab content - Phase 2 Dynamic Dashboard
                         const InterestedDashboardWrapper(),
                         // Callback tab content
                         const CallbackRequestsScreen(),
                         // Social tab content
-                        const DynamicProfileScreen(),
+                        const SocialMediaScreen(),
                       ],
                     ),
                   ),
