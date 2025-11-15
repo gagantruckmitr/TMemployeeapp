@@ -110,10 +110,10 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   Future<void> _startCall(SocialMediaLead lead) async {
     try {
       final contact = _mapLeadToDriverContact(lead);
-      
+
       // Show call type selection dialog
       if (!mounted) return;
-      
+
       final callType = await showDialog<String>(
         context: context,
         builder: (context) => AlertDialog(
@@ -181,12 +181,15 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     }
   }
 
-  Future<void> _handleManualCall(SocialMediaLead lead, DriverContact contact) async {
+  Future<void> _handleManualCall(
+    SocialMediaLead lead,
+    DriverContact contact,
+  ) async {
     try {
       final cleanNumber = lead.mobile.replaceAll(RegExp(r'[^\d]'), '');
-      
+
       HapticFeedback.mediumImpact();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('📱 Calling ${lead.name}...'),
@@ -196,9 +199,9 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
       );
 
       await FlutterPhoneDirectCaller.callNumber(cleanNumber);
-      
+
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       if (mounted) {
         _showFeedbackModal(contact);
       }
@@ -215,7 +218,10 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     }
   }
 
-  Future<void> _handleIVRCall(SocialMediaLead lead, DriverContact contact) async {
+  Future<void> _handleIVRCall(
+    SocialMediaLead lead,
+    DriverContact contact,
+  ) async {
     if (!mounted) return;
 
     final proceed = await showDialog<bool>(
@@ -290,20 +296,10 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     );
   }
 
-  String _extractLatestFeedback(String remarks) {
-    // Extract only the latest feedback from remarks
-    if (remarks.contains('[Feedback:')) {
-      final feedbackEntries = remarks.split('\n').where((line) => line.contains('[Feedback:')).toList();
-      if (feedbackEntries.isNotEmpty) {
-        final latestFeedback = feedbackEntries.last;
-        // Remove the [Feedback: ] wrapper
-        return latestFeedback.replaceAll('[Feedback:', '').replaceAll(']', '').trim();
-      }
-    }
-    return remarks;
-  }
-
-  Future<void> _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback) async {
+  Future<void> _handleFeedbackSubmitted(
+    DriverContact contact,
+    CallFeedback feedback,
+  ) async {
     if (!mounted) return;
 
     // Find the original lead
@@ -321,13 +317,13 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     if (!mounted) return;
 
     HapticFeedback.lightImpact();
-    
+
     if (result['success'] == true) {
       // Remove the lead from the list immediately
       setState(() {
         _leads.removeWhere((l) => l.id == lead.id);
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('✅ Feedback saved for ${contact.name}'),
@@ -352,14 +348,13 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    final subtitle =
-        _isLoading
-            ? 'Fetching latest social media leads...'
-            : _error != null
-            ? 'Tap refresh to try again.'
-            : _leads.isEmpty
-            ? 'No social media leads available.'
-            : '${_leads.length} social media leads';
+    final subtitle = _isLoading
+        ? 'Fetching latest social media leads...'
+        : _error != null
+        ? 'Tap refresh to try again.'
+        : _leads.isEmpty
+        ? 'No social media leads available.'
+        : '${_leads.length} social media leads';
 
     return Scaffold(
       backgroundColor: AppTheme.lightGray,
@@ -399,40 +394,36 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
           Expanded(
             child: SafeArea(
               top: false,
-              child:
-                  _isLoading
-                      ? const _LoadingView()
-                      : _error != null
-                      ? _ErrorView(message: _error!, onRetry: _loadLeads)
-                      : RefreshIndicator(
-                        onRefresh: _refresh,
-                        color: AppTheme.accentPurple,
-                        child:
-                            _leads.isEmpty
-                                ? const _EmptyView()
-                                : ListView.separated(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    20,
-                                    24,
-                                    20,
-                                    24,
+              child: _isLoading
+                  ? const _LoadingView()
+                  : _error != null
+                  ? _ErrorView(message: _error!, onRetry: _loadLeads)
+                  : RefreshIndicator(
+                      onRefresh: _refresh,
+                      color: AppTheme.accentPurple,
+                      child: _leads.isEmpty
+                          ? const _EmptyView()
+                          : ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                24,
+                                20,
+                                24,
+                              ),
+                              itemBuilder: (context, index) {
+                                final lead = _leads[index];
+                                return _SocialMediaLeadCard(
+                                  lead: lead,
+                                  formattedTime: _timeFormat.format(
+                                    lead.chatDateTime,
                                   ),
-                                  itemBuilder: (context, index) {
-                                    final lead = _leads[index];
-                                    return _SocialMediaLeadCard(
-                                      lead: lead,
-                                      formattedTime: _timeFormat.format(
-                                        lead.chatDateTime,
-                                      ),
-                                      onCall: () => _onCallPressed(lead),
-                                      onCopyNumber: _copyNumber,
-                                    );
-                                  },
-                                  separatorBuilder:
-                                      (_, __) => const SizedBox(height: 16),
-                                  itemCount: _leads.length,
-                                ),
-                      ),
+                                  onCall: () => _onCallPressed(lead),
+                                  onCopyNumber: _copyNumber,
+                                );
+                              },
+                              itemCount: _leads.length,
+                            ),
+                    ),
             ),
           ),
         ],
@@ -441,7 +432,7 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   }
 }
 
-class _SocialMediaLeadCard extends StatelessWidget {
+class _SocialMediaLeadCard extends StatefulWidget {
   const _SocialMediaLeadCard({
     required this.lead,
     required this.formattedTime,
@@ -454,21 +445,66 @@ class _SocialMediaLeadCard extends StatelessWidget {
   final VoidCallback onCall;
   final ValueChanged<String> onCopyNumber;
 
+  @override
+  State<_SocialMediaLeadCard> createState() => _SocialMediaLeadCardState();
+}
+
+class _SocialMediaLeadCardState extends State<_SocialMediaLeadCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _scaleController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _scaleController.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails details) {
+    _scaleController.forward();
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    _scaleController.reverse();
+  }
+
+  void _onTapCancel() {
+    _scaleController.reverse();
+  }
+
   String _extractLatestFeedback(String remarks) {
     // Extract only the latest feedback from remarks
     if (remarks.contains('[Feedback:')) {
-      final feedbackEntries = remarks.split('\n').where((line) => line.contains('[Feedback:')).toList();
+      final feedbackEntries = remarks
+          .split('\n')
+          .where((line) => line.contains('[Feedback:'))
+          .toList();
       if (feedbackEntries.isNotEmpty) {
         final latestFeedback = feedbackEntries.last;
         // Remove the [Feedback: ] wrapper
-        return latestFeedback.replaceAll('[Feedback:', '').replaceAll(']', '').trim();
+        return latestFeedback
+            .replaceAll('[Feedback:', '')
+            .replaceAll(']', '')
+            .trim();
       }
     }
     return remarks;
   }
 
   Color _sourceColor() {
-    switch (lead.source.toLowerCase()) {
+    switch (widget.lead.source.toLowerCase()) {
       case 'facebook':
         return const Color(0xFF1877F2);
       case 'whatsapp':
@@ -483,7 +519,7 @@ class _SocialMediaLeadCard extends StatelessWidget {
   }
 
   IconData _sourceIcon() {
-    switch (lead.source.toLowerCase()) {
+    switch (widget.lead.source.toLowerCase()) {
       case 'facebook':
         return Icons.facebook;
       case 'whatsapp':
@@ -501,233 +537,342 @@ class _SocialMediaLeadCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final sourceColor = _sourceColor();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        boxShadow: AppTheme.cardShadow,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: sourceColor.withOpacity(0.12),
-                  child: Text(
-                    lead.name.isNotEmpty ? lead.name[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: sourceColor,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
+    return GestureDetector(
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                ],
+                border: Border.all(color: Colors.grey.shade200, width: 1),
+              ),
+              child: Column(
+                children: [
+                  // Top Row: Avatar, Name, Call Button
+                  Row(
                     children: [
-                      Text(
-                        lead.name,
-                        style: AppTheme.headingMedium.copyWith(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
+                      // Avatar
+                      CircleAvatar(
+                        radius: 27,
+                        backgroundColor: sourceColor.withValues(alpha: 0.12),
+                        child: Text(
+                          widget.lead.name.isNotEmpty
+                              ? widget.lead.name[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                            color: sourceColor,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.phone_android,
-                            size: 16,
-                            color: AppTheme.gray,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              lead.mobile,
-                              style: AppTheme.bodyLarge.copyWith(
-                                color: AppTheme.darkGray,
-                                fontWeight: FontWeight.w500,
+                      const SizedBox(width: 14),
+
+                      // Name and Mobile
+                      Expanded(
+                        child: GestureDetector(
+                          onLongPress: () {
+                            Clipboard.setData(
+                              ClipboardData(text: widget.lead.name),
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Name copied: ${widget.lead.name}',
+                                ),
+                                duration: const Duration(seconds: 1),
+                                behavior: SnackBarBehavior.floating,
+                                margin: const EdgeInsets.all(8),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            );
+                            HapticFeedback.mediumImpact();
+                          },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.lead.name,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1A1A1A),
+                                  letterSpacing: -0.3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.lead.mobile,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: sourceColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(_sourceIcon(), size: 14, color: sourceColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        lead.source,
-                        style: AppTheme.bodyMedium.copyWith(
-                          color: sourceColor,
-                          fontWeight: FontWeight.w600,
+
+                      const SizedBox(width: 12),
+
+                      // Call Button
+                      GestureDetector(
+                        onTap: () {
+                          HapticFeedback.mediumImpact();
+                          widget.onCall();
+                        },
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentPurple,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.accentPurple.withValues(
+                                  alpha: 0.3,
+                                ),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.phone,
+                            color: Colors.white,
+                            size: 22,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-            if (lead.remarks != null && lead.remarks!.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.lightPurple.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentPurple.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
+
+                  const SizedBox(height: 14),
+
+                  // Divider
+                  Container(height: 1, color: Colors.grey.shade200),
+
+                  const SizedBox(height: 14),
+
+                  // Bottom Grid: Details in 2x2 layout
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildDetailItem(
+                          Icons.access_time,
+                          'Received',
+                          widget.formattedTime,
+                        ),
                       ),
-                      child: Icon(
-                        Icons.message_outlined,
-                        color: AppTheme.accentPurple,
-                        size: 16,
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildSourceItem(sourceColor)),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildDetailItem(
+                          widget.lead.isDriver ? Icons.person : Icons.business,
+                          'Role',
+                          widget.lead.role.toUpperCase(),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Message',
-                            style: AppTheme.bodyMedium.copyWith(
-                              fontSize: 12,
-                              letterSpacing: 0.2,
-                              color: AppTheme.gray,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _extractLatestFeedback(lead.remarks ?? ''),
-                            style: AppTheme.bodyLarge.copyWith(
-                              color: AppTheme.textPrimary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildDetailItem(
+                          Icons.phone_android,
+                          'Mobile',
+                          widget.lead.mobile,
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
+
+                  // Message Section
+                  if (widget.lead.remarks != null &&
+                      widget.lead.remarks!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildMessageSection(),
                   ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDetailItem(IconData icon, String label, String value) {
+    return GestureDetector(
+      onLongPress: () {
+        Clipboard.setData(ClipboardData(text: value));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$label copied: $value'),
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(8),
+          ),
+        );
+        HapticFeedback.mediumImpact();
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 16,
-                      color: AppTheme.gray,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      formattedTime,
-                      style: AppTheme.bodyMedium.copyWith(color: AppTheme.gray),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: lead.isDriver ? AppTheme.primaryBlue.withOpacity(0.12) : AppTheme.accentOrange.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF1A1A1A),
+                    fontWeight: FontWeight.w600,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        lead.isDriver ? Icons.person : Icons.business,
-                        size: 14,
-                        color: lead.isDriver ? AppTheme.primaryBlue : AppTheme.accentOrange,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        lead.role.toUpperCase(),
-                        style: AppTheme.bodyMedium.copyWith(
-                          color: lead.isDriver ? AppTheme.primaryBlue : AppTheme.accentOrange,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: onCall,
-                    icon: const Icon(Icons.call_rounded, size: 18),
-                    label: const Text('Call Now'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
+              ),
+              Icon(Icons.copy, size: 12, color: Colors.grey.shade400),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSourceItem(Color sourceColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(_sourceIcon(), size: 14, color: sourceColor),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                'Source',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => onCopyNumber(lead.mobile),
-                    icon: const Icon(Icons.copy, size: 18),
-                    label: const Text('Copy Number'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.accentPurple,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(
-                        color: AppTheme.accentPurple.withOpacity(0.2),
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: sourceColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: sourceColor.withValues(alpha: 0.3),
+              width: 1,
+            ),
+          ),
+          child: Text(
+            widget.lead.source,
+            style: TextStyle(
+              fontSize: 11,
+              color: sourceColor,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMessageSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.accentPurple.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.accentPurple.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.message_outlined, size: 16, color: AppTheme.accentPurple),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Message',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: AppTheme.accentPurple,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _extractLatestFeedback(widget.lead.remarks ?? ''),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.accentPurple.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -738,7 +883,9 @@ class _LoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: CircularProgressIndicator(color: AppTheme.accentPurple));
+    return Center(
+      child: CircularProgressIndicator(color: AppTheme.accentPurple),
+    );
   }
 }
 
@@ -763,11 +910,7 @@ class _ErrorView extends StatelessWidget {
                 color: AppTheme.error.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(45),
               ),
-              child: Icon(
-                Icons.error_outline,
-                color: AppTheme.error,
-                size: 38,
-              ),
+              child: Icon(Icons.error_outline, color: AppTheme.error, size: 38),
             ),
             const SizedBox(height: 20),
             Text(

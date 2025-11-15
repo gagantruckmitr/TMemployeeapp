@@ -140,8 +140,8 @@ class _DriverContactCardState extends State<DriverContactCard>
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder:
-                                  (context) => ProfileCompletionDetailsPage(
+                              builder: (context) =>
+                                  ProfileCompletionDetailsPage(
                                     contact: widget.contact,
                                   ),
                             ),
@@ -188,55 +188,50 @@ class _DriverContactCardState extends State<DriverContactCard>
 
                       // Call Button
                       GestureDetector(
-                        onTap:
-                            widget.isCallInProgress
-                                ? null
-                                : () {
-                                  HapticFeedback.mediumImpact();
-                                  widget.onCallPressed();
-                                },
+                        onTap: widget.isCallInProgress
+                            ? null
+                            : () {
+                                HapticFeedback.mediumImpact();
+                                widget.onCallPressed();
+                              },
                         child: Container(
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color:
-                                widget.isCallInProgress
-                                    ? Colors.grey.shade300
-                                    : const Color(0xFF2196F3),
+                            color: widget.isCallInProgress
+                                ? Colors.grey.shade300
+                                : const Color(0xFF2196F3),
                             shape: BoxShape.circle,
-                            boxShadow:
-                                widget.isCallInProgress
-                                    ? []
-                                    : [
-                                      BoxShadow(
-                                        color: const Color(
-                                          0xFF2196F3,
-                                        ).withValues(alpha: 0.3),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
+                            boxShadow: widget.isCallInProgress
+                                ? []
+                                : [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF2196F3,
+                                      ).withValues(alpha: 0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                           ),
-                          child:
-                              widget.isCallInProgress
-                                  ? const Center(
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
+                          child: widget.isCallInProgress
+                              ? const Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
                                       ),
                                     ),
-                                  )
-                                  : const Icon(
-                                    Icons.phone,
-                                    color: Colors.white,
-                                    size: 22,
                                   ),
+                                )
+                              : const Icon(
+                                  Icons.phone,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
                         ),
                       ),
                     ],
