@@ -10,6 +10,7 @@ import '../../../models/smart_calling_models.dart';
 import '../widgets/call_feedback_modal.dart';
 import '../widgets/tab_page_header.dart';
 import '../widgets/profile_completion_avatar.dart';
+import '../../../widgets/coming_soon_screen.dart';
 
 class CallbackRequestsScreen extends StatefulWidget {
   const CallbackRequestsScreen({super.key});
@@ -53,8 +54,9 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
       });
     } catch (error) {
       if (!mounted) return;
+      debugPrint('Error loading callback requests: $error');
       setState(() {
-        _error = error.toString();
+        _error = 'Unable to load callback requests';
         _isLoading = false;
       });
     }
@@ -73,20 +75,20 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
       });
     } catch (error) {
       if (!mounted) return;
+      debugPrint('Error refreshing callback requests: $error');
       setState(() {
         _isRefreshing = false;
-        _error = error.toString();
+        _error = 'Unable to refresh';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to refresh: $error',
-            style: const TextStyle(color: Colors.white),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Unable to refresh. Please try again.'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: AppTheme.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -259,7 +261,7 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
                   _isLoading
                       ? const _LoadingView()
                       : _error != null
-                      ? _ErrorView(message: _error!, onRetry: _loadRequests)
+                      ? const CallbacksNotAvailable()
                       : RefreshIndicator(
                         onRefresh: _refresh,
                         color: AppTheme.primaryBlue,
@@ -624,7 +626,7 @@ class _ErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              message,
+              'Please check your connection and try again',
               textAlign: TextAlign.center,
               style: AppTheme.bodyLarge.copyWith(color: AppTheme.gray),
             ),

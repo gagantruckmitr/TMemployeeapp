@@ -24,7 +24,8 @@ class ApiConfig {
       '$baseUrl/manager_dashboard_api.php';
   static const String telecallerAnalyticsApi =
       '$baseUrl/telecaller_analytics_api.php';
-  static const String ivrCallApi = '$baseUrl/ivr_call_api.php';
+  // Production IVR API - Click2Call
+  static const String click2CallIvrApi = '$baseUrl/click2call_ivr_api.php';
 
   // Timeout Configuration
   static const Duration timeout = Duration(seconds: 30);

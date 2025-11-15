@@ -118,6 +118,8 @@ function getJobs() {
             $transporterPhone = '';
             $transporterCity = '';
             $transporterState = '';
+            $transporterGender = '';
+            $transporterImage = '';
             $profileCompletion = 0;
             
             if (!empty($row['transporter_id'])) {
@@ -133,6 +135,8 @@ function getJobs() {
                     $transporterPhone = $user['mobile'] ?? '';
                     $transporterCity = $user['city'] ?? '';
                     $transporterState = $user['state_name'] ?? '';
+                    $transporterGender = $user['sex'] ?? '';
+                    $transporterImage = $user['images'] ?? '';
                     
                     // Calculate profile completion for transporter (EXACT same logic as profile_completion_api.php)
                     $transporterFields = [
@@ -177,6 +181,8 @@ function getJobs() {
                 'transporterPhone' => $transporterPhone,
                 'transporterCity' => $transporterCity,
                 'transporterState' => $transporterState,
+                'transporterGender' => $transporterGender,
+                'transporterImage' => $transporterImage,
                 'transporterProfileCompletion' => $profileCompletion,
                 'jobLocation' => $row['job_location'] ?? '',
                 'jobDescription' => $row['Job_Description'] ?? '',

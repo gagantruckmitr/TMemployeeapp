@@ -440,18 +440,18 @@ class ApiService {
   }
 
   // ============================================
-  // IVR CALLING API METHODS
+  // IVR CALLING API METHODS (Click2Call Production)
   // ============================================
 
-  // Initiate IVR call through MyOperator
-  static Future<Map<String, dynamic>> initiateIVRCall({
+  // Initiate IVR call through Click2Call API
+  static Future<Map<String, dynamic>> initiateClick2CallIVR({
     required String driverMobile,
     required int callerId,
     required String driverId,
   }) async {
     try {
       final uri = Uri.parse(
-        ApiConfig.ivrCallApi,
+        ApiConfig.click2CallIvrApi,
       ).replace(queryParameters: {'action': 'initiate_call'});
 
       final requestBody = {
@@ -460,7 +460,7 @@ class ApiService {
         'driver_id': driverId,
       };
 
-      print('🔵 IVR Call API Request:');
+      print('🔵 Click2Call IVR API Request:');
       print('   URL: $uri');
       print('   Body: ${json.encode(requestBody)}');
 
@@ -472,19 +472,18 @@ class ApiService {
           )
           .timeout(timeout);
 
-      print('🔵 IVR Call API Response:');
+      print('🔵 Click2Call IVR API Response:');
       print('   Status: ${response.statusCode}');
       print('   Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
-          print('✅ IVR call initiated successfully');
+          print('✅ Click2Call IVR call initiated successfully');
           print('   Reference ID: ${data['data']?['reference_id']}');
-          print('   Simulation Mode: ${data['simulation_mode']}');
           return data;
         } else {
-          print('❌ IVR call failed: ${data['error']}');
+          print('❌ Click2Call IVR call failed: ${data['error']}');
           return data;
         }
       } else {
@@ -493,7 +492,7 @@ class ApiService {
         return {'success': false, 'error': errorMsg};
       }
     } catch (e) {
-      print('❌ Exception in initiateIVRCall: $e');
+      print('❌ Exception in initiateClick2CallIVR: $e');
       return {'success': false, 'error': 'Connection error: $e'};
     }
   }
@@ -555,7 +554,7 @@ class ApiService {
   // Get call status by reference ID
   static Future<Map<String, dynamic>> getCallStatus(String referenceId) async {
     try {
-      final uri = Uri.parse(ApiConfig.ivrCallApi).replace(
+      final uri = Uri.parse(ApiConfig.click2CallIvrApi).replace(
         queryParameters: {'action': 'call_status', 'reference_id': referenceId},
       );
 
@@ -583,7 +582,7 @@ class ApiService {
   }) async {
     try {
       final uri = Uri.parse(
-        ApiConfig.ivrCallApi,
+        ApiConfig.click2CallIvrApi,
       ).replace(queryParameters: {'action': 'update_feedback'});
 
       final response = await http

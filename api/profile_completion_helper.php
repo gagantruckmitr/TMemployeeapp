@@ -1,40 +1,10 @@
 <?php
-header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+/**
+ * Shared helper function for calculating profile completion
+ * Used by both profile_completion_api.php and phase2_job_applicants_api.php
+ */
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
-}
-
-require_once __DIR__ . '/config.php';
-
-$action = $_GET['action'] ?? '';
-
-try {
-    switch ($action) {
-        case 'get_profile_details':
-            getProfileDetails($conn);
-            break;
-        default:
-            throw new Exception('Invalid action');
-    }
-} catch (Exception $e) {
-    echo json_encode([
-        'success' => false,
-        'error' => $e->getMessage()
-    ]);
-}
-
-function getProfileDetails($conn) {
-    $userId = $_GET['user_id'] ?? null;
-    
-    if (!$userId) {
-        throw new Exception('User ID is required');
-    }
-    
+function getProfileCompletionData($conn, $userId) {
     // Fetch user data with joins for vehicle_type and states
     $stmt = $conn->prepare("
         SELECT 
@@ -61,7 +31,7 @@ function getProfileDetails($conn) {
     $result = $stmt->get_result();
     
     if ($result->num_rows === 0) {
-        throw new Exception('User not found');
+        return 0;
     }
     
     $user = $result->fetch_assoc();
@@ -72,6 +42,7 @@ function getProfileDetails($conn) {
     $displayFields = []; // Fields with proper names for display
     
     if ($role === 'driver') {
+        // Exclude system fields: unique_id, id, status, role, created_at, updated_at
         $requiredFields = [
             'name', 'email', 'city', 'sex', 'vehicle_type',
             'father_name', 'images', 'address', 'dob',
@@ -88,6 +59,7 @@ function getProfileDetails($conn) {
             'states' => 'state_name'
         ];
     } elseif ($role === 'transporter') {
+        // Exclude system fields: unique_id, id
         $requiredFields = [
             'name', 'email', 'transport_name', 'year_of_establishment',
             'fleet_size', 'operational_segment', 'average_km', 'city', 'images', 'address',
@@ -95,7 +67,6 @@ function getProfileDetails($conn) {
         ];
     }
     
-    // Calculate document status and get actual values
     $documentStatus = [];
     $documentValues = [];
     $filledFields = 0;
@@ -144,21 +115,19 @@ function getProfileDetails($conn) {
     
     $completionPercentage = $totalFields > 0 ? round(($filledFields / $totalFields) * 100) : 0;
     
-    echo json_encode([
-        'success' => true,
-        'data' => [
-            'user_id' => $user['id'],
-            'unique_id' => $user['unique_id'],
-            'name' => $user['name'],
-            'role' => $role,
-            'profile_completion' => [
-                'percentage' => $completionPercentage,
-                'filled_fields' => $filledFields,
-                'total_fields' => $totalFields,
-                'document_status' => $documentStatus,
-                'document_values' => $documentValues
-            ]
-        ]
-    ]);
+    return [
+        'percentage' => $completionPercentage,
+        'filled_fields' => $filledFields,
+        'total_fields' => $totalFields,
+        'document_status' => $documentStatus,
+        'document_values' => $documentValues,
+        'user_data' => $user
+    ];
+}
+
+// Simple function that just returns the percentage
+function calculateProfileCompletion($conn, $userId) {
+    $data = getProfileCompletionData($conn, $userId);
+    return $data['percentage'];
 }
 ?>

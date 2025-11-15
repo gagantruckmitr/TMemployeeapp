@@ -8,9 +8,10 @@ import '../jobs/dynamic_jobs_screen.dart';
 
 import '../calls/call_history_hub_screen.dart';
 import '../analytics/call_analytics_screen.dart';
-import '../profile/profile_screen.dart';
+import '../telecaller/screens/dynamic_profile_screen.dart';
 import 'widgets/activity_feed_item.dart';
 import 'widgets/job_card.dart';
+import '../../widgets/coming_soon_screen.dart';
 
 class DynamicDashboardScreen extends StatefulWidget {
   const DynamicDashboardScreen({super.key});
@@ -136,7 +137,7 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                MaterialPageRoute(builder: (_) => const DynamicProfileScreen()),
               );
             },
             child: Container(
@@ -160,22 +161,7 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error.isNotEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline,
-                          size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text('Error: $_error'),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadDashboardData,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
+              ? const MatchMakingComingSoon()
               : RefreshIndicator(
                   onRefresh: _loadDashboardData,
                   child: SingleChildScrollView(
@@ -301,7 +287,7 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 170,
+          height: 118,
           child: ListView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -315,7 +301,7 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
                 const Color(0xFFEEF2FF), // Indigo light
                 () => _navigateToJobs('all'),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               _buildKPICard(
                 'Approved',
                 _stats!.approvedJobs.toString(),
@@ -324,7 +310,7 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
                 const Color(0xFFECFDF5), // Green light
                 () => _navigateToJobs('approved'),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               _buildKPICard(
                 'Pending',
                 _stats!.pendingJobs.toString(),
@@ -333,7 +319,7 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
                 const Color(0xFFFEF3C7), // Amber light
                 () => _navigateToJobs('pending'),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               _buildKPICard(
                 'Inactive',
                 _stats!.inactiveJobs.toString(),
@@ -342,7 +328,7 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
                 const Color(0xFFF3F4F6), // Grey light
                 () => _navigateToJobs('inactive'),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               _buildKPICard(
                 'Expired',
                 _stats!.expiredJobs.toString(),
@@ -369,8 +355,8 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 140,
-        padding: const EdgeInsets.all(18),
+        width: 110,
+        padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -391,8 +377,8 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
           children: [
             // Icon circle
             Container(
-              width: 48,
-              height: 48,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: iconBackground,
                 shape: BoxShape.circle,
@@ -400,28 +386,29 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
               child: Icon(
                 icon,
                 color: iconColor,
-                size: 24,
+                size: 18,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 7),
 
             // Number
             Text(
               value,
               style: const TextStyle(
-                fontSize: 32,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF1A1A1A),
                 height: 1.0,
+                letterSpacing: -0.5,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 3),
 
             // Label
             Text(
               title,
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF6B7280),
               ),
@@ -483,26 +470,27 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 140,
-        padding: const EdgeInsets.all(24),
+        height: 120,
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 2),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Circular icon background
             Container(
-              width: 64,
-              height: 64,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 color: iconBackground,
                 shape: BoxShape.circle,
@@ -510,18 +498,19 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
               child: Icon(
                 icon,
                 color: iconColor,
-                size: 32,
+                size: 24,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
             // Title
             Text(
               title,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF1A1F3A),
+                letterSpacing: -0.2,
               ),
             ),
           ],
@@ -541,8 +530,8 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                AppColors.primary,
-                AppColors.primary.withValues(alpha: 0.8),
+                Color(0xFF0A2472), // dark navy blue
+                Color(0xFF1E40AF), // rich blue tone
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,

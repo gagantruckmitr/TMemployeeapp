@@ -16,6 +16,7 @@ import '../../core/services/telecaller_service.dart';
 import '../../core/services/activity_tracker_service.dart';
 import 'screens/search_users_screen.dart';
 import 'screens/pending_calls_screen.dart';
+import 'performance_analytics_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
@@ -99,14 +100,35 @@ class _DashboardPageState extends State<DashboardPage>
     } catch (e) {
       print('❌ Error loading dashboard stats: $e');
       if (mounted) {
-        // Error occurred while loading stats
+        // Get user-friendly error message
+        String errorMessage = 'Unable to load dashboard';
+        final errorString = e.toString().toLowerCase();
+        
+        if (errorString.contains('socket') || 
+            errorString.contains('failed host lookup') ||
+            errorString.contains('network')) {
+          errorMessage = 'No internet connection';
+        } else if (errorString.contains('timeout')) {
+          errorMessage = 'Connection timeout';
+        }
 
         // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load dashboard: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '$errorMessage. Please check your connection and try again.',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red.shade600,
+            duration: const Duration(seconds: 4),
             action: SnackBarAction(
               label: 'Retry',
               textColor: Colors.white,
@@ -241,6 +263,11 @@ class _DashboardPageState extends State<DashboardPage>
 
                       // Call History Section
                       _buildCallHistorySection(),
+
+                      const SizedBox(height: 20),
+
+                      // Call Analytics Section
+                      _buildCallAnalyticsSection(),
 
                       const SizedBox(height: 20),
 
@@ -771,6 +798,97 @@ class _DashboardPageState extends State<DashboardPage>
     if (widget.onNavigateToSection != null) {
       widget.onNavigateToSection!(NavigationSection.callHistory);
     }
+  }
+
+  Widget _buildCallAnalyticsSection() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _navigateToCallAnalytics,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppTheme.primaryBlue.withOpacity(0.1),
+                AppTheme.accentPurple.withOpacity(0.1),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppTheme.primaryBlue.withOpacity(0.3),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryBlue.withOpacity(0.1),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryBlue.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.analytics_rounded,
+                  color: AppTheme.primaryBlue,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Call Analytics',
+                      style: AppTheme.titleMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Track performance & view detailed insights',
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Colors.grey.shade400,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToCallAnalytics() {
+    HapticFeedback.lightImpact();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PerformanceAnalyticsPage(
+          onNavigateBack: () => Navigator.pop(context),
+        ),
+      ),
+    );
   }
 
   Widget _buildPerformanceSection() {

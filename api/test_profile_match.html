@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Profile Completion API Comparison Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #3B82F6;
+            padding-bottom: 10px;
+        }
+        .input-group {
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background: #3B82F6;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #2563EB;
+        }
+        .results {
+            margin-top: 30px;
+            display: none;
+        }
+        .result-box {
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .result-box h3 {
+            margin-top: 0;
+            color: #1f2937;
+        }
+        .percentage {
+            font-size: 48px;
+            font-weight: bold;
+            color: #3B82F6;
+            margin: 10px 0;
+        }
+        .match {
+            background: #d1fae5;
+            border-color: #10b981;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-weight: bold;
+            color: #065f46;
+        }
+        .mismatch {
+            background: #fee2e2;
+            border-color: #ef4444;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-weight: bold;
+            color: #991b1b;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .error {
+            background: #fee2e2;
+            border: 2px solid #ef4444;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        pre {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Profile Completion API Comparison Test</h1>
+        <p>This tool compares profile completion percentages from both APIs to ensure they match.</p>
+        
+        <div class="input-group">
+            <label for="userId">User ID:</label>
+            <input type="number" id="userId" placeholder="Enter user ID (e.g., 123)" value="">
+        </div>
+        
+        <div class="input-group">
+            <label for="jobId">Job ID (for job applicants API):</label>
+            <input type="text" id="jobId" placeholder="Enter job ID (e.g., TMJB00418)" value="">
+        </div>
+        
+        <button onclick="runTest()">Run Comparison Test</button>
+        
+        <div id="results" class="results">
+            <div id="loading" class="loading">Loading...</div>
+            <div id="content" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        async function runTest() {
+            const userId = document.getElementById('userId').value;
+            const jobId = document.getElementById('jobId').value;
+            
+            if (!userId) {
+                alert('Please enter a User ID');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('results');
+            const loadingDiv = document.getElementById('loading');
+            const contentDiv = document.getElementById('content');
+            
+            resultsDiv.style.display = 'block';
+            loadingDiv.style.display = 'block';
+            contentDiv.style.display = 'none';
+            contentDiv.innerHTML = '';
+            
+            try {
+                // Test 1: Profile Completion API
+                const response1 = await fetch(`/truckmitr-app/api/profile_completion_api.php?action=get_profile_details&user_id=${userId}`);
+                const data1 = await response1.json();
+                
+                let percentage1 = null;
+                let error1 = null;
+                if (data1.success) {
+                    percentage1 = data1.data.profile_completion.percentage;
+                } else {
+                    error1 = data1.error || 'Unknown error';
+                }
+                
+                // Test 2: Job Applicants API (if job_id provided)
+                let percentage2 = null;
+                let error2 = null;
+                let applicantFound = false;
+                
+                if (jobId) {
+                    const response2 = await fetch(`/truckmitr-app/api/phase2_job_applicants_api.php?job_id=${jobId}`);
+                    const data2 = await response2.json();
+                    
+                    if (data2.success && data2.data && data2.data.applicants) {
+                        const applicant = data2.data.applicants.find(a => a.driverId == userId);
+                        if (applicant) {
+                            percentage2 = applicant.profileCompletion;
+                            applicantFound = true;
+                        } else {
+                            error2 = 'User not found in job applicants';
+                        }
+                    } else {
+                        error2 = data2.message || 'Failed to fetch job applicants';
+                    }
+                }
+                
+                // Display results
+                let html = '';
+                
+                // API 1 Result
+                html += '<div class="result-box">';
+                html += '<h3>📋 Profile Completion API</h3>';
+                if (error1) {
+                    html += `<div class="error">Error: ${error1}</div>`;
+                } else {
+                    html += `<div class="percentage">${percentage1}%</div>`;
+                    html += `<p>Endpoint: <code>profile_completion_api.php</code></p>`;
+                }
+                html += '</div>';
+                
+                // API 2 Result
+                if (jobId) {
+                    html += '<div class="result-box">';
+                    html += '<h3>👥 Job Applicants API</h3>';
+                    if (error2) {
+                        html += `<div class="error">Error: ${error2}</div>`;
+                    } else {
+                        html += `<div class="percentage">${percentage2}%</div>`;
+                        html += `<p>Endpoint: <code>phase2_job_applicants_api.php</code></p>`;
+                    }
+                    html += '</div>';
+                }
+                
+                // Comparison
+                if (!error1 && (!jobId || (!error2 && applicantFound))) {
+                    if (!jobId) {
+                        html += '<div class="match">✅ Profile Completion API returned: ' + percentage1 + '%</div>';
+                        html += '<p><em>Provide a Job ID to compare with Job Applicants API</em></p>';
+                    } else if (percentage1 === percentage2) {
+                        html += '<div class="match">✅ MATCH! Both APIs return the same percentage: ' + percentage1 + '%</div>';
+                    } else {
+                        html += '<div class="mismatch">❌ MISMATCH! API 1: ' + percentage1 + '% vs API 2: ' + percentage2 + '% (Difference: ' + Math.abs(percentage1 - percentage2) + '%)</div>';
+                    }
+                }
+                
+                contentDiv.innerHTML = html;
+                loadingDiv.style.display = 'none';
+                contentDiv.style.display = 'block';
+                
+            } catch (error) {
+                contentDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                loadingDiv.style.display = 'none';
+                contentDiv.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>

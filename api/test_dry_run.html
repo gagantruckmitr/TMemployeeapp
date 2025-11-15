@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Click2Call IVR - Dry Run Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .info-box h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .info-value {
+            color: #333;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .btn-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .btn-test {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        
+        .btn-test:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .btn-test:active {
+            transform: translateY(0);
+        }
+        
+        .btn-test:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .result {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 10px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .result.active {
+            display: block;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+        
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .warning-box strong {
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📞 Click2Call IVR - Dry Run Test</h1>
+            <p>Test the IVR API without database dependencies</p>
+        </div>
+        
+        <div class="content">
+            <div class="warning-box">
+                <strong>⚠️ Important:</strong> This is a DRY RUN test. It will make a REAL call to the numbers below. Make sure both phones are ready to receive calls!
+            </div>
+            
+            <div class="info-box">
+                <h3>📋 Test Configuration</h3>
+                <div class="info-item">
+                    <span class="info-label">Telecaller Number:</span>
+                    <span class="info-value">6394756798</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Driver Number:</span>
+                    <span class="info-value">8448079624</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Test Mode:</span>
+                    <span class="info-value">DRY RUN (No Database)</span>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <h3>🎯 What This Test Does</h3>
+                <ul style="margin-left: 20px; color: #555; line-height: 1.8;">
+                    <li>Calls Click2Call IVR API directly</li>
+                    <li>Uses your test phone numbers</li>
+                    <li>Skips database validation</li>
+                    <li>Shows real API response</li>
+                    <li>Both phones will ring if successful</li>
+                </ul>
+            </div>
+            
+            <div class="btn-container">
+                <button class="btn-test" onclick="runTest()">
+                    🚀 Run Test Call
+                </button>
+            </div>
+            
+            <div class="loading">
+                <div class="spinner"></div>
+                <p style="color: #667eea; font-weight: 600;">Calling API... Please wait</p>
+            </div>
+            
+            <div class="result" id="result"></div>
+        </div>
+    </div>
+    
+    <script>
+        async function runTest() {
+            const btn = document.querySelector('.btn-test');
+            const loading = document.querySelector('.loading');
+            const result = document.getElementById('result');
+            
+            // Disable button and show loading
+            btn.disabled = true;
+            loading.classList.add('active');
+            result.classList.remove('active', 'success', 'error');
+            result.textContent = '';
+            
+            try {
+                const response = await fetch('test_dry_run.php');
+                const text = await response.text();
+                
+                // Hide loading
+                loading.classList.remove('active');
+                
+                // Show result
+                result.textContent = text;
+                result.classList.add('active');
+                
+                // Determine if success or error
+                if (text.includes('TEST PASSED') || text.includes('CALL INITIATED SUCCESSFULLY')) {
+                    result.classList.add('success');
+                } else {
+                    result.classList.add('error');
+                }
+                
+            } catch (error) {
+                loading.classList.remove('active');
+                result.textContent = '❌ Error: ' + error.message;
+                result.classList.add('active', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

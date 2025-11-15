@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
@@ -95,6 +96,36 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  String? _getProfileImageUrl(String imagePath) {
+    if (imagePath.isEmpty || imagePath.toLowerCase() == 'null') return null;
+    
+    // Try to parse as JSON array
+    try {
+      final decoded = json.decode(imagePath);
+      if (decoded is List && decoded.isNotEmpty) {
+        imagePath = decoded[0].toString();
+      }
+    } catch (e) {
+      // Not JSON, use as is
+    }
+    
+    // If it's already a full URL
+    if (imagePath.startsWith('http')) {
+      return imagePath;
+    }
+    
+    // If it's a relative path, prepend the correct base URL
+    if (imagePath.isNotEmpty) {
+      // Remove leading slash if present
+      if (imagePath.startsWith('/')) {
+        imagePath = imagePath.substring(1);
+      }
+      return 'https://truckmitr.com/public/$imagePath';
+    }
+    
+    return null;
   }
 
   @override
@@ -402,6 +433,10 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                   userType: 'driver',
                   size: 56,
                   completionPercentage: driver.profileCompletion,
+                  profileImageUrl: driver.profileImage != null && driver.profileImage!.isNotEmpty
+                      ? _getProfileImageUrl(driver.profileImage!)
+                      : null,
+                  gender: driver.gender,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

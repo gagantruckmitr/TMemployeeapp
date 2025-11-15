@@ -151,11 +151,11 @@ class _SmartCallingPageState extends State<SmartCallingPage>
                     color: AppTheme.primaryBlue,
                   ),
                   title: const Text('IVR Call'),
-                  subtitle: const Text('MyOperator progressive dialing'),
-                  onTap: () => Navigator.pop(context, 'ivr'),
+                  subtitle: const Text('Automated IVR calling (Recommended)'),
+                  onTap: () => Navigator.pop(context, 'click2call'),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: AppTheme.primaryBlue),
+                    side: BorderSide(color: AppTheme.primaryBlue, width: 2),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -193,184 +193,10 @@ class _SmartCallingPageState extends State<SmartCallingPage>
           return;
         }
 
-        // IVR call flow continues below
-        if (!mounted) return;
-
-        final proceed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('📞 Progressive Dialing'),
-            content: Text(
-              'MyOperator will call the driver first.\n\n'
-              '1. ${contact.name}\'s phone will ring FIRST\n'
-              '2. When driver picks up, they hear IVR message\n'
-              '3. YOUR phone will ring NEXT\n'
-              '4. When you pick up - instant connection!\n'
-              '5. Driver number remains hidden\n\n'
-              'Ready to proceed?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Start Call'),
-              ),
-            ],
-          ),
-        );
-
-        if (proceed != true) {
-          setState(() {
-            _isCallInProgress = false;
-            _currentCallingContact = null;
-          });
+        // Use Click2Call IVR as the default IVR option
+        if (callType == 'click2call' || callType == 'ivr') {
+          await _handleClick2CallIVR(contact, callerId);
           return;
-        }
-
-        if (!mounted) return;
-
-        // Show loading indicator
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📞 Initiating call...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-
-        // Clean phone number - remove all non-digits
-        final cleanDriverMobile = contact.phoneNumber.replaceAll(
-          RegExp(r'[^\d]'),
-          '',
-        );
-        debugPrint('🔵 Clean driver mobile: $cleanDriverMobile');
-
-        // Initiate IVR call through MyOperator
-        debugPrint('🔵 Calling SmartCallingService.initiateIVRCall...');
-        final result = await SmartCallingService.instance.initiateIVRCall(
-          driverMobile: cleanDriverMobile,
-          callerId: callerId,
-          driverId: contact.id,
-        );
-
-        debugPrint('🔔 Call Result: $result');
-
-        if (mounted) {
-          if (result['success'] == true) {
-            final referenceId = result['data']?['reference_id'];
-            final isSimulation = result['simulation_mode'] == true;
-
-            debugPrint(
-              '✅ Call initiated successfully! Simulation: $isSimulation, Ref: $referenceId',
-            );
-
-            if (isSimulation) {
-              // Simulation mode - show warning and quick feedback
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    '⚠️ Simulation mode - Configure MyOperator for real calls',
-                  ),
-                  backgroundColor: Colors.orange,
-                  duration: Duration(seconds: 5),
-                ),
-              );
-
-              await Future.delayed(const Duration(seconds: 2));
-
-              if (mounted) {
-                _showFeedbackModal(
-                  contact,
-                  referenceId: referenceId,
-                  callDuration: 0,
-                );
-              }
-            } else {
-              // Real call mode - show success message
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '✅ Call initiated! ${contact.name}\'s phone will ring first.\n'
-                    'When they pick up, YOUR phone will ring. Answer to connect!',
-                  ),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 8),
-                  action: SnackBarAction(
-                    label: 'Got it',
-                    textColor: Colors.white,
-                    onPressed: () {},
-                  ),
-                ),
-              );
-
-              // Show "Call in progress" dialog
-              if (mounted) {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (context) => PopScope(
-                    canPop: false,
-                    child: AlertDialog(
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Call in Progress',
-                            style: AppTheme.titleMedium.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Driver is being called first.\nYour phone will ring when driver picks up.\nComplete the call and submit feedback.',
-                            textAlign: TextAlign.center,
-                            style: AppTheme.bodyLarge.copyWith(
-                              color: AppTheme.gray,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              _showFeedbackModal(
-                                contact,
-                                referenceId: referenceId,
-                                callDuration: 0,
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryBlue,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
-                            ),
-                            child: const Text('Call Ended - Submit Feedback'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }
-            }
-          } else {
-            // Show error
-            final errorMsg = result['error'] ?? 'Unknown error';
-            debugPrint('❌ Call failed: $errorMsg');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to initiate call: $errorMsg'),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 5),
-              ),
-            );
-          }
         }
       }
     } catch (e) {
@@ -380,6 +206,137 @@ class _SmartCallingPageState extends State<SmartCallingPage>
             content: Text('Error initiating call: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCallInProgress = false;
+          _currentCallingContact = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleClick2CallIVR(DriverContact contact, int callerId) async {
+    try {
+      // Clean phone number
+      final cleanDriverMobile = contact.phoneNumber.replaceAll(
+        RegExp(r'[^\d]'),
+        '',
+      );
+
+      debugPrint(
+        '📞 Click2Call IVR - Driver: ${contact.name}, Mobile: $cleanDriverMobile',
+      );
+
+      if (!mounted) return;
+
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📞 Initiating Click2Call IVR...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Initiate Click2Call IVR
+      final result = await SmartCallingService.instance.initiateClick2CallIVR(
+        driverMobile: cleanDriverMobile,
+        callerId: callerId,
+        driverId: contact.id,
+      );
+
+      debugPrint('🔔 Click2Call Result: $result');
+
+      if (mounted) {
+        if (result['success'] == true) {
+          final referenceId = result['data']?['reference_id'];
+
+          debugPrint('✅ Click2Call IVR initiated! Ref: $referenceId');
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '✅ IVR call initiated! Both phones will ring.\n'
+                'Complete the call and submit feedback.',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+
+          // Show "Call in progress" dialog
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => PopScope(
+              canPop: false,
+              child: AlertDialog(
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      'IVR Call in Progress',
+                      style: AppTheme.titleMedium.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'IVR system is connecting the call.\nBoth phones will ring.\nComplete the call and submit feedback.',
+                      textAlign: TextAlign.center,
+                      style: AppTheme.bodyLarge.copyWith(
+                        color: AppTheme.gray,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _showFeedbackModal(
+                          contact,
+                          referenceId: referenceId,
+                          callDuration: 0,
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryBlue,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: const Text('Call Ended - Submit Feedback'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        } else {
+          // Show error
+          final errorMsg = result['error'] ?? 'Unknown error';
+          debugPrint('❌ Click2Call failed: $errorMsg');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to initiate IVR call: $errorMsg'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Click2Call error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }

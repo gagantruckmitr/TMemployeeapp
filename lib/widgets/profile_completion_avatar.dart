@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/profile_completion_details_screen.dart';
+import '../screens/profile_completion_loader_screen.dart';
 import 'progress_ring_avatar.dart';
 
 class ProfileCompletionAvatar extends StatelessWidget {
@@ -10,6 +10,8 @@ class ProfileCompletionAvatar extends StatelessWidget {
   final int? completionPercentage;
   final String? profileImageUrl;
   final String? gender;
+  final String? tmId;
+  final Map<String, dynamic>? profileData;
 
   const ProfileCompletionAvatar({
     super.key,
@@ -20,6 +22,8 @@ class ProfileCompletionAvatar extends StatelessWidget {
     this.completionPercentage,
     this.profileImageUrl,
     this.gender,
+    this.tmId,
+    this.profileData,
   });
 
   @override
@@ -34,10 +38,11 @@ class ProfileCompletionAvatar extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ProfileCompletionDetailsScreen(
+            builder: (context) => ProfileCompletionLoaderScreen(
               userId: userId,
               userName: name,
               userType: userType,
+              tmId: tmId,
             ),
           ),
         );

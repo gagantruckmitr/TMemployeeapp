@@ -143,17 +143,17 @@ function initiateCall($pdo) {
     }
     
     try {
-        // Get telecaller info from admins table
-        $stmt = $pdo->prepare("SELECT mobile, name FROM admins WHERE id = ?");
+        // Get telecaller info from admins table (only telecallers, not admins)
+        $stmt = $pdo->prepare("SELECT mobile, name, role FROM admins WHERE id = ? AND role = 'telecaller'");
         $stmt->execute([$callerId]);
         $telecaller = $stmt->fetch();
         
         if (!$telecaller) {
             echo json_encode([
                 'success' => false,
-                'error' => 'Telecaller not found in database',
+                'error' => 'Telecaller not found or user is not a telecaller',
                 'caller_id' => $callerId,
-                'debug' => 'Please ensure telecaller exists in admins table'
+                'note' => 'Only users with role=telecaller can make calls'
             ]);
             return;
         }

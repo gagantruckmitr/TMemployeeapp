@@ -5,6 +5,7 @@
  */
 
 require_once 'config.php';
+require_once 'profile_completion_helper.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     getJobApplicants();
@@ -56,6 +57,8 @@ function getJobApplicants() {
             u.city,
             u.states as state_id,
             s.name as state_name,
+            u.sex as gender,
+            u.images as profile_image,
             COALESCE(vt.vehicle_name, u.vehicle_type) as vehicle_type,
             s2.name as preferred_location_name,
             u.Driving_Experience,
@@ -119,38 +122,9 @@ function getJobApplicants() {
         
         $applicants = [];
         while ($row = $result->fetch_assoc()) {
-            // Calculate profile completion using EXACT same logic as profile_completion_api.php
+            // Calculate profile completion using shared helper function
             $driverId = $row['driver_id'];
-            
-            // Fetch full user data
-            $userQuery = "SELECT * FROM users WHERE id = $driverId";
-            $userResult = $conn->query($userQuery);
-            $userData = $userResult->fetch_assoc();
-            
-            // Use EXACT same fields and logic as phase2_profile_completion_api.php
-            // Define fields in same structure - using exact database column names (case-sensitive)
-            $fields = [
-                'Basic Info' => ['name', 'email', 'city', 'sex', 'father_name', 'address', 'dob'],
-                'Professional' => ['vehicle_type', 'Type_of_License', 'Driving_Experience', 'highest_education', 'License_Number', 'expiry_date_of_license'],
-                'Income' => ['expected_monthly_income', 'current_monthly_income', 'marital_status', 'Preferred_Location'],
-                'Documents' => ['Aadhar_Number', 'aadhar_photo', 'driving_license', 'images'],
-                'Employment' => ['previous_employer', 'job_placement']
-            ];
-            
-            $totalFields = 0;
-            $filledFields = 0;
-            
-            foreach ($fields as $category => $fieldList) {
-                foreach ($fieldList as $field) {
-                    $value = $userData[$field] ?? null;
-                    $isFilled = !empty($value) && $value !== '0000-00-00';
-                    
-                    $totalFields++;
-                    if ($isFilled) $filledFields++;
-                }
-            }
-            
-            $profileCompletion = $totalFields > 0 ? round(($filledFields / $totalFields) * 100) : 0;
+            $profileCompletion = calculateProfileCompletion($conn, $driverId);
             
             // Calculate subscription status - only for subscription payment type
             $subscriptionStatus = 'inactive';
@@ -203,6 +177,8 @@ function getJobApplicants() {
                 'email' => $row['email'] ?? '',
                 'city' => $row['city'] ?? '',
                 'state' => $row['state_name'] ?? '',
+                'gender' => $row['gender'] ?? '',
+                'profileImage' => $row['profile_image'] ?? '',
                 'vehicleType' => $row['vehicle_type'] ?? '',
                 'drivingExperience' => $row['Driving_Experience'] ?? '',
                 'licenseType' => $row['Type_of_License'] ?? '',

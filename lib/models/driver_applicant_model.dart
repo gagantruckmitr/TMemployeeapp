@@ -11,6 +11,8 @@ class DriverApplicant {
   final String email;
   final String city;
   final String state;
+  final String? gender;
+  final String? profileImage;
   final String vehicleType;
   final String drivingExperience;
   final String licenseType;
@@ -45,6 +47,8 @@ class DriverApplicant {
     required this.email,
     required this.city,
     required this.state,
+    this.gender,
+    this.profileImage,
     required this.vehicleType,
     required this.drivingExperience,
     required this.licenseType,
@@ -81,6 +85,8 @@ class DriverApplicant {
       email: json['email'] ?? '',
       city: json['city'] ?? '',
       state: json['state'] ?? '',
+      gender: json['gender'],
+      profileImage: json['profileImage'],
       vehicleType: json['vehicleType'] ?? '',
       drivingExperience: json['drivingExperience'] ?? '',
       licenseType: json['licenseType'] ?? '',

@@ -87,7 +87,7 @@ class JobModel {
       transporterCity: json['transporterCity'] ?? '',
       transporterState: json['transporterState'] ?? '',
       transporterProfileCompletion: json['transporterProfileCompletion'] ?? 0,
-      transporterProfilePhoto: json['transporterProfilePhoto'],
+      transporterProfilePhoto: json['transporterImage'] ?? json['transporterProfilePhoto'],
       transporterGender: json['transporterGender'],
       jobLocation: json['jobLocation'] ?? '',
       jobDescription: json['jobDescription'] ?? '',

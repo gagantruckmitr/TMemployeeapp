@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../../../models/smart_calling_models.dart';
 import '../../../core/services/api_service.dart';
 
@@ -14,14 +15,29 @@ class ProfileCompletionDetailsPage extends StatefulWidget {
 }
 
 class _ProfileCompletionDetailsPageState
-    extends State<ProfileCompletionDetailsPage> {
+    extends State<ProfileCompletionDetailsPage>
+    with SingleTickerProviderStateMixin {
   ProfileCompletion? _detailedCompletion;
   bool _isLoading = true;
+  late TabController _tabController;
+  int _selectedTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      setState(() {
+        _selectedTabIndex = _tabController.index;
+      });
+    });
     _loadDetailedProfileData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDetailedProfileData() async {
@@ -254,12 +270,12 @@ class _ProfileCompletionDetailsPageState
     final totalDocs = documents.length;
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () {
             HapticFeedback.lightImpact();
             Navigator.pop(context);
@@ -268,7 +284,7 @@ class _ProfileCompletionDetailsPageState
         title: const Text(
           'Profile Completion',
           style: TextStyle(
-            color: Color(0xFF1A1A1A),
+            color: Colors.black,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -277,341 +293,692 @@ class _ProfileCompletionDetailsPageState
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Column(
-                  children: [
-                    // Header Card
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          // Avatar with circular progress
-                          Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              SizedBox(
-                                width: 70,
-                                height: 70,
-                                child: CircularProgressIndicator(
-                                  value: percentage / 100,
-                                  strokeWidth: 4,
-                                  backgroundColor: Colors.grey.shade300,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    progressColor,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                width: 56,
-                                height: 56,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2196F3),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    widget.contact.name
-                                        .substring(0, 1)
-                                        .toUpperCase(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(width: 12),
-
-                          // Name and details
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  widget.contact.name,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF1A1A1A),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  widget.contact.tmid,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      percentage >= 80
-                                          ? Icons.check_circle
-                                          : percentage >= 50
-                                          ? Icons.warning_amber_rounded
-                                          : Icons.error_outline,
-                                      color: progressColor,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '$percentage% Complete',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: progressColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '$completedDocs/$totalDocs docs',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Completed Documents Section
-                    if (completedDocs > 0)
-                      Container(
-                        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF4CAF50,
-                                    ).withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.check_circle,
-                                    color: Color(0xFF4CAF50),
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Completed Documents ($completedDocs)',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.grey.shade800,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Divider(height: 1, color: Colors.grey.shade200),
-                          ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: documents
-                                .where((doc) => doc.isPresent)
-                                .length,
-                            separatorBuilder: (context, index) => Divider(
-                              height: 1,
-                              color: Colors.grey.shade200,
-                              indent: 56,
-                            ),
-                            itemBuilder: (context, index) {
-                              final completedDocsList = documents
-                                  .where((doc) => doc.isPresent)
-                                  .toList();
-                              return _buildDocumentItem(
-                                completedDocsList[index],
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Missing Documents Section
-                    if (totalDocs - completedDocs > 0)
-                      Container(
-                        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFFF44336,
-                                    ).withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.error_outline,
-                                    color: Color(0xFFF44336),
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Missing Documents (${totalDocs - completedDocs})',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.grey.shade800,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Divider(height: 1, color: Colors.grey.shade200),
-                          ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: documents
-                                .where((doc) => !doc.isPresent)
-                                .length,
-                            separatorBuilder: (context, index) => Divider(
-                              height: 1,
-                              color: Colors.grey.shade200,
-                              indent: 56,
-                            ),
-                            itemBuilder: (context, index) {
-                              final missingDocsList = documents
-                                  .where((doc) => !doc.isPresent)
-                                  .toList();
-                              return _buildDocumentItem(missingDocsList[index]);
-                            },
-                          ),
-                          ],
-                        ),
-                      ),
-                  ],
+          : Column(
+              children: [
+                // Profile Section
+                _buildProfileSection(
+                  percentage,
+                  progressColor,
+                  completedDocs,
+                  totalDocs,
                 ),
-              ),
+
+                // Tab Navigation
+                _buildTabNavigation(),
+
+                // Tab Content
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildPersonalDetailTab(),
+                      _buildDrivingDetailsTab(),
+                      _buildUploadedDocumentsTab(),
+                    ],
+                  ),
+                ),
+              ],
             ),
     );
   }
 
-  Widget _buildDocumentItem(DocumentItem doc) {
+  Widget _buildProfileSection(
+    int percentage,
+    Color progressColor,
+    int completedDocs,
+    int totalDocs,
+  ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
         children: [
-          // Status icon
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: doc.isPresent
-                  ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
-                  : Colors.grey.shade200,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              doc.isPresent ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: doc.isPresent
-                  ? const Color(0xFF4CAF50)
-                  : Colors.grey.shade400,
-              size: 20,
+          // Circular Progress with Profile Image
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              // Outer Progress Circle (120x120)
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: CircularProgressIndicator(
+                  value: percentage / 100,
+                  strokeWidth: 6,
+                  backgroundColor: const Color(0xFFE5E7EB),
+                  valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                ),
+              ),
+
+              // Inner Profile Image/Avatar (100x100)
+              Container(
+                width: 100,
+                height: 100,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFF3B82F6),
+                ),
+                child: Center(
+                  child: Text(
+                    widget.contact.name.isNotEmpty
+                        ? widget.contact.name[0].toUpperCase()
+                        : 'U',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Percentage Badge (Bottom-right)
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: progressColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    '$percentage%',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // TM ID
+          Text(
+            widget.contact.tmid,
+            style: const TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
           ),
 
-          const SizedBox(width: 12),
+          const SizedBox(height: 4),
 
-          // Document name and value
+          // Completion Status
+          Text(
+            '$completedDocs/23 docs',
+            style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabNavigation() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          _buildTabItem('Personal Detail', 0),
+          _buildTabItem('Driving Details', 1),
+          _buildTabItem('Uploaded Documents', 2),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabItem(String title, int index) {
+    final isSelected = _selectedTabIndex == index;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          _tabController.animateTo(index);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected
+                  ? const Color(0xFF3B82F6)
+                  : const Color(0xFF6B7280),
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonalDetailTab() {
+    final completion = _detailedCompletion ?? widget.contact.profileCompletion;
+    final values = completion?.documentValues ?? {};
+
+    final personalFields = [
+      {'key': 'name', 'label': 'Full Name', 'icon': Icons.person_outline},
+      {'key': 'email', 'label': 'Email', 'icon': Icons.email_outlined},
+      {
+        'key': 'father_name',
+        'label': 'Father Name',
+        'icon': Icons.family_restroom_outlined,
+      },
+      {
+        'key': 'dob',
+        'label': 'DOB',
+        'icon': Icons.cake_outlined,
+        'isDate': true,
+      },
+      {'key': 'sex', 'label': 'Gender', 'icon': Icons.wc_outlined},
+      {
+        'key': 'marital_status',
+        'label': 'Marital Status',
+        'icon': Icons.favorite_outline,
+      },
+      {
+        'key': 'highest_education',
+        'label': 'Highest Education',
+        'icon': Icons.school_outlined,
+      },
+      {'key': 'address', 'label': 'Address', 'icon': Icons.home_outlined},
+      {'key': 'city', 'label': 'City', 'icon': Icons.location_city_outlined},
+      {'key': 'state', 'label': 'State', 'icon': Icons.map_outlined},
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        children: personalFields.map((field) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildInfoCard(
+              field['key'] as String,
+              field['label'] as String,
+              field['icon'] as IconData,
+              values,
+              isDate: field['isDate'] as bool? ?? false,
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildDrivingDetailsTab() {
+    final completion = _detailedCompletion ?? widget.contact.profileCompletion;
+    final values = completion?.documentValues ?? {};
+
+    final drivingFields = [
+      {
+        'key': 'vehicle_type',
+        'label': 'Vehicle Type',
+        'icon': Icons.local_shipping_outlined,
+      },
+      {
+        'key': 'driving_experience',
+        'label': 'Driving Experience',
+        'icon': Icons.speed_outlined,
+      },
+      {
+        'key': 'preferred_location',
+        'label': 'Preferred Location',
+        'icon': Icons.location_on_outlined,
+      },
+      {
+        'key': 'current_monthly_income',
+        'label': 'Current Monthly Income',
+        'icon': Icons.currency_rupee,
+      },
+      {
+        'key': 'expected_monthly_income',
+        'label': 'Expected Monthly Income',
+        'icon': Icons.trending_up_outlined,
+      },
+      {
+        'key': 'type_of_license',
+        'label': 'Type of License',
+        'icon': Icons.badge_outlined,
+      },
+      {
+        'key': 'previous_employer',
+        'label': 'Previous Employer',
+        'icon': Icons.work_outline,
+      },
+      {
+        'key': 'job_placement',
+        'label': 'Job Placement',
+        'icon': Icons.work_history_outlined,
+      },
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        children: drivingFields.map((field) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildInfoCard(
+              field['key'] as String,
+              field['label'] as String,
+              field['icon'] as IconData,
+              values,
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildUploadedDocumentsTab() {
+    final completion = _detailedCompletion ?? widget.contact.profileCompletion;
+    final values = completion?.documentValues ?? {};
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        children: [
+          _buildInfoCard(
+            'aadhar_number',
+            'Aadhar Number',
+            Icons.credit_card_outlined,
+            values,
+          ),
+          const SizedBox(height: 12),
+          _buildDocumentPhotoCard(
+            'aadhar_photo',
+            'Uploaded Aadhar Photo',
+            Icons.photo_outlined,
+            values,
+          ),
+          const SizedBox(height: 12),
+          _buildInfoCard(
+            'license_number',
+            'License Number',
+            Icons.drive_eta_outlined,
+            values,
+          ),
+          const SizedBox(height: 12),
+          _buildInfoCard(
+            'expiry_date_of_license',
+            'Expiry Date of License',
+            Icons.event_outlined,
+            values,
+            isDate: true,
+          ),
+          const SizedBox(height: 12),
+          _buildDocumentPhotoCard(
+            'driving_license',
+            'Uploaded Driving License Photo',
+            Icons.photo_library_outlined,
+            values,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(
+    String key,
+    String label,
+    IconData icon,
+    Map<String, String?> values, {
+    bool isDate = false,
+  }) {
+    final value = values[key];
+    final hasValue = _isValidValue(value);
+    final displayValue = hasValue
+        ? (isDate ? _formatDate(value.toString()) : value.toString())
+        : 'N/A';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasValue ? const Color(0xFFE5E7EB) : const Color(0xFFFEE2E2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Icon Container
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: hasValue
+                  ? const Color(0xFF3B82F6).withValues(alpha: 0.1)
+                  : const Color(0xFFEF4444).withValues(alpha: 0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: hasValue
+                  ? const Color(0xFF3B82F6)
+                  : const Color(0xFFEF4444),
+            ),
+          ),
+
+          const SizedBox(width: 14),
+
+          // Label and Value
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  doc.displayName,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  doc.value ?? 'N/A',
+                  displayValue,
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: doc.isPresent
-                        ? const Color(0xFF1A1A1A)
-                        : const Color(0xFFF44336),
+                    fontSize: 15,
+                    color: hasValue
+                        ? const Color(0xFF1F2937)
+                        : const Color(0xFFF87171),
+                    fontWeight: FontWeight.w600,
                   ),
-                  maxLines: 2,
+                  maxLines: label == 'Address' ? 3 : 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
+
+          // Status Icon
+          Icon(
+            hasValue ? Icons.check_circle : Icons.error_outline,
+            size: 20,
+            color: hasValue ? const Color(0xFF34D399) : const Color(0xFFEF4444),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildDocumentPhotoCard(
+    String key,
+    String label,
+    IconData icon,
+    Map<String, String?> values,
+  ) {
+    final value = values[key];
+    final hasValue = _isValidValue(value);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasValue ? const Color(0xFFE5E7EB) : const Color(0xFFFEE2E2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header Row
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: hasValue
+                      ? const Color(0xFF3B82F6).withValues(alpha: 0.1)
+                      : const Color(0xFFEF4444).withValues(alpha: 0.05),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: hasValue
+                      ? const Color(0xFF3B82F6)
+                      : const Color(0xFFEF4444),
+                ),
+              ),
+
+              const SizedBox(width: 14),
+
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+
+              Icon(
+                hasValue ? Icons.check_circle : Icons.error_outline,
+                size: 20,
+                color: hasValue
+                    ? const Color(0xFF34D399)
+                    : const Color(0xFFEF4444),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Photo Preview or N/A Message
+          if (hasValue)
+            GestureDetector(
+              onTap: () => _showFullImageDialog(value.toString()),
+              child: Container(
+                height: 150,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(
+                    value.toString(),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: const Color(0xFFF3F4F6),
+                        child: const Center(
+                          child: Icon(
+                            Icons.broken_image,
+                            size: 32,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            )
+          else
+            Container(
+              height: 100,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: const Color(0xFFFCA5A5),
+                  style: BorderStyle.solid,
+                ),
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.cloud_upload_outlined,
+                    size: 32,
+                    color: Color(0xFFF87171),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'No document uploaded',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFFF87171),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showFullImageDialog(String imageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.8),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(20),
+        child: Stack(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: Colors.transparent,
+              ),
+            ),
+            Center(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width - 40,
+                  maxHeight: MediaQuery.of(context).size.height - 100,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 200,
+                        height: 200,
+                        color: const Color(0xFFF3F4F6),
+                        child: const Center(
+                          child: Icon(
+                            Icons.broken_image,
+                            size: 48,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 20,
+              right: 20,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, color: Colors.black, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _isValidValue(dynamic value) {
+    if (value == null) return false;
+
+    final String stringValue = value.toString().trim();
+
+    if (stringValue.isEmpty) return false;
+    if (stringValue.toLowerCase() == 'null') return false;
+    if (stringValue.toLowerCase() == 'n/a') return false;
+
+    return true;
+  }
+
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return DateFormat('dd MMM yyyy').format(date);
+    } catch (e) {
+      return dateStr;
+    }
   }
 }
 

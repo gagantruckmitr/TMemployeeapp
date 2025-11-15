@@ -184,20 +184,20 @@ class SmartCallingService {
     }
   }
 
-  // Initiate IVR call through MyOperator
-  Future<Map<String, dynamic>> initiateIVRCall({
+  // Initiate IVR call through Click2Call API (Production)
+  Future<Map<String, dynamic>> initiateClick2CallIVR({
     required String driverMobile,
     required int callerId,
     required String driverId,
   }) async {
     try {
-      return await ApiService.initiateIVRCall(
+      return await ApiService.initiateClick2CallIVR(
         driverMobile: driverMobile,
         callerId: callerId,
         driverId: driverId,
       );
     } catch (e) {
-      print('Failed to initiate IVR call: $e');
+      print('Failed to initiate Click2Call IVR: $e');
       return {
         'success': false,
         'error': e.toString(),

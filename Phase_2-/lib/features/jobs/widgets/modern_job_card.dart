@@ -49,6 +49,24 @@ class _ModernJobCardState extends State<ModernJobCard> {
     }
   }
 
+  String? _getProfileImageUrl(String? imagePath) {
+    if (imagePath == null || imagePath.isEmpty || imagePath.toLowerCase() == 'null') {
+      return null;
+    }
+    
+    // If it's already a full URL
+    if (imagePath.startsWith('http')) {
+      return imagePath;
+    }
+    
+    // If it's a relative path, prepend the correct base URL
+    String cleanPath = imagePath;
+    if (cleanPath.startsWith('/')) {
+      cleanPath = cleanPath.substring(1);
+    }
+    return 'https://truckmitr.com/public/$cleanPath';
+  }
+
   String _maskPhone(String phone) {
     if (phone.isEmpty || phone.length < 4) return '••••••••••';
     return '${phone.substring(0, 2)}••••••${phone.substring(phone.length - 2)}';
@@ -148,7 +166,7 @@ class _ModernJobCardState extends State<ModernJobCard> {
             userId: int.tryParse(widget.job.transporterId) ?? 0,
             userType: 'transporter',
             completionPercentage: widget.job.transporterProfileCompletion,
-            profileImageUrl: widget.job.transporterProfilePhoto,
+            profileImageUrl: _getProfileImageUrl(widget.job.transporterProfilePhoto),
             gender: widget.job.transporterGender,
             size: 70,
           ),
