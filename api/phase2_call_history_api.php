@@ -78,12 +78,16 @@ function getCallHistory() {
         $countResult = $conn->query($countQuery);
         $total = $countResult->fetch_assoc()['total'];
         
-        // Get paginated data
+        // Get paginated data with phone numbers
         $query = "SELECT 
             clm.*,
-            a.name as caller_name
+            a.name as caller_name,
+            u_driver.mobile as driver_mobile,
+            u_transporter.mobile as transporter_mobile
         FROM call_logs_match_making clm
         LEFT JOIN admins a ON clm.caller_id = a.id
+        LEFT JOIN users u_driver ON clm.unique_id_driver = u_driver.unique_id
+        LEFT JOIN users u_transporter ON clm.unique_id_transporter = u_transporter.unique_id
         $whereClause
         ORDER BY clm.created_at DESC
         LIMIT $limit OFFSET $offset";
@@ -104,6 +108,8 @@ function getCallHistory() {
                 'uniqueIdDriver' => $row['unique_id_driver'] ?? '',
                 'driverName' => $row['driver_name'] ?? '',
                 'transporterName' => $row['transporter_name'] ?? '',
+                'driverMobile' => $row['driver_mobile'] ?? '',
+                'transporterMobile' => $row['transporter_mobile'] ?? '',
                 'feedback' => $row['feedback'] ?? '',
                 'matchStatus' => $row['match_status'] ?? '',
                 'remark' => $row['remark'] ?? '',

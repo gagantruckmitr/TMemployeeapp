@@ -38,21 +38,21 @@ function getProfileDetails($conn) {
     // Fetch user data with joins for vehicle_type and states
     $stmt = $conn->prepare("
         SELECT 
-            u.id, u.unique_id, u.name, u.email, u.city, u.status, u.sex, u.vehicle_type,
-            u.father_name, u.images, u.address, u.dob, u.role, u.created_at, u.updated_at,
-            u.type_of_license, u.driving_experience, u.highest_education, u.license_number,
-            u.expiry_date_of_license, u.expected_monthly_income, u.current_monthly_income,
-            u.marital_status, u.preferred_location, u.aadhar_number, u.aadhar_photo,
-            u.driving_license, u.previous_employer, u.job_placement,
-            u.transport_name, u.year_of_establishment, u.fleet_size, u.operational_segment,
-            u.average_km, u.pan_number, u.pan_image, u.gst_certificate, u.states,
+            u.id, u.unique_id, u.name, u.email, u.city, u.status, u.Sex, u.vehicle_type,
+            u.Father_Name, u.images, u.address, u.DOB, u.role, u.Created_at, u.Updated_at,
+            u.Type_of_License, u.Driving_Experience, u.Highest_Education, u.License_Number,
+            u.Expiry_date_of_License, u.Expected_Monthly_Income, u.Current_Monthly_Income,
+            u.Marital_Status, u.Preferred_Location, u.Aadhar_Number, u.Aadhar_Photo,
+            u.Driving_License, u.previous_employer, u.job_placement,
+            u.Transport_Name, u.Year_of_Establishment, u.Fleet_Size, u.Operational_Segment,
+            u.Average_KM, u.PAN_Number, u.PAN_Image, u.GST_Certificate, u.states,
             COALESCE(vt.vehicle_name, u.vehicle_type) as vehicle_type_name,
             s.name as state_name,
             s2.name as preferred_location_name
         FROM users u
         LEFT JOIN vehicle_type vt ON CAST(u.vehicle_type AS UNSIGNED) = vt.id
         LEFT JOIN states s ON u.states = s.id
-        LEFT JOIN states s2 ON CAST(u.preferred_location AS UNSIGNED) = s2.id
+        LEFT JOIN states s2 ON CAST(u.Preferred_Location AS UNSIGNED) = s2.id
         WHERE u.id = ?
     ");
     
@@ -73,25 +73,25 @@ function getProfileDetails($conn) {
     
     if ($role === 'driver') {
         $requiredFields = [
-            'name', 'email', 'city', 'sex', 'vehicle_type',
-            'father_name', 'images', 'address', 'dob',
-            'type_of_license', 'driving_experience', 'highest_education', 'license_number',
-            'expiry_date_of_license', 'expected_monthly_income', 'current_monthly_income',
-            'marital_status', 'preferred_location', 'aadhar_number', 'aadhar_photo',
-            'driving_license', 'previous_employer', 'job_placement'
+            'name', 'email', 'city', 'Sex', 'vehicle_type',
+            'Father_Name', 'images', 'address', 'DOB',
+            'Type_of_License', 'Driving_Experience', 'Highest_Education', 'License_Number',
+            'Expiry_date_of_License', 'Expected_Monthly_Income', 'Current_Monthly_Income',
+            'Marital_Status', 'Preferred_Location', 'Aadhar_Number', 'Aadhar_Photo',
+            'Driving_License', 'previous_employer', 'job_placement'
         ];
         
         // Map fields to their display names
         $displayFields = [
             'vehicle_type' => 'vehicle_type_name',
-            'preferred_location' => 'preferred_location_name',
+            'Preferred_Location' => 'preferred_location_name',
             'states' => 'state_name'
         ];
     } elseif ($role === 'transporter') {
         $requiredFields = [
-            'name', 'email', 'transport_name', 'year_of_establishment',
-            'fleet_size', 'operational_segment', 'average_km', 'city', 'images', 'address',
-            'pan_number', 'pan_image', 'gst_certificate'
+            'name', 'email', 'Transport_Name', 'Year_of_Establishment',
+            'Fleet_Size', 'Operational_Segment', 'Average_KM', 'city', 'images', 'address',
+            'PAN_Number', 'PAN_Image', 'GST_Certificate'
         ];
     }
     

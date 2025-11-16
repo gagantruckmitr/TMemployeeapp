@@ -8,6 +8,8 @@ import '../../core/services/smart_calling_service.dart';
 import '../../core/services/real_auth_service.dart';
 import 'widgets/driver_contact_card.dart';
 import 'widgets/call_feedback_modal.dart';
+import 'widgets/call_type_selection_dialog.dart';
+import 'widgets/ivr_call_waiting_overlay.dart';
 
 class SmartCallingPage extends StatefulWidget {
   const SmartCallingPage({super.key});
@@ -131,52 +133,12 @@ class _SmartCallingPageState extends State<SmartCallingPage>
         '🔵 Starting call - Caller ID: $callerId, Driver: ${contact.name} (${contact.phoneNumber})',
       );
 
-      // Show call type selection dialog
+      // Show modern call type selection dialog
       if (mounted) {
         final callType = await showDialog<String>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('📞 Select Call Type'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Choose how to call ${contact.name}:',
-                  style: AppTheme.bodyLarge,
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: Icon(
-                    Icons.phone_forwarded,
-                    color: AppTheme.primaryBlue,
-                  ),
-                  title: const Text('IVR Call'),
-                  subtitle: const Text('Automated IVR calling (Recommended)'),
-                  onTap: () => Navigator.pop(context, 'click2call'),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: AppTheme.primaryBlue, width: 2),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  leading: Icon(Icons.phone, color: AppTheme.success),
-                  title: const Text('Manual Call'),
-                  subtitle: const Text('Direct phone dialer'),
-                  onTap: () => Navigator.pop(context, 'manual'),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: AppTheme.success),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, null),
-                child: const Text('Cancel'),
-              ),
-            ],
+          builder: (context) => CallTypeSelectionDialog(
+            driverName: contact.name,
           ),
         );
 
@@ -267,52 +229,23 @@ class _SmartCallingPageState extends State<SmartCallingPage>
             ),
           );
 
-          // Show "Call in progress" dialog
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => PopScope(
-              canPop: false,
-              child: AlertDialog(
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 16),
-                    Text(
-                      'IVR Call in Progress',
-                      style: AppTheme.titleMedium.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'IVR system is connecting the call.\nBoth phones will ring.\nComplete the call and submit feedback.',
-                      textAlign: TextAlign.center,
-                      style: AppTheme.bodyLarge.copyWith(
-                        color: AppTheme.gray,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _showFeedbackModal(
-                          contact,
-                          referenceId: referenceId,
-                          callDuration: 0,
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryBlue,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                      ),
-                      child: const Text('Call Ended - Submit Feedback'),
-                    ),
-                  ],
+          // Show modern IVR waiting overlay
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (context) => PopScope(
+                canPop: false,
+                child: IVRCallWaitingOverlay(
+                  driverName: contact.name,
+                  referenceId: referenceId,
+                  onCallEnded: () {
+                    Navigator.of(context).pop();
+                    _showFeedbackModal(
+                      contact,
+                      referenceId: referenceId,
+                      callDuration: 0,
+                    );
+                  },
                 ),
               ),
             ),

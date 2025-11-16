@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
+import '../../core/services/smart_calling_service.dart';
 import '../../models/driver_applicant_model.dart';
 import '../../widgets/profile_completion_avatar.dart';
 import 'match_making_screen.dart';
 import '../calls/widgets/call_feedback_modal.dart';
+import '../telecaller/widgets/call_type_selection_dialog.dart';
+import '../telecaller/widgets/ivr_call_waiting_overlay.dart';
 import '../main_container.dart' as main;
 
 class JobApplicantsScreen extends StatefulWidget {
@@ -468,10 +472,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                   color: Colors.green,
                   borderRadius: BorderRadius.circular(10),
                   child: InkWell(
-                    onTap: () async {
-                      await _makePhoneCall(driver.mobile);
-                      _showCallFeedbackModal(driver);
-                    },
+                    onTap: () => _initiateCall(driver),
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
                       padding: const EdgeInsets.all(10),
@@ -1030,6 +1031,162 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     }
   }
 
+  Future<void> _initiateCall(DriverApplicant driver) async {
+    if (driver.mobile.isEmpty) return;
+
+    try {
+      // Get current user ID
+      final callerId = await Phase2AuthService.getUserId();
+
+      // Show modern call type selection dialog
+      final callType = await showDialog<String>(
+        context: context,
+        builder: (context) => CallTypeSelectionDialog(
+          driverName: driver.name,
+        ),
+      );
+
+      if (callType == null) return;
+
+      if (callType == 'manual') {
+        await _handleManualCall(driver, callerId);
+      } else if (callType == 'click2call') {
+        await _handleIVRCall(driver, callerId);
+      }
+    } catch (e) {
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Text('Error initiating call: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleManualCall(DriverApplicant driver, int callerId) async {
+    try {
+      // Clean phone number
+      final cleanMobile = driver.mobile.replaceAll(RegExp(r'[^\d]'), '');
+
+      // Log manual call to database
+      final result = await SmartCallingService.instance.initiateManualCall(
+        driverMobile: cleanMobile,
+        callerId: callerId,
+        driverId: driver.driverId.toString(),
+      );
+
+      if (result['success'] == true) {
+        final referenceId = result['data']?['reference_id'];
+        final driverMobileRaw = result['data']?['driver_mobile_raw'];
+
+        // Show success message
+        _scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Text('📱 Calling ${driver.name}...'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Make direct call
+        await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+
+        // Small delay to ensure call screen has appeared
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Show feedback modal
+        if (mounted) {
+          _showCallFeedbackModal(driver);
+        }
+      } else {
+        final errorMsg = result['error'] ?? 'Unknown error';
+        _scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Text('Failed to log call: $errorMsg'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleIVRCall(DriverApplicant driver, int callerId) async {
+    try {
+      // Clean phone number
+      final cleanMobile = driver.mobile.replaceAll(RegExp(r'[^\d]'), '');
+
+      // Show loading indicator
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(
+          content: Text('📞 Initiating IVR call...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Initiate IVR call
+      final result = await SmartCallingService.instance.initiateClick2CallIVR(
+        driverMobile: cleanMobile,
+        callerId: callerId,
+        driverId: driver.driverId.toString(),
+      );
+
+      if (mounted) {
+        if (result['success'] == true) {
+          final referenceId = result['data']?['reference_id'];
+
+          _scaffoldMessengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text('✅ IVR call initiated! Both phones will ring.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          // Show modern IVR waiting overlay
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (context) => PopScope(
+                canPop: false,
+                child: IVRCallWaitingOverlay(
+                  driverName: driver.name,
+                  referenceId: referenceId,
+                  onCallEnded: () {
+                    Navigator.of(context).pop();
+                    _showCallFeedbackModal(driver);
+                  },
+                ),
+              ),
+            ),
+          );
+        } else {
+          final errorMsg = result['error'] ?? 'Unknown error';
+          _scaffoldMessengerKey.currentState?.showSnackBar(
+            SnackBar(
+              content: Text('Failed to initiate IVR call: $errorMsg'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _makePhoneCall(String phone) async {
     if (phone.isEmpty) return;
     final Uri phoneUri = Uri(scheme: 'tel', path: phone);
@@ -1041,7 +1198,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _DriverDetailsSheet(driver: driver, onCall: () => _makePhoneCall(driver.mobile)),
+      builder: (context) => _DriverDetailsSheet(driver: driver, onCall: () => _initiateCall(driver)),
     );
   }
 
@@ -1360,7 +1517,10 @@ class _DriverDetailsSheetState extends State<_DriverDetailsSheet> {
                       child: SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: widget.onCall,
+                          onPressed: () {
+                            Navigator.pop(context); // Close the sheet first
+                            widget.onCall(); // Then initiate call
+                          },
                           icon: const Icon(
                             Icons.call_rounded,
                             color: Colors.white,

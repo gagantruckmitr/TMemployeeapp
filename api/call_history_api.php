@@ -76,6 +76,13 @@ function getCallHistory($conn) {
         FROM call_logs cl
         INNER JOIN users u ON cl.user_id = u.id
         WHERE cl.caller_id = ?
+        AND u.role != 'transporter'
+        AND NOT EXISTS (
+            SELECT 1 FROM call_logs_match_making clm 
+            WHERE clm.caller_id = cl.caller_id 
+            AND (clm.unique_id_driver = u.unique_id OR clm.unique_id_transporter = u.unique_id)
+            AND DATE(clm.created_at) = DATE(COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at))
+        )
     ";
     
     $params = [$callerId];

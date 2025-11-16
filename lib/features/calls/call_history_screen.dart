@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
+import '../../core/services/smart_calling_service.dart';
 import '../../models/call_history_model.dart';
 import '../../models/phase2_user_model.dart';
 import '../../widgets/audio_player_widget.dart';
 import 'widgets/call_feedback_modal.dart';
+import '../telecaller/widgets/call_type_selection_dialog.dart';
+import '../telecaller/widgets/ivr_call_waiting_overlay.dart';
 import 'package:intl/intl.dart';
 import '../main_container.dart' as main;
 
@@ -1559,59 +1564,112 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
   // Make a phone call
   Future<void> _makeCall(CallHistoryLog log) async {
     try {
-      // Fetch phone number from API based on TMID
-      final tmid = log.contactType == 'Driver' ? log.uniqueIdDriver : log.uniqueIdTransporter;
-      
-      // You'll need to implement this API call to get phone number
-      // For now, show feedback modal directly
-      showModalBottomSheet(
+      // Show call type selection dialog
+      final callType = await showDialog<String>(
         context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => CallFeedbackModal(
-          userType: log.contactType.toLowerCase(),
-          userName: log.contactName,
-          userTmid: log.contactId,
-          transporterTmid:
-              log.uniqueIdTransporter.isNotEmpty ? log.uniqueIdTransporter : null,
-          jobId: log.jobId.isNotEmpty ? log.jobId : null,
-          onSubmit: (feedback, matchStatus, notes) async {
-            try {
-              await Phase2ApiService.saveCallFeedback(
-                callerId: _currentUser?.id ?? 0,
-                transporterTmid: log.uniqueIdTransporter.isNotEmpty
-                    ? log.uniqueIdTransporter
-                    : null,
-                driverTmid:
-                    log.uniqueIdDriver.isNotEmpty ? log.uniqueIdDriver : null,
-                driverName: log.driverName,
-                transporterName: log.transporterName,
-                feedback: feedback,
-                matchStatus: matchStatus,
-                notes: notes,
-                jobId: log.jobId.isNotEmpty ? log.jobId : null,
-              );
-
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Call feedback saved successfully'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-                _loadData();
-              }
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error saving feedback: $e')),
-                );
-              }
-            }
-          },
+        builder: (context) => CallTypeSelectionDialog(
+          driverName: log.contactName,
         ),
       );
+
+      if (callType == null) return;
+
+      // Get phone number from the call history log
+      final phoneNumber = log.contactMobile;
+      
+      if (phoneNumber.isEmpty) {
+        // Show informational dialog
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.info_outline, color: AppTheme.primaryBlue),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Phone Number Not Available',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'To call ${log.contactName}, please find them in:',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                _buildInfoStep('1', 'Smart Calling section'),
+                const SizedBox(height: 8),
+                _buildInfoStep('2', 'Jobs section'),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.security, size: 16, color: Colors.blue.shade700),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Contact ID: ${log.contactId}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Got it'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Navigate back and let user go to smart calling from dashboard
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryBlue,
+                ),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      final callerId = _currentUser?.id ?? 0;
+      final contactId = log.contactId;
+
+      if (callType == 'manual') {
+        await _handleManualCall(log, phoneNumber, callerId, contactId);
+      } else if (callType == 'click2call') {
+        await _handleIVRCall(log, phoneNumber, callerId, contactId);
+      }
     } catch (e) {
+      // Close any open dialogs
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1621,6 +1679,38 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         );
       }
     }
+  }
+
+  Widget _buildInfoStep(String number, String text) {
+    return Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: AppTheme.primaryBlue,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              number,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 13),
+          ),
+        ),
+      ],
+    );
   }
 
   // Show edit feedback modal with role-based options
@@ -1633,6 +1723,174 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         log: log,
         onUpdate: () {
           _loadData();
+        },
+      ),
+    );
+  }
+
+  Future<void> _handleManualCall(CallHistoryLog log, String phoneNumber, int callerId, String contactId) async {
+    try {
+      final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+
+      // Log manual call
+      final result = await SmartCallingService.instance.initiateManualCall(
+        driverMobile: cleanMobile,
+        callerId: callerId,
+        driverId: contactId,
+      );
+
+      if (result['success'] == true) {
+        final driverMobileRaw = result['data']?['driver_mobile_raw'];
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📱 Calling ${log.contactName}...'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Make direct call
+        await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+
+        // Show feedback modal immediately
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          _showCallFeedbackModal(log);
+        }
+      } else {
+        final errorMsg = result['error'] ?? 'Unknown error';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to log call: $errorMsg'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleIVRCall(CallHistoryLog log, String phoneNumber, int callerId, String contactId) async {
+    try {
+      final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📞 Initiating IVR call...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Initiate IVR call
+      final result = await SmartCallingService.instance.initiateClick2CallIVR(
+        driverMobile: cleanMobile,
+        callerId: callerId,
+        driverId: contactId,
+      );
+
+      if (mounted) {
+        if (result['success'] == true) {
+          final referenceId = result['data']?['reference_id'];
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ IVR call initiated! Both phones will ring.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          // Show IVR waiting overlay
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (context) => PopScope(
+                canPop: false,
+                child: IVRCallWaitingOverlay(
+                  driverName: log.contactName,
+                  referenceId: referenceId,
+                  onCallEnded: () {
+                    Navigator.of(context).pop();
+                    _showCallFeedbackModal(log);
+                  },
+                ),
+              ),
+            ),
+          );
+        } else {
+          final errorMsg = result['error'] ?? 'Unknown error';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to initiate IVR call: $errorMsg'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showCallFeedbackModal(CallHistoryLog log) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CallFeedbackModal(
+        userType: log.contactType.toLowerCase(),
+        userName: log.contactName,
+        userTmid: log.contactId,
+        transporterTmid:
+            log.uniqueIdTransporter.isNotEmpty ? log.uniqueIdTransporter : null,
+        jobId: log.jobId.isNotEmpty ? log.jobId : null,
+        onSubmit: (feedback, matchStatus, notes) async {
+          try {
+            await Phase2ApiService.saveCallFeedback(
+              callerId: _currentUser?.id ?? 0,
+              transporterTmid: log.uniqueIdTransporter.isNotEmpty
+                  ? log.uniqueIdTransporter
+                  : null,
+              driverTmid:
+                  log.uniqueIdDriver.isNotEmpty ? log.uniqueIdDriver : null,
+              driverName: log.driverName,
+              transporterName: log.transporterName,
+              feedback: feedback,
+              matchStatus: matchStatus,
+              notes: notes,
+              jobId: log.jobId.isNotEmpty ? log.jobId : null,
+            );
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Call feedback saved successfully'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+              _loadData();
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error saving feedback: $e')),
+              );
+            }
+          }
         },
       ),
     );

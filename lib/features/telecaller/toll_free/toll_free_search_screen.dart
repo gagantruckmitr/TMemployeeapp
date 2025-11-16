@@ -5,9 +5,13 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/toll_free_service.dart';
 import '../../../core/services/toll_free_feedback_service.dart';
+import '../../../core/services/smart_calling_service.dart';
+import '../../../core/services/real_auth_service.dart';
 import '../../../models/toll_free_lead_model.dart';
 import '../../../models/smart_calling_models.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/call_type_selection_dialog.dart';
+import '../widgets/ivr_call_waiting_overlay.dart';
 import 'toll_free_history_screen.dart';
 
 class TollFreeSearchScreen extends StatefulWidget {
@@ -74,59 +78,107 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
 
   Future<void> _makeCall(TollFreeUser user) async {
     try {
+      // Show call type selection dialog
       final callType = await showDialog<String>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('📞 Select Call Type'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Choose how to call ${user.name}:',
-                style: AppTheme.bodyLarge,
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: Icon(Icons.phone, color: AppTheme.success),
-                title: const Text('Manual Call'),
-                subtitle: const Text('Direct phone dialer'),
-                onTap: () => Navigator.pop(context, 'manual'),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: AppTheme.success),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancel'),
-            ),
-          ],
+        builder: (context) => CallTypeSelectionDialog(
+          driverName: user.name,
         ),
       );
 
       if (callType == null || !mounted) return;
 
+      final currentUser = RealAuthService.instance.currentUser;
+      if (currentUser == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ User not logged in'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final callerId = int.tryParse(currentUser.id) ?? 1;
       final cleanNumber = user.mobile.replaceAll(RegExp(r'[^\d]'), '');
       
       HapticFeedback.mediumImpact();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('📱 Calling ${user.name}...'),
-          backgroundColor: AppTheme.success,
-          duration: const Duration(seconds: 2),
-        ),
-      );
 
-      await FlutterPhoneDirectCaller.callNumber(cleanNumber);
-      
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      if (mounted) {
-        _showFeedbackModal(user);
+      if (callType == 'manual') {
+        // Manual call
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📱 Calling ${user.name}...'),
+            backgroundColor: AppTheme.success,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        await FlutterPhoneDirectCaller.callNumber(cleanNumber);
+        
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        if (mounted) {
+          _showFeedbackModal(user);
+        }
+      } else if (callType == 'click2call') {
+        // IVR call
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('📞 Initiating IVR call...'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        final result = await SmartCallingService.instance.initiateClick2CallIVR(
+          driverMobile: cleanNumber,
+          callerId: callerId,
+          driverId: user.id.toString(),
+        );
+
+        if (mounted) {
+          if (result['success'] == true) {
+            final referenceId = result['data']?['reference_id'];
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ IVR call initiated! Both phones will ring.'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+
+            // Show IVR waiting overlay
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                fullscreenDialog: true,
+                builder: (context) => PopScope(
+                  canPop: false,
+                  child: IVRCallWaitingOverlay(
+                    driverName: user.name,
+                    referenceId: referenceId,
+                    onCallEnded: () {
+                      Navigator.of(context).pop();
+                      _showFeedbackModal(user);
+                    },
+                  ),
+                ),
+              ),
+            );
+          } else {
+            final errorMsg = result['error'] ?? 'Unknown error';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to initiate IVR call: $errorMsg'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
       }
     } catch (error) {
       if (mounted) {

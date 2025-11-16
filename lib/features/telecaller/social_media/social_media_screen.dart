@@ -6,9 +6,13 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/social_media_service.dart';
 import '../../../core/services/social_media_feedback_service.dart';
+import '../../../core/services/smart_calling_service.dart';
+import '../../../core/services/phase2_auth_service.dart';
 import '../../../models/social_media_lead_model.dart';
 import '../../../models/smart_calling_models.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/call_type_selection_dialog.dart';
+import '../widgets/ivr_call_waiting_overlay.dart';
 import '../widgets/tab_page_header.dart';
 import 'social_media_history_screen.dart';
 
@@ -116,48 +120,8 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
       
       final callType = await showDialog<String>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('📞 Select Call Type'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Choose how to call ${lead.name}:',
-                style: AppTheme.bodyLarge,
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: Icon(
-                  Icons.phone_forwarded,
-                  color: AppTheme.primaryBlue,
-                ),
-                title: const Text('IVR Call'),
-                subtitle: const Text('MyOperator progressive dialing'),
-                onTap: () => Navigator.pop(context, 'ivr'),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: AppTheme.primaryBlue),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: Icon(Icons.phone, color: AppTheme.success),
-                title: const Text('Manual Call'),
-                subtitle: const Text('Direct phone dialer'),
-                onTap: () => Navigator.pop(context, 'manual'),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: AppTheme.success),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancel'),
-            ),
-          ],
+        builder: (context) => CallTypeSelectionDialog(
+          driverName: lead.name,
         ),
       );
 
@@ -165,7 +129,7 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
 
       if (callType == 'manual') {
         await _handleManualCall(lead, contact);
-      } else {
+      } else if (callType == 'click2call') {
         await _handleIVRCall(lead, contact);
       }
     } catch (e) {
@@ -218,41 +182,85 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   Future<void> _handleIVRCall(SocialMediaLead lead, DriverContact contact) async {
     if (!mounted) return;
 
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('📞 Progressive Dialing'),
-        content: Text(
-          'MyOperator will call ${lead.name} first.\n\n'
-          '1. ${lead.name}\'s phone will ring FIRST\n'
-          '2. When they pick up, they hear IVR message\n'
-          '3. YOUR phone will ring NEXT\n'
-          '4. When you pick up - instant connection!\n'
-          '5. Number remains hidden\n\n'
-          'Ready to proceed?',
+    try {
+      // Get current user ID
+      final callerId = await Phase2AuthService.getUserId();
+      if (callerId == 0) {
+        throw Exception('User not logged in');
+      }
+
+      // Show loading indicator
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Start Call'),
-          ),
-        ],
-      ),
-    );
+      );
 
-    if (proceed != true || !mounted) return;
+      // Initiate IVR call
+      final result = await SmartCallingService.instance.initiateClick2CallIVR(
+        driverMobile: lead.mobile,
+        callerId: callerId,
+        driverId: contact.id,
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('📞 IVR call feature coming soon!'),
-        backgroundColor: Colors.orange,
-        duration: Duration(seconds: 3),
-      ),
-    );
+      // Close loading dialog
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      if (result['success'] == true) {
+        final referenceId = result['reference_id'] as String?;
+        
+        // Show IVR waiting overlay
+        if (!mounted) return;
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => IVRCallWaitingOverlay(
+            driverName: lead.name,
+            referenceId: referenceId,
+            onCallEnded: () {
+              Navigator.pop(context);
+            },
+          ),
+        );
+
+        // Show feedback modal after call ends
+        if (!mounted) return;
+        _showFeedbackModal(contact);
+      } else {
+        // Show error message
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result['message'] ?? 'Failed to initiate IVR call',
+            ),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if open
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initiate IVR call: $e'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   void _showFeedbackModal(DriverContact contact) {
@@ -288,19 +296,6 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
       registrationDate: lead.createdAt,
       profileCompletion: null,
     );
-  }
-
-  String _extractLatestFeedback(String remarks) {
-    // Extract only the latest feedback from remarks
-    if (remarks.contains('[Feedback:')) {
-      final feedbackEntries = remarks.split('\n').where((line) => line.contains('[Feedback:')).toList();
-      if (feedbackEntries.isNotEmpty) {
-        final latestFeedback = feedbackEntries.last;
-        // Remove the [Feedback: ] wrapper
-        return latestFeedback.replaceAll('[Feedback:', '').replaceAll(']', '').trim();
-      }
-    }
-    return remarks;
   }
 
   Future<void> _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback) async {

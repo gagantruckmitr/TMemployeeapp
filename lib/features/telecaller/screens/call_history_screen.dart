@@ -9,6 +9,8 @@ import '../../../core/services/smart_calling_service.dart';
 import '../../../core/services/real_auth_service.dart';
 import '../../../core/services/pending_feedback_service.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/call_type_selection_dialog.dart';
+import '../widgets/ivr_call_waiting_overlay.dart';
 
 class CallHistoryScreen extends StatefulWidget {
   final String? initialFilter;
@@ -516,32 +518,116 @@ class _CallHistoryCardState extends State<_CallHistoryCard> {
         return;
       }
 
+      // Show call type selection dialog
+      final callType = await showDialog<String>(
+        context: context,
+        builder: (context) => CallTypeSelectionDialog(
+          driverName: widget.entry.driverName,
+        ),
+      );
+
+      if (callType == null) return;
+
       final callerId = int.tryParse(currentUser.id) ?? 1;
       final cleanPhone = widget.entry.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
 
-      // Log manual call
-      final result = await SmartCallingService.instance.initiateManualCall(
-        driverMobile: cleanPhone,
-        callerId: callerId,
-        driverId: widget.entry.driverId,
-      );
-
-      if (result['success'] == true && mounted) {
-        final referenceId = result['data']?['reference_id'];
-        final driverMobileRaw = result['data']?['driver_mobile_raw'];
-
-        // Save pending feedback
-        await PendingFeedbackService.instance.savePendingFeedback(
-          referenceId: referenceId,
-          driverId: widget.entry.driverId,
-          driverName: widget.entry.driverName,
-          driverPhone: widget.entry.phoneNumber,
-          driverCompany: '',
+      if (callType == 'manual') {
+        // Manual call
+        final result = await SmartCallingService.instance.initiateManualCall(
+          driverMobile: cleanPhone,
           callerId: callerId,
+          driverId: widget.entry.driverId,
         );
 
-        // Make the call
-        await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+        if (result['success'] == true && mounted) {
+          final referenceId = result['data']?['reference_id'];
+          final driverMobileRaw = result['data']?['driver_mobile_raw'];
+
+          // Save pending feedback
+          await PendingFeedbackService.instance.savePendingFeedback(
+            referenceId: referenceId,
+            driverId: widget.entry.driverId,
+            driverName: widget.entry.driverName,
+            driverPhone: widget.entry.phoneNumber,
+            driverCompany: '',
+            callerId: callerId,
+          );
+
+          // Make the call
+          await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+          
+          // Show feedback modal immediately after call
+          await Future.delayed(const Duration(milliseconds: 500));
+          
+          if (mounted) {
+            _showUpdateFeedbackModal();
+          }
+        }
+      } else if (callType == 'click2call') {
+        // IVR call
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('📞 Initiating IVR call...'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        final result = await SmartCallingService.instance.initiateClick2CallIVR(
+          driverMobile: cleanPhone,
+          callerId: callerId,
+          driverId: widget.entry.driverId,
+        );
+
+        if (mounted) {
+          if (result['success'] == true) {
+            final referenceId = result['data']?['reference_id'];
+
+            // Save pending feedback
+            await PendingFeedbackService.instance.savePendingFeedback(
+              referenceId: referenceId,
+              driverId: widget.entry.driverId,
+              driverName: widget.entry.driverName,
+              driverPhone: widget.entry.phoneNumber,
+              driverCompany: '',
+              callerId: callerId,
+            );
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ IVR call initiated! Both phones will ring.'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+
+            // Show IVR waiting overlay
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                fullscreenDialog: true,
+                builder: (context) => PopScope(
+                  canPop: false,
+                  child: IVRCallWaitingOverlay(
+                    driverName: widget.entry.driverName,
+                    referenceId: referenceId,
+                    onCallEnded: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ),
+              ),
+            );
+          } else {
+            final errorMsg = result['error'] ?? 'Unknown error';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to initiate IVR call: $errorMsg'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -652,6 +738,9 @@ class _CallHistoryCardState extends State<_CallHistoryCard> {
             behavior: SnackBarBehavior.floating,
           ),
         );
+        
+        // Add delay to ensure database has committed the changes
+        await Future.delayed(const Duration(milliseconds: 800));
         
         // Notify parent to refresh
         if (widget.onUpdate != null) {
