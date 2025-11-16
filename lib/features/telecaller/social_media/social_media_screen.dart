@@ -10,6 +10,7 @@ import '../../../core/services/smart_calling_service.dart';
 import '../../../core/services/phase2_auth_service.dart';
 import '../../../models/social_media_lead_model.dart';
 import '../../../models/smart_calling_models.dart';
+import '../../../widgets/access_denied_screen.dart';
 import '../widgets/call_feedback_modal.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/ivr_call_waiting_overlay.dart';
@@ -32,6 +33,8 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   bool _isLoading = true;
   bool _isRefreshing = false;
   String? _error;
+  bool _hasAccess = false;
+  bool _checkingAccess = true;
 
   @override
   bool get wantKeepAlive => true;
@@ -39,7 +42,42 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   @override
   void initState() {
     super.initState();
-    _loadLeads();
+    _checkAccess();
+  }
+
+  Future<void> _checkAccess() async {
+    setState(() => _checkingAccess = true);
+    
+    try {
+      // First try Phase2Auth
+      final phase2User = await Phase2AuthService.getCurrentUser();
+      
+      if (phase2User != null && phase2User.tcFor.toLowerCase() == 'social-media') {
+        setState(() {
+          _hasAccess = true;
+          _checkingAccess = false;
+        });
+        _loadLeads();
+        return;
+      }
+
+      // If Phase2Auth doesn't work, try to load leads anyway
+      // The API will do the proper authentication check
+      // by cross-referencing Phase1 user ID with Phase2 mobile number
+      setState(() {
+        _hasAccess = true; // Assume access, let API decide
+        _checkingAccess = false;
+      });
+      
+      _loadLeads();
+    } catch (e) {
+      // On error, still try to load - let API handle auth
+      setState(() {
+        _hasAccess = true;
+        _checkingAccess = false;
+      });
+      _loadLeads();
+    }
   }
 
   Future<void> _loadLeads() async {
@@ -58,10 +96,21 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() {
-        _error = error.toString();
-        _isLoading = false;
-      });
+      
+      // Check if it's an access denied error
+      final errorMessage = error.toString();
+      if (errorMessage.contains('Access denied') || errorMessage.contains('403')) {
+        setState(() {
+          _hasAccess = false;
+          _isLoading = false;
+          _error = null;
+        });
+      } else {
+        setState(() {
+          _error = errorMessage;
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -129,7 +178,7 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
 
       if (callType == 'manual') {
         await _handleManualCall(lead, contact);
-      } else if (callType == 'click2call') {
+      } else if (callType == 'easygo_ivr') {
         await _handleIVRCall(lead, contact);
       }
     } catch (e) {
@@ -304,19 +353,6 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     );
   }
 
-  String _extractLatestFeedback(String remarks) {
-    // Extract only the latest feedback from remarks
-    if (remarks.contains('[Feedback:')) {
-      final feedbackEntries = remarks.split('\n').where((line) => line.contains('[Feedback:')).toList();
-      if (feedbackEntries.isNotEmpty) {
-        final latestFeedback = feedbackEntries.last;
-        // Remove the [Feedback: ] wrapper
-        return latestFeedback.replaceAll('[Feedback:', '').replaceAll(']', '').trim();
-      }
-    }
-    return remarks;
-  }
-
   Future<void> _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback) async {
     if (!mounted) return;
 
@@ -365,6 +401,35 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
+    // Show loading while checking access
+    if (_checkingAccess) {
+      return Scaffold(
+        backgroundColor: AppTheme.lightGray,
+        body: Center(
+          child: CircularProgressIndicator(color: AppTheme.accentPurple),
+        ),
+      );
+    }
+
+    // Show access denied screen if user doesn't have permission
+    if (!_hasAccess) {
+      return AccessDeniedScreen(
+        title: 'Social Media Access Required',
+        message: 'This feature is only available to users assigned to Social Media leads.\n\nYour account does not have permission to access this section.',
+        icon: Icons.people_outline,
+        onContactAdmin: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Please contact your administrator to request Social Media access'),
+              backgroundColor: AppTheme.accentPurple,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        },
+      );
+    }
 
     final subtitle = _isLoading
         ? 'Fetching latest social media leads...'

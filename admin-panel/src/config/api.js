@@ -1,6 +1,6 @@
 // API Configuration
-// LOCAL DEVELOPMENT
-export const API_BASE_URL = 'http://192.168.29.149/api';
+// LOCAL DEVELOPMENT (Active)
+export const API_BASE_URL = 'http://localhost/api';
 
 // PRODUCTION (Commented out)
 // export const API_BASE_URL = 'https://truckmitr.com/truckmitr-app/api';

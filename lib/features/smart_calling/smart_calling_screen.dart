@@ -4,6 +4,7 @@ import '../../models/dummy_data.dart';
 import 'widgets/driver_card.dart';
 import 'widgets/transporter_job_card.dart';
 import 'widgets/call_bar.dart';
+import '../telecaller/widgets/easygo_ivr_call_helper.dart';
 
 class SmartCallingScreen extends StatefulWidget {
   const SmartCallingScreen({super.key});
@@ -30,22 +31,17 @@ class _SmartCallingScreenState extends State<SmartCallingScreen>
     super.dispose();
   }
 
-  void _handleCall(String name, String phone) {
-    setState(() {
-      _isCallActive = true;
-      _activeCallName = name;
-    });
-
-    // Simulate call duration
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _isCallActive = false;
-          _activeCallName = null;
-        });
-        _showFeedbackDialog();
-      }
-    });
+  void _handleCall(String name, String phone, String id, String type) async {
+    // Import the helper at the top of the file
+    await EasyGoIVRCallHelper.initiateCall(
+      context: context,
+      clientName: name,
+      clientPhone: phone,
+      clientId: id,
+      contactType: type,
+      callSource: null, // Regular smart calling, not from job screens
+      onCallEnded: () => _showFeedbackDialog(),
+    );
   }
 
   void _showFeedbackDialog() {
@@ -147,7 +143,12 @@ class _SmartCallingScreenState extends State<SmartCallingScreen>
           padding: const EdgeInsets.only(bottom: 16),
           child: DriverCard(
             driver: driver,
-            onCall: () => _handleCall(driver['name'], driver['phone']),
+            onCall: () => _handleCall(
+              driver['name'], 
+              driver['phone'],
+              driver['id'] ?? 'DRIVER_${index + 1}',
+              'driver',
+            ),
           ),
         );
       },
@@ -164,7 +165,12 @@ class _SmartCallingScreenState extends State<SmartCallingScreen>
           padding: const EdgeInsets.only(bottom: 16),
           child: TransporterJobCard(
             transporter: transporter,
-            onCall: () => _handleCall(transporter['name'], transporter['phone']),
+            onCall: () => _handleCall(
+              transporter['name'], 
+              transporter['phone'],
+              transporter['id'] ?? 'TRANS_${index + 1}',
+              'transporter',
+            ),
           ),
         );
       },

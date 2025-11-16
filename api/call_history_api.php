@@ -50,18 +50,23 @@ function getCallHistory($conn) {
     }
     
     // Build query - using users table instead of drivers with proper timing
+    // Hide phone numbers for IVR calls (privacy protection)
     $query = "
         SELECT 
             cl.id,
             cl.user_id as driver_id,
             u.name as driver_name,
-            u.mobile as phone_number,
+            CASE 
+                WHEN cl.tc_for LIKE '%ivr%' THEN ''
+                ELSE u.mobile
+            END as phone_number,
             cl.call_status as status,
             cl.feedback,
             cl.remarks,
             cl.call_duration as duration,
             cl.recording_url,
             cl.manual_call_recording_url,
+            cl.tc_for,
             COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at) as call_time,
             cl.call_initiated_at,
             cl.call_completed_at,
@@ -77,6 +82,9 @@ function getCallHistory($conn) {
         INNER JOIN users u ON cl.user_id = u.id
         WHERE cl.caller_id = ?
         AND u.role != 'transporter'
+        AND cl.tc_for NOT LIKE '%job%'
+        AND cl.tc_for NOT LIKE '%match%'
+        AND (cl.call_source IS NULL OR cl.call_source NOT LIKE '%job%')
         AND NOT EXISTS (
             SELECT 1 FROM call_logs_match_making clm 
             WHERE clm.caller_id = cl.caller_id 

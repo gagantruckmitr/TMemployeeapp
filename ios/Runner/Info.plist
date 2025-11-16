@@ -45,5 +45,43 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	
+	<!-- Permissions for phone calls -->
+	<key>NSPhoneCallUsageDescription</key>
+	<string>This app needs access to make phone calls for telecaller functionality</string>
+	
+	<!-- Permissions for microphone (for call recordings) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access for call recordings</string>
+	
+	<!-- Permissions for photo library (for profile pictures) -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to your photo library to upload profile pictures</string>
+	
+	<!-- Permissions for camera -->
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs camera access to take profile pictures</string>
+	
+	<!-- Permissions for file access -->
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>This app needs access to save and retrieve documents</string>
+	
+	<!-- Network usage -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	
+	<!-- Background modes for audio -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>fetch</string>
+	</array>
+	
+	<!-- Supported iOS version -->
+	<key>MinimumOSVersion</key>
+	<string>12.0</string>
 </dict>
 </plist>

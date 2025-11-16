@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EasyGo IVR Complete Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .result {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #4CAF50;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .error {
+            border-left-color: #f44336;
+        }
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .fail {
+            color: #f44336;
+            font-weight: bold;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 EasyGo IVR Complete Test</h1>
+    
+    <div class="test-section">
+        <h2>Step 1: Initiate Call</h2>
+        <input type="text" id="exten" placeholder="Telecaller Phone" value="9876543210">
+        <input type="text" id="number" placeholder="Client Phone" value="9123456789">
+        <input type="number" id="caller_id" placeholder="Caller ID" value="1">
+        <input type="number" id="contact_id" placeholder="Contact ID" value="123">
+        <br>
+        <button onclick="initiateCall()">Initiate Call</button>
+        <div id="call-result" class="result" style="display:none;"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Step 2: Update Feedback</h2>
+        <input type="text" id="reference_id" placeholder="Reference ID (from step 1)" readonly>
+        <input type="number" id="call_log_id" placeholder="Call Log ID (from step 1)" readonly>
+        <br>
+        <select id="feedback">
+            <option>Agree for Subscription (Today)</option>
+            <option>Agree for Subscription (Tomorrow)</option>
+            <option>Not Interested</option>
+            <option>Call Back Later</option>
+        </select>
+        <select id="call_status">
+            <option value="connected">Connected</option>
+            <option value="not_connected">Not Connected</option>
+            <option value="busy">Busy</option>
+            <option value="no_answer">No Answer</option>
+        </select>
+        <input type="number" id="call_duration" placeholder="Duration (seconds)" value="120">
+        <br>
+        <button onclick="updateFeedback()">Update Feedback</button>
+        <div id="feedback-result" class="result" style="display:none;"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Step 3: Verify in Database</h2>
+        <button onclick="verifyDatabase()">Verify Database</button>
+        <div id="verify-result" class="result" style="display:none;"></div>
+    </div>
+
+    <script>
+        let currentReferenceId = '';
+        let currentCallLogId = '';
+
+        async function initiateCall() {
+            const resultDiv = document.getElementById('call-result');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Initiating call...';
+            
+            const data = {
+                exten: document.getElementById('exten').value,
+                number: document.getElementById('number').value,
+                caller_id: parseInt(document.getElementById('caller_id').value),
+                contact_id: parseInt(document.getElementById('contact_id').value),
+                contact_type: 'driver',
+                duration: ''
+            };
+            
+            try {
+                const response = await fetch('easygo_ivr_api.php?action=initiate_call', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentReferenceId = result.reference_id;
+                    currentCallLogId = result.call_log_id;
+                    
+                    document.getElementById('reference_id').value = currentReferenceId;
+                    document.getElementById('call_log_id').value = currentCallLogId;
+                    
+                    resultDiv.className = 'result';
+                    resultDiv.innerHTML = `<span class="success">✅ Call Initiated Successfully!</span>\n\n` +
+                        `Reference ID: ${result.reference_id}\n` +
+                        `Call Log ID: ${result.call_log_id}\n\n` +
+                        `Full Response:\n${JSON.stringify(result, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `<span class="fail">❌ Call Failed!</span>\n\n` +
+                        `Error: ${result.error}\n\n` +
+                        `Full Response:\n${JSON.stringify(result, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+
+        async function updateFeedback() {
+            const resultDiv = document.getElementById('feedback-result');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Updating feedback...';
+            
+            const referenceId = document.getElementById('reference_id').value;
+            const callLogId = document.getElementById('call_log_id').value;
+            
+            if (!referenceId && !callLogId) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ Please initiate a call first!';
+                return;
+            }
+            
+            const data = {
+                reference_id: referenceId,
+                call_log_id: parseInt(callLogId),
+                feedback: document.getElementById('feedback').value,
+                call_status: document.getElementById('call_status').value,
+                call_duration: parseInt(document.getElementById('call_duration').value),
+                remarks: 'Test feedback from browser'
+            };
+            
+            try {
+                const response = await fetch('easygo_ivr_api.php?action=update_feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.className = 'result';
+                    resultDiv.innerHTML = `<span class="success">✅ Feedback Updated Successfully!</span>\n\n` +
+                        `Affected Rows: ${result.affected_rows}\n` +
+                        `Call Log ID: ${result.call_log_id}\n` +
+                        `Reference ID: ${result.reference_id}\n\n` +
+                        `Full Response:\n${JSON.stringify(result, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `<span class="fail">❌ Feedback Update Failed!</span>\n\n` +
+                        `Error: ${result.error}\n\n` +
+                        `Full Response:\n${JSON.stringify(result, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+
+        async function verifyDatabase() {
+            const resultDiv = document.getElementById('verify-result');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Checking database...';
+            
+            const referenceId = document.getElementById('reference_id').value;
+            
+            if (!referenceId) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ Please initiate a call first!';
+                return;
+            }
+            
+            try {
+                // Use a simple PHP script to check the database
+                const response = await fetch(`verify_easygo_call.php?reference_id=${referenceId}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const log = result.data;
+                    resultDiv.className = 'result';
+                    resultDiv.innerHTML = `<span class="success">✅ Call Log Found in Database!</span>\n\n` +
+                        `ID: ${log.id}\n` +
+                        `Reference ID: ${log.reference_id}\n` +
+                        `Call Status: ${log.call_status}\n` +
+                        `Feedback: ${log.feedback || 'Not set'}\n` +
+                        `Remarks: ${log.remarks || 'Not set'}\n` +
+                        `Call Duration: ${log.call_duration || 0} seconds\n` +
+                        `Caller Number: ${log.caller_number}\n` +
+                        `User Number: ${log.user_number}\n` +
+                        `Created At: ${log.created_at}\n` +
+                        `Updated At: ${log.updated_at}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `<span class="fail">❌ Call Log Not Found!</span>\n\n` +
+                        `Error: ${result.error}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

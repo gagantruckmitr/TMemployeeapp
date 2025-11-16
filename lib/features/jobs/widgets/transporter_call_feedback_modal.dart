@@ -30,6 +30,7 @@ class _TransporterCallFeedbackModalState
   bool _isSubmitting = false;
   File? _selectedRecordingFile;
   String? _selectedRecordingName;
+  bool? _closeJobConfirmation;
 
   final Map<String, List<String>> _statusOptions = {
     'Connected': [
@@ -39,6 +40,7 @@ class _TransporterCallFeedbackModalState
       'He is Driver, mistakenly registered as Transporter',
       'Hire from other source',
       'Hired from TruckMitr',
+      'Close Job',
     ],
     'Not Connected': [
       'Ringing / Call Busy',
@@ -85,14 +87,38 @@ class _TransporterCallFeedbackModalState
     });
   }
 
-  bool get _canSubmit =>
-      _selectedMainStatus != null &&
-      _selectedSubStatus != null;
+  bool get _canSubmit {
+    if (_selectedMainStatus == null || _selectedSubStatus == null) return false;
+    
+    // For "Close Job" option, require Yes/No confirmation
+    if (_selectedSubStatus == 'Close Job' && _closeJobConfirmation == null) {
+      return false;
+    }
+    
+    // For "Not a Transporter" and "He is Driver..." auto-close job
+    return true;
+  }
+  
+  bool get _shouldShowCloseJobConfirmation {
+    return _selectedSubStatus == 'Close Job';
+  }
+  
+  bool get _shouldAutoCloseJob {
+    return _selectedSubStatus == 'Not a Transporter' ||
+        _selectedSubStatus == 'He is Driver, mistakenly registered as Transporter';
+  }
 
   void _handleSubmit() {
     if (!_canSubmit) return;
 
-    final callStatus = '$_selectedMainStatus: $_selectedSubStatus';
+    // For "Close Job" option, only send it if user selected "Yes"
+    String finalSubStatus = _selectedSubStatus!;
+    if (_selectedSubStatus == 'Close Job' && _closeJobConfirmation == false) {
+      // User selected "No" for closing job, so don't send "Close Job" feedback
+      finalSubStatus = 'Call Back Later'; // Change to a non-closing status
+    }
+
+    final callStatus = '$_selectedMainStatus: $finalSubStatus';
     final notes = _notesController.text.trim().isNotEmpty 
         ? _notesController.text.trim() 
         : null;
@@ -202,6 +228,31 @@ class _TransporterCallFeedbackModalState
               ),
               const SizedBox(height: 12),
               _buildSubStatusGrid(_statusOptions[_selectedMainStatus]!),
+              const SizedBox(height: 24),
+            ],
+
+            // Close Job Confirmation (only for "Close Job" option)
+            if (_shouldShowCloseJobConfirmation) ...[
+              const Text(
+                'Do you want to close this job?',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.red,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildCloseJobOption('Yes', true),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildCloseJobOption('No', false),
+                  ),
+                ],
+              ),
               const SizedBox(height: 24),
             ],
 
@@ -452,6 +503,7 @@ class _TransporterCallFeedbackModalState
       onTap: () {
         setState(() {
           _selectedSubStatus = option;
+          _closeJobConfirmation = null; // Reset confirmation when changing option
           if (option != 'Details Received') {
             _notesController.clear();
           }
@@ -496,6 +548,56 @@ class _TransporterCallFeedbackModalState
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCloseJobOption(String title, bool value) {
+    final isSelected = _closeJobConfirmation == value;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _closeJobConfirmation = value;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (value ? Colors.red.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1))
+              : Colors.white,
+          border: Border.all(
+            color: isSelected
+                ? (value ? Colors.red : Colors.green)
+                : const Color(0xFFE5E7EB),
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isSelected ? Icons.check_circle : Icons.radio_button_off,
+              color: isSelected
+                  ? (value ? Colors.red : Colors.green)
+                  : const Color(0xFF9CA3AF),
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected
+                    ? (value ? Colors.red : Colors.green)
+                    : const Color(0xFF374151),
               ),
             ),
           ],

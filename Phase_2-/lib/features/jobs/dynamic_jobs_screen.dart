@@ -115,9 +115,14 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: _loadJobs,
+        color: AppColors.primary,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          slivers: [
           SliverAppBar(
             expandedHeight: 280,
             floating: false,
@@ -205,6 +210,7 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
             sliver: _buildJobsList(),
           ),
         ],
+      ),
       ),
     );
   }

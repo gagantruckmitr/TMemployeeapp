@@ -53,37 +53,9 @@ function getFreshLeads($pdo) {
             return getDriversByStatus($pdo, $callerId, $status, $limit);
         }
         
-        // Check if payments table exists
-        $checkPaymentsSql = "SHOW TABLES LIKE 'payments'";
-        $stmt = $pdo->query($checkPaymentsSql);
-        $paymentsExists = $stmt->rowCount() > 0;
-        
-        // Get total number of active telecallers from admins table
-        $telecallerCountStmt = $pdo->query("SELECT COUNT(*) as count FROM admins WHERE role = 'telecaller'");
-        $telecallerCount = (int)$telecallerCountStmt->fetch()['count'];
-        
-        // If no telecallers found, default to 2
-        if ($telecallerCount == 0) {
-            $telecallerCount = 2;
-        }
-        
-        // Get all active telecaller IDs ordered by ID from admins table
-        $telecallersStmt = $pdo->query("SELECT id FROM admins WHERE role = 'telecaller' ORDER BY id ASC");
-        $telecallers = $telecallersStmt->fetchAll(PDO::FETCH_COLUMN);
-        
-        // Find the position of current telecaller in the list
-        $callerPosition = array_search($callerId, $telecallers);
-        if ($callerPosition === false) {
-            $callerPosition = 0; // Default to first position if not found
-        }
-        
-        // Debug: Log the distribution
-        error_log("Round-robin: Caller ID $callerId, Position $callerPosition, Total telecallers: $telecallerCount");
-        
-        // TRUE ROUND-ROBIN: Show leads where assigned_to matches this telecaller
-        // Database has alternating assignments: Lead1→TC1, Lead2→TC2, Lead3→TC1, Lead4→TC2
-        // This query simply filters by assigned_to column
-        
+        // ALL telecallers see only their assigned leads (based on assigned_to column)
+        // tc_for is used for other purposes (match-making, callback, etc.)
+        // IMPORTANT: Filter out NULL and 0 user_ids from call_logs to avoid excluding all users
         $sql = "SELECT 
                     u.id,
                     u.unique_id,
@@ -95,6 +67,7 @@ function getFreshLeads($pdo) {
                     u.status,
                     u.role,
                     u.assigned_to,
+                    u.images,
                     u.Created_at,
                     u.Updated_at
                 FROM users u
@@ -104,9 +77,16 @@ function getFreshLeads($pdo) {
                     SELECT DISTINCT user_id 
                     FROM call_logs
                     WHERE caller_id = :caller_id
+                    AND user_id IS NOT NULL
+                    AND user_id != ''
+                    AND user_id > 0
                 )
                 ORDER BY u.Created_at DESC
                 LIMIT :limit";
+        
+        $distributionNote = 'showing assigned leads only (assigned_to column)';
+        
+        error_log("🔍 Telecaller $callerId fetching assigned leads");
         
         $stmt = $pdo->prepare($sql);
         $stmt->bindValue(':caller_id', $callerId, PDO::PARAM_INT);
@@ -143,6 +123,20 @@ function getFreshLeads($pdo) {
             // Calculate profile completion
             $profileCompletion = calculateProfileCompletion($pdo, $user['id']);
             
+            // Extract profile picture from images JSON and construct full URL
+            $profilePicture = null;
+            if (!empty($user['images'])) {
+                $images = json_decode($user['images'], true);
+                if (is_array($images) && count($images) > 0) {
+                    $imagePath = $images[0];
+                    // Construct full URL with base URL
+                    $profilePicture = 'https://truckmitr.com/public/' . $imagePath;
+                } elseif (!is_array($images) && is_string($user['images'])) {
+                    // Handle case where images is a plain string, not JSON
+                    $profilePicture = 'https://truckmitr.com/public/' . $user['images'];
+                }
+            }
+            
             return [
                 'id' => (string)$user['id'],
                 'tmid' => $tmid,
@@ -162,7 +156,8 @@ function getFreshLeads($pdo) {
                 'registrationDate' => $user['Created_at'] ?? date('Y-m-d H:i:s'),
                 'createdAt' => $user['Created_at'] ?? date('Y-m-d H:i:s'),
                 'updatedAt' => $user['Updated_at'] ?? date('Y-m-d H:i:s'),
-                'profile_completion' => $profileCompletion . '%'
+                'profile_completion' => $profileCompletion . '%',
+                'profilePicture' => $profilePicture
             ];
         }, $users);
         
@@ -172,7 +167,7 @@ function getFreshLeads($pdo) {
             'count' => count($drivers),
             'caller_id' => $callerId,
             'distribution' => 'assigned_to_column',
-            'note' => 'Showing leads assigned to this telecaller via assigned_to column',
+            'note' => $distributionNote,
             'timestamp' => date('Y-m-d H:i:s')
         ]);
         
@@ -256,6 +251,7 @@ function getDriversByStatus($pdo, $callerId, $status, $limit) {
         $callStatus = $statusMap[$status] ?? $status;
         
         // Get drivers that have been called with this status by this telecaller
+        // For welcome-call users, show all their calls regardless of assignment
         $sql = "SELECT 
                     u.id,
                     u.unique_id,
@@ -265,6 +261,7 @@ function getDriversByStatus($pdo, $callerId, $status, $limit) {
                     u.city,
                     u.states,
                     u.status,
+                    u.images,
                     u.Created_at,
                     u.Updated_at,
                     cl.call_status,
@@ -315,6 +312,20 @@ function getDriversByStatus($pdo, $callerId, $status, $limit) {
             // Calculate profile completion
             $profileCompletion = calculateProfileCompletion($pdo, $user['id']);
             
+            // Extract profile picture from images JSON and construct full URL
+            $profilePicture = null;
+            if (!empty($user['images'])) {
+                $images = json_decode($user['images'], true);
+                if (is_array($images) && count($images) > 0) {
+                    $imagePath = $images[0];
+                    // Construct full URL with base URL
+                    $profilePicture = 'https://truckmitr.com/public/' . $imagePath;
+                } elseif (!is_array($images) && is_string($user['images'])) {
+                    // Handle case where images is a plain string, not JSON
+                    $profilePicture = 'https://truckmitr.com/public/' . $user['images'];
+                }
+            }
+            
             return [
                 'id' => (string)$user['id'],
                 'tmid' => $tmid,
@@ -334,7 +345,8 @@ function getDriversByStatus($pdo, $callerId, $status, $limit) {
                 'registrationDate' => $user['Created_at'] ?? date('Y-m-d H:i:s'),
                 'createdAt' => $user['Created_at'] ?? date('Y-m-d H:i:s'),
                 'updatedAt' => $user['Updated_at'] ?? date('Y-m-d H:i:s'),
-                'profile_completion' => $profileCompletion . '%'
+                'profile_completion' => $profileCompletion . '%',
+                'profilePicture' => $profilePicture
             ];
         }, $users);
         

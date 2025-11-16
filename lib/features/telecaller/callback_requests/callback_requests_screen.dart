@@ -5,9 +5,13 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/callback_requests_service.dart';
+import '../../../core/services/smart_calling_service.dart';
+import '../../../core/services/phase2_auth_service.dart';
 import '../../../models/database_models.dart';
 import '../../../models/smart_calling_models.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/call_type_selection_dialog.dart';
+import '../widgets/easygo_ivr_call_helper.dart';
 import '../widgets/tab_page_header.dart';
 import '../widgets/profile_completion_avatar.dart';
 import '../../../widgets/coming_soon_screen.dart';
@@ -110,36 +114,92 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
   }
 
   Future<void> _callDriver(CallbackRequest request) async {
-    final cleanNumber = request.mobileNumber.replaceAll(RegExp(r'[^\d+]'), '');
-    bool callPlaced = false;
-    String message = 'Calling $cleanNumber';
-    Color snackColor = AppTheme.primaryBlue;
-
     try {
-      HapticFeedback.mediumImpact();
-      final result = await FlutterPhoneDirectCaller.callNumber(cleanNumber);
-      callPlaced = result ?? false;
-      if (!callPlaced) {
-        message = 'Unable to initiate call. Please try again.';
-        snackColor = AppTheme.error;
+      // Show call type selection dialog
+      final callType = await showDialog<String>(
+        context: context,
+        builder: (context) => CallTypeSelectionDialog(
+          driverName: request.userName,
+        ),
+      );
+
+      if (callType == null) return; // User cancelled
+
+      // Get user info
+      final user = await Phase2AuthService.getCurrentUser();
+      if (user == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('User not logged in'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final callerId = user.id;
+      final cleanNumber = request.mobileNumber.replaceAll(RegExp(r'[^\d+]'), '');
+
+      if (callType == 'manual') {
+        // Manual call
+        HapticFeedback.mediumImpact();
+        
+        final result = await SmartCallingService.instance.initiateManualCall(
+          driverMobile: cleanNumber,
+          callerId: callerId,
+          driverId: request.id.toString(),
+        );
+
+        if (result['success'] == true) {
+          final driverMobileRaw = result['data']?['driver_mobile_raw'];
+          await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('📱 Calling ${request.userName}...'),
+                backgroundColor: AppTheme.primaryBlue,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } else if (callType == 'easygo_ivr') {
+        // IVR call
+        await EasyGoIVRCallHelper.initiateCall(
+          context: context,
+          clientName: request.userName,
+          clientPhone: cleanNumber,
+          clientId: request.id.toString(),
+          contactType: 'driver',
+          callSource: 'callback_requests',
+          onCallEnded: () {
+            if (mounted) {
+              _showCallFeedbackModal(request);
+            }
+          },
+        );
+        return; // Don't show feedback modal yet, it will be shown after call ends
+      }
+
+      // Show feedback modal for manual calls
+      if (mounted) {
+        _showCallFeedbackModal(request);
       }
     } catch (error) {
-      message = 'Unable to start call: $error';
-      snackColor = AppTheme.error;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unable to start call: $error'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: snackColor,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-
-    _showCallFeedbackModal(request);
   }
 
   void _showCallFeedbackModal(CallbackRequest request) {

@@ -135,6 +135,7 @@ class _DriverContactCardState extends State<DriverContactCard>
                         name: widget.contact.name,
                         completionPercentage:
                             widget.contact.profileCompletion?.percentage ?? 0,
+                        imageUrl: widget.contact.profilePicture,
                         onTap: () {
                           HapticFeedback.lightImpact();
                           Navigator.push(

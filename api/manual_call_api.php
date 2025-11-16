@@ -48,6 +48,9 @@ switch($action) {
     case 'initiate_call':
         initiateManualCall($pdo);
         break;
+    case 'update_feedback':
+        updateCallFeedback($pdo);
+        break;
     default:
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
 }
@@ -77,10 +80,10 @@ function initiateManualCall($pdo) {
     
     error_log("📱 Manual Call - Driver Mobile: $driverMobile, Caller ID: $callerId, Driver ID: $driverId");
     
-    if (empty($driverMobile) || empty($callerId)) {
+    if (empty($callerId)) {
         echo json_encode([
             'success' => false, 
-            'error' => 'Driver mobile and caller ID required',
+            'error' => 'Caller ID required',
             'received' => [
                 'driver_mobile' => $driverMobile,
                 'caller_id' => $callerId,
@@ -105,10 +108,23 @@ function initiateManualCall($pdo) {
             return;
         }
         
-        // Get driver info
-        $stmt = $pdo->prepare("SELECT id, name, mobile, role FROM users WHERE mobile = ? AND role IN ('driver', 'transporter')");
-        $stmt->execute([$driverMobile]);
-        $driver = $stmt->fetch();
+        // Get driver info - try by mobile first, then by ID
+        if (!empty($driverMobile)) {
+            $stmt = $pdo->prepare("SELECT id, name, mobile, role FROM users WHERE mobile = ? AND role IN ('driver', 'transporter')");
+            $stmt->execute([$driverMobile]);
+            $driver = $stmt->fetch();
+        } else if (!empty($driverId)) {
+            // If mobile not provided, fetch by driver ID
+            $stmt = $pdo->prepare("SELECT id, name, mobile, role FROM users WHERE id = ? AND role IN ('driver', 'transporter')");
+            $stmt->execute([$driverId]);
+            $driver = $stmt->fetch();
+        } else {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Driver mobile or driver ID required'
+            ]);
+            return;
+        }
         
         if (!$driver) {
             echo json_encode([
@@ -138,11 +154,11 @@ function initiateManualCall($pdo) {
         
         error_log('📞 Manual Call Setup: Driver=' . $driverNumber . ', Telecaller=' . $telecallerNumber);
         
-        // Save to call_logs (same structure as IVR)
+        // Save to call_logs (same structure as IVR) with IST timezone
         $sql = "INSERT INTO call_logs 
                 (caller_id, user_id, caller_number, user_number, driver_name, call_status, 
                  reference_id, api_response, call_time, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())";
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(NOW(), '+00:00', '+05:30'), CONVERT_TZ(NOW(), '+00:00', '+05:30'), CONVERT_TZ(NOW(), '+00:00', '+05:30'))";
         
         $apiResponse = json_encode([
             'type' => 'manual',
@@ -200,6 +216,100 @@ function initiateManualCall($pdo) {
             'success' => false,
             'error' => 'Failed to log manual call: ' . $e->getMessage()
         ]);
+    }
+}
+
+/**
+ * Update call feedback after call completion
+ */
+function updateCallFeedback($pdo) {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+        return;
+    }
+    
+    $rawInput = file_get_contents('php://input');
+    $input = json_decode($rawInput, true);
+    
+    error_log("📝 Manual Call Update Feedback Raw Input: " . $rawInput);
+    
+    $referenceId = $input['reference_id'] ?? '';
+    $callStatus = $input['call_status'] ?? 'pending';
+    $feedback = $input['feedback'] ?? null;
+    $remarks = $input['remarks'] ?? null;
+    $callDuration = $input['call_duration'] ?? 0;
+    
+    error_log("📝 Manual Call Update Feedback Parsed: ref=$referenceId, status=$callStatus, feedback=$feedback, remarks=$remarks, duration=$callDuration");
+    
+    if (empty($referenceId)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Reference ID required']);
+        return;
+    }
+    
+    // Validate call_status
+    $validStatuses = ['pending', 'connected', 'callback', 'callback_later', 'not_reachable', 'not_interested', 'invalid', 'completed', 'failed', 'cancelled'];
+    if (!in_array($callStatus, $validStatuses)) {
+        error_log("⚠️ Invalid call status: $callStatus, defaulting to 'pending'");
+        $callStatus = 'pending';
+    }
+    
+    try {
+        // First check if the reference_id exists
+        $checkSql = "SELECT id, call_status, feedback FROM call_logs WHERE reference_id = ?";
+        $checkStmt = $pdo->prepare($checkSql);
+        $checkStmt->execute([$referenceId]);
+        $existingRecord = $checkStmt->fetch();
+        
+        if (!$existingRecord) {
+            error_log("❌ No record found with reference_id: $referenceId");
+            http_response_code(404);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Call log not found with reference_id: ' . $referenceId
+            ]);
+            return;
+        }
+        
+        error_log("📋 Existing record: ID={$existingRecord['id']}, Status={$existingRecord['call_status']}, Feedback={$existingRecord['feedback']}");
+        
+        // Update call log with IST timezone
+        $sql = "UPDATE call_logs 
+                SET call_status = ?, 
+                    feedback = ?, 
+                    remarks = ?,
+                    call_duration = ?,
+                    updated_at = CONVERT_TZ(NOW(), '+00:00', '+05:30')
+                WHERE reference_id = ?";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$callStatus, $feedback, $remarks, $callDuration, $referenceId]);
+        
+        $rowsAffected = $stmt->rowCount();
+        error_log("✅ Manual Call Update Feedback: $rowsAffected rows affected for ref=$referenceId");
+        
+        // Fetch updated record to confirm
+        $checkStmt->execute([$referenceId]);
+        $updatedRecord = $checkStmt->fetch();
+        error_log("📋 Updated record: Status={$updatedRecord['call_status']}, Feedback={$updatedRecord['feedback']}");
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Call feedback updated successfully',
+            'rows_affected' => $rowsAffected,
+            'data' => [
+                'call_log_id' => $updatedRecord['id'],
+                'call_status' => $updatedRecord['call_status'],
+                'feedback' => $updatedRecord['feedback'],
+                'reference_id' => $referenceId
+            ],
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
+        
+    } catch(Exception $e) {
+        error_log("❌ Manual Call Update Feedback Error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Failed to update feedback: ' . $e->getMessage()]);
     }
 }
 ?>

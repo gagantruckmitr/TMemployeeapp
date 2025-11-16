@@ -64,13 +64,10 @@ function getJobs() {
                 $query .= " AND 1 = 0 ORDER BY j.Created_at DESC LIMIT 50";
             }
         } else {
-            // For all other filters, exclude closed jobs
-            if ($hasJobBriefTable) {
-                $query .= " AND j.job_id NOT IN (SELECT job_id FROM job_brief_table WHERE closed_job = 1)";
-            }
+            // For all other filters, DO NOT exclude closed jobs - show all jobs
             
             if ($hasDeadlineColumn) {
-                // Use deadline-aware filters
+                // Use filters - EXCLUDE expired jobs from approved, active, pending
                 if ($filter === 'approved') {
                     $query .= " AND j.status = '1' AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
                 } elseif ($filter === 'pending') {
@@ -81,10 +78,8 @@ function getJobs() {
                     $query .= " AND j.active_inactive = 0 AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
                 } elseif ($filter === 'expired') {
                     $query .= " AND j.Application_Deadline IS NOT NULL AND j.Application_Deadline != '' AND j.Application_Deadline < NOW()";
-                } elseif ($filter === 'all') {
-                    // For 'all' filter, exclude expired jobs by default to show only active jobs
-                    $query .= " AND (j.Application_Deadline IS NULL OR j.Application_Deadline = '' OR j.Application_Deadline >= NOW())";
                 }
+                // For 'all' filter, no additional conditions - show ALL jobs including expired
             } else {
                 // Use simple filters without deadline checks
                 if ($filter === 'approved') {
@@ -99,15 +94,17 @@ function getJobs() {
                     // Return no results if no deadline column
                     $query .= " AND 1 = 0";
                 }
+                // For 'all' filter, no additional conditions - show all jobs
             }
             
-            $query .= " ORDER BY j.Created_at DESC LIMIT 50";
+            $query .= " ORDER BY j.Created_at DESC LIMIT 100";
         }
         
         $result = $conn->query($query);
         
         if (!$result) {
             sendError('Query failed: ' . $conn->error, 500);
+            return;
         }
         
         $jobs = [];

@@ -41,14 +41,14 @@ class CallTypeSelectionDialog extends StatelessWidget {
             // Call Options
             Row(
               children: [
-                // IVR Call
+                // EasyGo IVR Call (Recommended)
                 Expanded(
                   child: _CallOption(
-                    icon: Icons.settings_phone_rounded,
-                    label: 'IVR Call',
-                    color: AppTheme.primaryBlue,
+                    icon: Icons.phone_in_talk_rounded,
+                    label: 'EasyGo IVR',
+                    color: Colors.purple,
                     badge: 'Recommended',
-                    onTap: () => Navigator.pop(context, 'click2call'),
+                    onTap: () => Navigator.pop(context, 'easygo_ivr'),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -56,7 +56,7 @@ class CallTypeSelectionDialog extends StatelessWidget {
                 Expanded(
                   child: _CallOption(
                     icon: Icons.phone_rounded,
-                    label: 'Manual',
+                    label: 'Manual Call',
                     color: AppTheme.success,
                     onTap: () => Navigator.pop(context, 'manual'),
                   ),

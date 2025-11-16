@@ -29,8 +29,17 @@ class ProfileCompletionAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Debug: Print image URL to console
+    if (imageUrl != null && imageUrl!.isNotEmpty) {
+      print('🖼️ Profile picture URL: $imageUrl');
+    }
+    
     return GestureDetector(
-      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        print('🟢 ProfileCompletionAvatar tapped!');
+        onTap();
+      },
       child: SizedBox(
         width: size + 30, // Extra space for badge
         height: size + 8,
@@ -63,12 +72,6 @@ class ProfileCompletionAvatar extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFF2196F3),
                   shape: BoxShape.circle,
-                  image: imageUrl != null
-                      ? DecorationImage(
-                          image: NetworkImage(imageUrl!),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF2196F3).withValues(alpha: 0.2),
@@ -77,18 +80,62 @@ class ProfileCompletionAvatar extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: imageUrl == null
-                    ? Center(
-                        child: Text(
-                          name.substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w600,
+                child: ClipOval(
+                  child: imageUrl != null && imageUrl!.isNotEmpty
+                      ? Image.network(
+                          imageUrl!,
+                          fit: BoxFit.cover,
+                          width: size,
+                          height: size,
+                          errorBuilder: (context, error, stackTrace) {
+                            // Show first letter if image fails to load
+                            return Container(
+                              color: const Color(0xFF2196F3),
+                              child: Center(
+                                child: Text(
+                                  name.substring(0, 1).toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: const Color(0xFF2196F3),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  strokeWidth: 2,
+                                  valueColor: const AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          color: const Color(0xFF2196F3),
+                          child: Center(
+                            child: Text(
+                              name.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
-                      )
-                    : null,
+                ),
               ),
             ),
 

@@ -13,6 +13,7 @@ import '../../widgets/audio_player_widget.dart';
 import 'widgets/call_feedback_modal.dart';
 import '../telecaller/widgets/call_type_selection_dialog.dart';
 import '../telecaller/widgets/ivr_call_waiting_overlay.dart';
+import '../telecaller/widgets/easygo_ivr_call_helper.dart';
 import 'package:intl/intl.dart';
 import '../main_container.dart' as main;
 
@@ -1561,23 +1562,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     );
   }
 
-  // Make a phone call
+  // Make a phone call using EasyGo IVR
   Future<void> _makeCall(CallHistoryLog log) async {
     try {
-      // Show call type selection dialog
-      final callType = await showDialog<String>(
-        context: context,
-        builder: (context) => CallTypeSelectionDialog(
-          driverName: log.contactName,
-        ),
-      );
-
-      if (callType == null) return;
-
-      // Get phone number from the call history log
-      final phoneNumber = log.contactMobile;
-      
-      if (phoneNumber.isEmpty) {
+      // Check if phone number is available
+      if (log.contactMobile.isEmpty) {
         // Show informational dialog
         showDialog(
           context: context,
@@ -1655,15 +1644,122 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         );
         return;
       }
+      
+      // Use EasyGo IVR for all calls
+      await EasyGoIVRCallHelper.initiateCall(
+        context: context,
+        clientName: log.contactName,
+        clientPhone: log.contactMobile,
+        clientId: log.contactId,
+        contactType: log.contactType.toLowerCase(),
+        onCallEnded: () {
+          // Show feedback modal after call
+          _showFeedbackModalForLog(log);
+        },
+      );
+      return;
+      
+      // OLD CODE - Keeping for reference but not used
+      // Show call type selection dialog
+      // final callType = await showDialog<String>(
+      //   context: context,
+      //   builder: (context) => CallTypeSelectionDialog(
+      //     driverName: log.contactName,
+      //   ),
+      // );
 
-      final callerId = _currentUser?.id ?? 0;
-      final contactId = log.contactId;
+      // if (callType == null) return;
 
-      if (callType == 'manual') {
-        await _handleManualCall(log, phoneNumber, callerId, contactId);
-      } else if (callType == 'click2call') {
-        await _handleIVRCall(log, phoneNumber, callerId, contactId);
-      }
+      // // Get phone number from the call history log
+      // final phoneNumber = log.contactMobile;
+      
+      // if (phoneNumber.isEmpty) {
+      //   // Show informational dialog
+      //   showDialog(
+      //     context: context,
+      //     builder: (context) => AlertDialog(
+      //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      //       title: Row(
+      //         children: [
+      //           Icon(Icons.info_outline, color: AppTheme.primaryBlue),
+      //           const SizedBox(width: 12),
+      //           const Expanded(
+      //             child: Text(
+      //               'Phone Number Not Available',
+      //               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      //             ),
+      //           ),
+      //         ],
+      //       ),
+      //       content: Column(
+      //         mainAxisSize: MainAxisSize.min,
+      //         crossAxisAlignment: CrossAxisAlignment.start,
+      //         children: [
+      //           Text(
+      //             'To call ${log.contactName}, please find them in:',
+      //             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      //           ),
+      //           const SizedBox(height: 12),
+      //           _buildInfoStep('1', 'Smart Calling section'),
+      //           const SizedBox(height: 8),
+      //           _buildInfoStep('2', 'Jobs section'),
+      //           const SizedBox(height: 16),
+      //           Container(
+      //             padding: const EdgeInsets.all(12),
+      //             decoration: BoxDecoration(
+      //               color: Colors.blue.shade50,
+      //               borderRadius: BorderRadius.circular(8),
+      //               border: Border.all(color: Colors.blue.shade200),
+      //             ),
+      //             child: Row(
+      //               children: [
+      //                 Icon(Icons.security, size: 16, color: Colors.blue.shade700),
+      //                 const SizedBox(width: 8),
+      //                 Expanded(
+      //                   child: Text(
+      //                     'Contact ID: ${log.contactId}',
+      //                     style: TextStyle(
+      //                       fontSize: 11,
+      //                       color: Colors.blue.shade700,
+      //                       fontWeight: FontWeight.w600,
+      //                     ),
+      //                   ),
+      //                 ),
+      //               ],
+      //             ),
+      //           ),
+      //         ],
+      //       ),
+      //       actions: [
+      //         TextButton(
+      //           onPressed: () => Navigator.pop(context),
+      //           child: const Text('Got it'),
+      //         ),
+      //         ElevatedButton(
+      //           onPressed: () {
+      //             Navigator.pop(context);
+      //             // Navigate back and let user go to smart calling from dashboard
+      //             Navigator.pop(context);
+      //           },
+      //           style: ElevatedButton.styleFrom(
+      //             backgroundColor: AppTheme.primaryBlue,
+      //           ),
+      //           child: const Text('OK'),
+      //         ),
+      //       ],
+      //     ),
+      //   );
+      //   return;
+      // }
+
+      // final callerId = _currentUser?.id ?? 0;
+      // final contactId = log.contactId;
+
+      // if (callType == 'manual') {
+      //   await _handleManualCall(log, phoneNumber, callerId, contactId);
+      // } else if (callType == 'easygo_ivr') {
+      //   await _handleIVRCall(log, phoneNumber, callerId, contactId);
+      // }
     } catch (e) {
       // Close any open dialogs
       if (mounted && Navigator.canPop(context)) {
@@ -1711,6 +1807,17 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         ),
       ],
     );
+  }
+
+  // Show feedback modal for new call
+  void _showFeedbackModalForLog(CallHistoryLog log) {
+    // Reload data and show edit feedback modal
+    _loadData();
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _showEditFeedbackModal(log);
+      }
+    });
   }
 
   // Show edit feedback modal with role-based options

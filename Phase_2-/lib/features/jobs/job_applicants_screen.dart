@@ -8,6 +8,7 @@ import '../../models/driver_applicant_model.dart';
 import '../../widgets/profile_completion_avatar.dart';
 import 'match_making_screen.dart';
 import '../calls/widgets/call_feedback_modal.dart';
+import '../../../lib/features/telecaller/widgets/easygo_ivr_call_helper.dart';
 import '../main_container.dart' as main;
 
 class JobApplicantsScreen extends StatefulWidget {
@@ -81,15 +82,36 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       _error = '';
     });
     try {
+      print('=== LOADING APPLICANTS ===');
+      print('Job ID: ${widget.jobId}');
+      
       final applicants =
           await Phase2ApiService.fetchJobApplicants(widget.jobId);
+      
+      print('Received ${applicants.length} applicants');
+      
+      // Debug: Print feedback data for first applicant
+      if (applicants.isNotEmpty) {
+        final first = applicants[0];
+        print('First applicant: ${first.name}');
+        print('  - callFeedback: ${first.callFeedback}');
+        print('  - matchStatus: ${first.matchStatus}');
+        print('  - feedbackNotes: ${first.feedbackNotes}');
+        print('  - transporterTmid: ${first.transporterTmid}');
+        print('  - transporterName: ${first.transporterName}');
+      }
+      
       setState(() {
         _applicants = applicants;
         _sortApplicants();
         _filteredApplicants = _applicants;
         _isLoading = false;
       });
+      
+      print('=== APPLICANTS LOADED SUCCESSFULLY ===');
     } catch (e) {
+      print('=== ERROR LOADING APPLICANTS ===');
+      print('Error: $e');
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -103,9 +125,14 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       key: _scaffoldMessengerKey,
       child: Scaffold(
         backgroundColor: AppColors.background,
-        body: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
+        body: RefreshIndicator(
+          onRefresh: _loadApplicants,
+          color: AppColors.primary,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
             SliverAppBar(
               expandedHeight: 220,
               floating: false,
@@ -252,6 +279,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
             ),
           ],
         ),
+        ),
       ),
     );
   }
@@ -360,6 +388,11 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     final hasMatchStatus =
         driver.matchStatus != null && driver.matchStatus!.isNotEmpty;
 
+    // Debug: Print feedback status for each driver
+    print('Building card for ${driver.name}:');
+    print('  - callFeedback: ${driver.callFeedback} (hasFeedback: $hasFeedback)');
+    print('  - matchStatus: ${driver.matchStatus} (hasMatchStatus: $hasMatchStatus)');
+
     // Determine card color based on match status first, then feedback
     Color cardColor = Colors.white;
     Color borderColor = Colors.grey.shade200;
@@ -433,10 +466,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                   color: Colors.green,
                   borderRadius: BorderRadius.circular(10),
                   child: InkWell(
-                    onTap: () async {
-                      await _makePhoneCall(driver.mobile);
-                      _showCallFeedbackModal(driver);
-                    },
+                    onTap: () => _initiateCall(driver),
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
                       padding: const EdgeInsets.all(10),
@@ -995,6 +1025,29 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     }
   }
 
+  Future<void> _initiateCall(DriverApplicant driver) async {
+    if (driver.mobile.isEmpty) return;
+
+    try {
+      // Use EasyGo IVR directly
+      await EasyGoIVRCallHelper.initiateCall(
+        context: context,
+        clientName: driver.name,
+        clientPhone: driver.mobile,
+        clientId: driver.driverId.toString(),
+        contactType: 'driver',
+        onCallEnded: () => _showCallFeedbackModal(driver),
+      );
+    } catch (e) {
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Text('Error initiating call: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _makePhoneCall(String phone) async {
     if (phone.isEmpty) return;
     final Uri phoneUri = Uri(scheme: 'tel', path: phone);
@@ -1006,12 +1059,13 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _DriverDetailsSheet(driver: driver, onCall: () => _makePhoneCall(driver.mobile)),
+      builder: (context) => _DriverDetailsSheet(driver: driver, onCall: () => _initiateCall(driver)),
     );
   }
 
-  void _showCallFeedbackModal(DriverApplicant driver) {
-    showModalBottomSheet(
+  void _showCallFeedbackModal(DriverApplicant driver) async {
+    // Show the modal and wait for it to close
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1048,72 +1102,82 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
               jobId: widget.jobId,
             );
 
-            // Update the driver's feedback status locally
-            setState(() {
-              final index =
-                  _applicants.indexWhere((d) => d.driverId == driver.driverId);
-              if (index != -1) {
-                _applicants[index] = DriverApplicant(
-                  jobId: driver.jobId,
-                  jobTitle: driver.jobTitle,
-                  contractorId: driver.contractorId,
-                  transporterTmid: driver.transporterTmid,
-                  transporterName: driver.transporterName,
-                  driverId: driver.driverId,
-                  driverTmid: driver.driverTmid,
-                  name: driver.name,
-                  mobile: driver.mobile,
-                  email: driver.email,
-                  city: driver.city,
-                  state: driver.state,
-                  vehicleType: driver.vehicleType,
-                  drivingExperience: driver.drivingExperience,
-                  licenseType: driver.licenseType,
-                  licenseNumber: driver.licenseNumber,
-                  preferredLocation: driver.preferredLocation,
-                  aadharNumber: driver.aadharNumber,
-                  panNumber: driver.panNumber,
-                  gstNumber: driver.gstNumber,
-                  status: driver.status,
-                  createdAt: driver.createdAt,
-                  updatedAt: driver.updatedAt,
-                  appliedAt: driver.appliedAt,
-                  profileCompletion: driver.profileCompletion,
-                  subscriptionAmount: driver.subscriptionAmount,
-                  subscriptionStartDate: driver.subscriptionStartDate,
-                  subscriptionEndDate: driver.subscriptionEndDate,
-                  subscriptionStatus: driver.subscriptionStatus,
-                  callFeedback: feedback,
-                  matchStatus: matchStatus,
-                  feedbackNotes: notes,
-                );
-              }
-              _sortApplicants();
-              _onSearchChanged(); // Refresh filtered list
-            });
+            // Update the driver's feedback status locally immediately
+            if (mounted) {
+              setState(() {
+                final index =
+                    _applicants.indexWhere((d) => d.driverId == driver.driverId);
+                if (index != -1) {
+                  _applicants[index] = DriverApplicant(
+                    jobId: driver.jobId,
+                    jobTitle: driver.jobTitle,
+                    contractorId: driver.contractorId,
+                    transporterTmid: driver.transporterTmid,
+                    transporterName: driver.transporterName,
+                    driverId: driver.driverId,
+                    driverTmid: driver.driverTmid,
+                    name: driver.name,
+                    mobile: driver.mobile,
+                    email: driver.email,
+                    city: driver.city,
+                    state: driver.state,
+                    vehicleType: driver.vehicleType,
+                    drivingExperience: driver.drivingExperience,
+                    licenseType: driver.licenseType,
+                    licenseNumber: driver.licenseNumber,
+                    preferredLocation: driver.preferredLocation,
+                    aadharNumber: driver.aadharNumber,
+                    panNumber: driver.panNumber,
+                    gstNumber: driver.gstNumber,
+                    status: driver.status,
+                    createdAt: driver.createdAt,
+                    updatedAt: driver.updatedAt,
+                    appliedAt: driver.appliedAt,
+                    profileCompletion: driver.profileCompletion,
+                    subscriptionAmount: driver.subscriptionAmount,
+                    subscriptionStartDate: driver.subscriptionStartDate,
+                    subscriptionEndDate: driver.subscriptionEndDate,
+                    subscriptionStatus: driver.subscriptionStatus,
+                    callFeedback: feedback,
+                    matchStatus: matchStatus,
+                    feedbackNotes: notes,
+                  );
+                }
+                _sortApplicants();
+                _onSearchChanged(); // Refresh filtered list
+              });
 
-            // Show toast using global key - more reliable
-            _scaffoldMessengerKey.currentState?.showSnackBar(
-              const SnackBar(
-                content: Text('Feedback submitted successfully'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
+              // Show toast using global key - more reliable
+              _scaffoldMessengerKey.currentState?.showSnackBar(
+                const SnackBar(
+                  content: Text('Feedback submitted successfully'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
           } catch (e) {
             // Show error toast using global key
-            _scaffoldMessengerKey.currentState?.showSnackBar(
-              SnackBar(
-                content: Text(
-                    'Error: Exception: Failed to save call feedback: Exception: ${e.toString()}'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 4),
-              ),
-            );
+            if (mounted) {
+              _scaffoldMessengerKey.currentState?.showSnackBar(
+                SnackBar(
+                  content: Text(
+                      'Error: Exception: Failed to save call feedback: Exception: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
           }
         },
       ),
     );
+    
+    // After modal closes, reload data from API to ensure we have the latest feedback
+    if (mounted) {
+      print('=== RELOADING APPLICANTS AFTER MODAL CLOSE ===');
+      await _loadApplicants();
+    }
   }
 }
 

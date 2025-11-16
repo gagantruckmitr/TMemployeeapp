@@ -139,7 +139,7 @@ class _ModernJobCardState extends State<ModernJobCard> {
       // Manual call - just open phone dialer
       final Uri phoneUri = Uri(scheme: 'tel', path: phone);
       if (await canLaunchUrl(phoneUri)) await launchUrl(phoneUri);
-    } else if (callType == 'click2call') {
+    } else if (callType == 'easygo_ivr') {
       // IVR call
       await _handleIVRCall(phone, callerId);
     }

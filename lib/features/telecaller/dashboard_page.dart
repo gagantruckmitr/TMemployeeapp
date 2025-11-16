@@ -21,6 +21,8 @@ import '../../core/services/smart_calling_service.dart';
 import 'screens/search_users_screen.dart';
 import 'screens/pending_calls_screen.dart';
 import 'performance_analytics_page.dart';
+import '../../core/services/subscription_service.dart';
+import 'subscriptions/subscriptions_screen.dart';
 
 class DashboardPage extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
@@ -47,6 +49,7 @@ class _DashboardPageState extends State<DashboardPage>
 
   // Dynamic data
   Map<String, int> _dashboardStats = {};
+  int _totalSubscriptions = 0;
 
   @override
   bool get wantKeepAlive => true;
@@ -84,9 +87,14 @@ class _DashboardPageState extends State<DashboardPage>
       final stats = await TelecallerService.instance.getDashboardStats();
       print('📊 Dashboard Stats Loaded: $stats');
 
+      // Load subscription stats
+      final subscriptionStats = await SubscriptionService.instance.getSubscriptionStats();
+      print('💳 Subscription Stats Loaded: ${subscriptionStats?.totalSubscriptions ?? 0}');
+
       if (mounted) {
         setState(() {
           _dashboardStats = stats;
+          _totalSubscriptions = subscriptionStats?.totalSubscriptions ?? 0;
         });
         print('✅ Dashboard UI Updated with stats');
 
@@ -577,6 +585,12 @@ class _DashboardPageState extends State<DashboardPage>
         title: 'Connected',
         value: connectedCalls.toString(),
         icon: '✅',
+        color: 0xFF10B981,
+      ),
+      KPIData(
+        title: 'Subscriptions',
+        value: _totalSubscriptions.toString(),
+        icon: '💳',
         color: 0xFF10B981,
       ),
       KPIData(
@@ -1657,6 +1671,15 @@ class _DashboardPageState extends State<DashboardPage>
           targetSection = NavigationSection.callHistory;
           filter = 'connected';
           break;
+        case 'subscriptions':
+          // Navigate to subscriptions screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const SubscriptionsScreen(),
+            ),
+          );
+          return;
         case 'pending calls':
           // Navigate to dedicated pending calls screen
           targetSection = NavigationSection.pendingCalls;
@@ -1743,7 +1766,7 @@ class _DashboardPageState extends State<DashboardPage>
 
       if (callType == 'manual') {
         await _handleManualCall(lead, phoneNumber, callerId);
-      } else if (callType == 'click2call') {
+      } else if (callType == 'easygo_ivr') {
         await _handleIVRCall(lead, phoneNumber, callerId);
       }
     } catch (e) {

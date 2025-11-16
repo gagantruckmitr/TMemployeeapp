@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
+import '../../core/services/smart_calling_service.dart';
 import '../../models/job_model.dart';
 import '../../models/driver_applicant_model.dart';
 import '../../widgets/profile_completion_avatar.dart';
 import '../calls/widgets/call_feedback_modal.dart';
+import '../telecaller/widgets/call_type_selection_dialog.dart';
+import '../telecaller/widgets/easygo_ivr_call_helper.dart';
 
 class MatchMakingScreen extends StatefulWidget {
   final String jobId;
@@ -451,10 +454,7 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
                 color: Colors.green,
                 borderRadius: BorderRadius.circular(10),
                 child: InkWell(
-                  onTap: () async {
-                    await _makePhoneCall(driver.mobile);
-                    _showCallFeedbackModal(driver);
-                  },
+                  onTap: () => _initiateCall(driver),
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
                     padding: const EdgeInsets.all(10),
@@ -511,10 +511,53 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
     );
   }
 
-  Future<void> _makePhoneCall(String phone) async {
-    if (phone.isEmpty) return;
-    final Uri phoneUri = Uri(scheme: 'tel', path: phone);
-    if (await canLaunchUrl(phoneUri)) await launchUrl(phoneUri);
+  Future<void> _initiateCall(DriverApplicant driver) async {
+    if (driver.mobile.isEmpty) return;
+
+    try {
+      final callType = await showDialog<String>(
+        context: context,
+        builder: (context) => CallTypeSelectionDialog(driverName: driver.name),
+      );
+
+      if (callType == null) return;
+
+      final callerId = await Phase2AuthService.getUserId();
+
+      if (callType == 'manual') {
+        await _handleManualCall(driver, callerId);
+      } else if (callType == 'easygo_ivr') {
+        await EasyGoIVRCallHelper.initiateCall(
+          context: context,
+          clientName: driver.name,
+          clientPhone: driver.mobile,
+          clientId: driver.driverId.toString(),
+          contactType: 'driver',
+          callSource: 'job_posting',
+          onCallEnded: () => _showCallFeedbackModal(driver),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _handleManualCall(DriverApplicant driver, int callerId) async {
+    final cleanMobile = driver.mobile.replaceAll(RegExp(r'[^\d]'), '');
+    final result = await SmartCallingService.instance.initiateManualCall(
+      driverMobile: cleanMobile,
+      callerId: callerId,
+      driverId: driver.driverId.toString(),
+    );
+
+    if (result['success'] == true) {
+      final driverMobileRaw = result['data']?['driver_mobile_raw'];
+      await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) _showCallFeedbackModal(driver);
+    }
   }
 
   void _showCallFeedbackModal(DriverApplicant driver) {

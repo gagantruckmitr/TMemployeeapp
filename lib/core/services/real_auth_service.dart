@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import '../../models/phase2_user_model.dart';
 import 'api_service.dart';
 import 'smart_calling_service.dart';
+import 'session_manager.dart';
 
 class RealAuthService {
   static String get baseUrl => ApiConfig.baseUrl;
@@ -56,6 +58,12 @@ class RealAuthService {
           
           _currentUser = user;
           await _saveUserSession(user, token);
+          
+          // Sync user data to Phase2AuthService format for IVR compatibility
+          await _syncToPhase2Auth(user);
+          
+          // Reset session timer on successful login
+          await SessionManager.instance.resetSession();
           
           // Update telecaller status to online if role is telecaller
           if (user.role == 'telecaller') {
@@ -160,6 +168,16 @@ class RealAuthService {
       await _restoreUserSession();
     }
     
+    // Check session validity (20-minute inactivity timeout)
+    if (isLoggedIn && _currentUser != null) {
+      final isSessionValid = await SessionManager.instance.isSessionValid();
+      if (!isSessionValid) {
+        print('Session expired due to inactivity - logging out');
+        await logout(keepCredentials: true);
+        return false;
+      }
+    }
+    
     return isLoggedIn && _currentUser != null;
   }
 
@@ -187,6 +205,9 @@ class RealAuthService {
       print('Logout API call failed: $e');
     }
 
+    // Clear session manager
+    await SessionManager.instance.clearSession();
+    
     // CRITICAL: Clear API caller ID and cached data
     ApiService.setCallerId('');
     SmartCallingService.instance.clearCache();
@@ -276,6 +297,31 @@ class RealAuthService {
     await prefs.setString(_keyUserRole, user.role);
     await prefs.setString(_keyUserMobile, user.mobile);
     await prefs.setString(_keyAuthToken, token);
+  }
+  
+  // Sync user data to Phase2AuthService format for IVR compatibility
+  Future<void> _syncToPhase2Auth(UserProfile user) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final phase2User = Phase2User(
+        id: int.tryParse(user.id) ?? 0,
+        name: user.name,
+        mobile: user.mobile,
+        email: user.email,
+        role: user.role,
+        tcFor: '', // Not available in RealAuthService
+        createdAt: DateTime.now().toIso8601String(),
+      );
+      
+      // Save to Phase2AuthService keys
+      await prefs.setString('phase2_user', json.encode(phase2User.toJson()));
+      await prefs.setBool('phase2_is_logged_in', true);
+      
+      print('✅ User data synced to Phase2AuthService for IVR compatibility');
+    } catch (e) {
+      print('⚠️ Failed to sync user to Phase2AuthService: $e');
+      // Don't fail login if sync fails
+    }
   }
   
   // Save credentials for auto-fill

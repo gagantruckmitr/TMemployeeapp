@@ -29,23 +29,23 @@ function getDashboardStats() {
         
         $stats = [];
         
-        // Mutually exclusive job categories
+        // Total jobs - include ALL jobs
         $result = $conn->query("SELECT COUNT(*) as count FROM jobs WHERE assigned_to = $userId");
         $stats['totalJobs'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
         
-        // Priority 1: Expired jobs (regardless of status or active/inactive)
+        // Expired jobs (regardless of status or active/inactive)
         $expiredResult = $conn->query("SELECT COUNT(*) as count FROM jobs WHERE assigned_to = $userId AND Application_Deadline < NOW() AND Application_Deadline IS NOT NULL AND Application_Deadline != ''");
         $stats['expiredJobs'] = $expiredResult ? (int)$expiredResult->fetch_assoc()['count'] : 0;
         
-        // Priority 2: Inactive jobs (excluding expired ones)
+        // Inactive jobs (excluding expired ones)
         $result = $conn->query("SELECT COUNT(*) as count FROM jobs WHERE assigned_to = $userId AND active_inactive = 0 AND (Application_Deadline IS NULL OR Application_Deadline = '' OR Application_Deadline >= NOW())");
         $stats['inactiveJobs'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
         
-        // Priority 3: Approved jobs (excluding expired and inactive ones)
+        // Approved jobs (excluding expired ones)
         $result = $conn->query("SELECT COUNT(*) as count FROM jobs WHERE assigned_to = $userId AND status = '1' AND active_inactive = 1 AND (Application_Deadline IS NULL OR Application_Deadline = '' OR Application_Deadline >= NOW())");
         $stats['approvedJobs'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
         
-        // Priority 4: Pending jobs (excluding expired and inactive ones)
+        // Pending jobs (excluding expired ones)
         $result = $conn->query("SELECT COUNT(*) as count FROM jobs WHERE assigned_to = $userId AND status = '0' AND active_inactive = 1 AND (Application_Deadline IS NULL OR Application_Deadline = '' OR Application_Deadline >= NOW())");
         $stats['pendingJobs'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
         

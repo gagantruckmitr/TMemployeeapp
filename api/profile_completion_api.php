@@ -89,9 +89,14 @@ function getProfileDetails($conn) {
         ];
     } elseif ($role === 'transporter') {
         $requiredFields = [
-            'name', 'email', 'Transport_Name', 'Year_of_Establishment',
-            'Fleet_Size', 'Operational_Segment', 'Average_KM', 'city', 'images', 'address',
-            'PAN_Number', 'PAN_Image', 'GST_Certificate'
+            'name', 'email', 'mobile', 'Transport_Name', 'Year_of_Establishment',
+            'Fleet_Size', 'Operational_Segment', 'Average_KM', 'city', 'states',
+            'images', 'address', 'PAN_Number', 'PAN_Image', 'GST_Certificate'
+        ];
+        
+        // Map fields to their display names
+        $displayFields = [
+            'states' => 'state_name'
         ];
     }
     

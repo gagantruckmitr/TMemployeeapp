@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/phase2_api_service.dart';
 import '../../../core/services/phase2_auth_service.dart';
@@ -10,7 +10,7 @@ import '../job_applicants_screen.dart';
 import 'job_brief_feedback_modal.dart';
 import 'show_transporter_call_feedback.dart';
 import '../../telecaller/widgets/call_type_selection_dialog.dart';
-import '../../telecaller/widgets/ivr_call_waiting_overlay.dart';
+import '../../telecaller/widgets/easygo_ivr_call_helper.dart';
 
 class ModernJobCard extends StatefulWidget {
   final JobModel job;
@@ -109,106 +109,62 @@ class _ModernJobCardState extends State<ModernJobCard> {
   Future<void> _makePhoneCall(String phone) async {
     if (phone.isEmpty) return;
 
-    // Check if user can make calls on this job
     if (!_isAssignedToMe) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-              'This job is assigned to ${widget.job.assignedToName ?? "another telecaller"}'),
+          content: Text('This job is assigned to ${widget.job.assignedToName ?? "another telecaller"}'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    // Show call type selection dialog
-    final callType = await showDialog<String>(
-      context: context,
-      builder: (context) => CallTypeSelectionDialog(
-        driverName: widget.job.transporterName,
-      ),
-    );
-
-    if (callType == null) return;
-
-    // Get current user for caller ID
-    final user = await Phase2AuthService.getCurrentUser();
-    final callerId = user?.id ?? 0;
-
-    if (callType == 'manual') {
-      // Manual call - just open phone dialer
-      final Uri phoneUri = Uri(scheme: 'tel', path: phone);
-      if (await canLaunchUrl(phoneUri)) await launchUrl(phoneUri);
-    } else if (callType == 'click2call') {
-      // IVR call
-      await _handleIVRCall(phone, callerId);
-    }
-  }
-
-  Future<void> _handleIVRCall(String phone, int callerId) async {
     try {
-      // Clean phone number
-      final cleanMobile = phone.replaceAll(RegExp(r'[^\d]'), '');
-
-      // Show loading indicator
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📞 Initiating IVR call...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      // Initiate IVR call
-      final result = await SmartCallingService.instance.initiateClick2CallIVR(
-        driverMobile: cleanMobile,
-        callerId: callerId,
-        driverId: widget.job.transporterTmid,
+      final callType = await showDialog<String>(
+        context: context,
+        builder: (context) => CallTypeSelectionDialog(driverName: widget.job.transporterName),
       );
 
-      if (mounted) {
-        if (result['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ IVR call initiated! Both phones will ring.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 3),
-            ),
-          );
+      if (callType == null) return;
 
-          // Show IVR waiting overlay
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => IVRCallWaitingOverlay(
-              driverName: widget.job.transporterName,
-              onCallEnded: () {
-                Navigator.pop(context);
-                // Show call feedback after IVR call
-                _showTransporterCallFeedbackAfterIVR();
-              },
-            ),
-          );
-        } else {
-          final errorMsg = result['error'] ?? 'Unknown error';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to initiate IVR call: $errorMsg'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (callType == 'manual') {
+        await _handleManualCall(phone);
+      } else if (callType == 'easygo_ivr') {
+        await EasyGoIVRCallHelper.initiateCall(
+          context: context,
+          clientName: widget.job.transporterName,
+          clientPhone: phone,
+          clientId: widget.job.transporterTmid,
+          contactType: 'transporter',
+          callSource: 'job_posting',
+          onCallEnded: () => _showTransporterCallFeedbackAfterIVR(),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
+    }
+  }
+
+  Future<void> _handleManualCall(String phone) async {
+    final user = await Phase2AuthService.getCurrentUser();
+    final callerId = user?.id ?? 0;
+    final cleanPhone = phone.replaceAll(RegExp(r'[^\d]'), '');
+    
+    final result = await SmartCallingService.instance.initiateManualCall(
+      driverMobile: cleanPhone,
+      callerId: callerId,
+      driverId: widget.job.transporterTmid,
+    );
+
+    if (result['success'] == true) {
+      final driverMobileRaw = result['data']?['driver_mobile_raw'];
+      await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) _showTransporterCallFeedbackAfterIVR();
     }
   }
 

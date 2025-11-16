@@ -38,8 +38,9 @@ function getJobApplicants() {
         $jobRow = $jobResult->fetch_assoc();
         $numericJobId = $jobRow['id'];
         
-        // Now get applicants using the numeric id with vehicle name, state name, and subscription details
+        // Now get applicants using the numeric id with vehicle name, state name, subscription details, and call feedback
         // Use subquery to get only the most recent captured subscription payment per user
+        // Also get the most recent call feedback for this driver and job
         $query = "SELECT 
             j.id AS job_id,
             j.job_title,
@@ -71,7 +72,12 @@ function getJobApplicants() {
             p.created_at as subscription_start_date,
             p.end_at as subscription_end_date,
             p.payment_status as payment_status,
-            p.payment_type as payment_type
+            p.payment_type as payment_type,
+            cl.feedback as call_feedback,
+            cl.match_status as match_status,
+            cl.remark as feedback_notes,
+            t.unique_id as transporter_tmid,
+            t.name as transporter_name
         FROM applyjobs a
         INNER JOIN users u ON a.driver_id = u.id
         INNER JOIN jobs j ON a.job_id = j.id
@@ -89,6 +95,19 @@ function getJobApplicants() {
             ) p2 ON p1.unique_id = p2.unique_id AND p1.created_at = p2.max_created
             WHERE p1.payment_type = 'subscription' AND p1.payment_status = 'captured'
         ) p ON u.unique_id = p.unique_id
+        LEFT JOIN (
+            SELECT cl1.*
+            FROM call_logs_match_making cl1
+            INNER JOIN (
+                SELECT unique_id_driver, job_id, MAX(created_at) as max_created
+                FROM call_logs_match_making
+                WHERE unique_id_driver IS NOT NULL AND unique_id_driver != ''
+                GROUP BY unique_id_driver, job_id
+            ) cl2 ON cl1.unique_id_driver = cl2.unique_id_driver 
+                  AND cl1.job_id = cl2.job_id 
+                  AND cl1.created_at = cl2.max_created
+        ) cl ON u.unique_id = cl.unique_id_driver AND cl.job_id = '$jobIdString'
+        LEFT JOIN users t ON j.transporter_id = t.id
         WHERE a.job_id = $numericJobId
         ORDER BY a.created_at DESC";
         
@@ -173,6 +192,8 @@ function getJobApplicants() {
                 'jobId' => (int)$row['job_id'],
                 'jobTitle' => $row['job_title'] ?? '',
                 'contractorId' => (int)$row['contractor_id'],
+                'transporterTmid' => $row['transporter_tmid'] ?? '',
+                'transporterName' => $row['transporter_name'] ?? '',
                 'driverId' => (int)$row['driver_id'],
                 'driverTmid' => $row['driver_tmid'] ?? '',
                 'name' => $row['name'] ?? '',
@@ -199,6 +220,9 @@ function getJobApplicants() {
                 'subscriptionStartDate' => $subscriptionStartDate,
                 'subscriptionEndDate' => $row['subscription_end_date'] ?? null,
                 'subscriptionStatus' => $subscriptionStatus,
+                'callFeedback' => $row['call_feedback'] ?? null,
+                'matchStatus' => $row['match_status'] ?? null,
+                'feedbackNotes' => $row['feedback_notes'] ?? null,
             ];
         }
         

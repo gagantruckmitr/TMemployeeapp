@@ -2,21 +2,32 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../../core/theme/app_theme.dart';
 
-/// Modern IVR call waiting overlay with animations
+// Global overlay entry for mini mode
+OverlayEntry? _globalMiniOverlay;
+
+/// Modern IVR call waiting overlay with animations and mini mode support
 class IVRCallWaitingOverlay extends StatefulWidget {
   final String driverName;
   final String? referenceId;
   final VoidCallback onCallEnded;
+  final bool allowMinimize;
 
   const IVRCallWaitingOverlay({
     super.key,
     required this.driverName,
     this.referenceId,
     required this.onCallEnded,
+    this.allowMinimize = true,
   });
 
   @override
   State<IVRCallWaitingOverlay> createState() => _IVRCallWaitingOverlayState();
+  
+  // Static method to remove mini overlay
+  static void removeMiniOverlay() {
+    _globalMiniOverlay?.remove();
+    _globalMiniOverlay = null;
+  }
 }
 
 class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
@@ -29,6 +40,7 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
 
   String _currentStatus = 'Initiating IVR call...';
   int _currentStep = 0;
+  bool _isMinimized = false; // Start in full screen, user can minimize
 
   final List<String> _statusMessages = [
     'Initiating IVR call...',
@@ -106,9 +118,69 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
       return false;
     });
   }
+  
+  void _minimizeToFloating(BuildContext context) {
+    // Remove any existing mini overlay
+    IVRCallWaitingOverlay.removeMiniOverlay();
+    
+    // Pop the current full-screen overlay
+    Navigator.of(context).pop();
+    
+    // Create and insert mini overlay
+    _globalMiniOverlay = OverlayEntry(
+      builder: (context) => _MiniFloatingWidget(
+        driverName: widget.driverName,
+        pulseAnimation: _pulseAnimation,
+        onExpand: () {
+          // Remove mini overlay
+          IVRCallWaitingOverlay.removeMiniOverlay();
+          
+          // Show full screen again
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (context) => PopScope(
+                canPop: false,
+                child: IVRCallWaitingOverlay(
+                  driverName: widget.driverName,
+                  referenceId: widget.referenceId,
+                  onCallEnded: widget.onCallEnded,
+                  allowMinimize: widget.allowMinimize,
+                ),
+              ),
+            ),
+          );
+        },
+        onCallEnded: () {
+          IVRCallWaitingOverlay.removeMiniOverlay();
+          widget.onCallEnded();
+        },
+      ),
+    );
+    
+    // Insert into overlay
+    Overlay.of(context).insert(_globalMiniOverlay!);
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isMinimized) {
+      return Stack(
+        children: [
+          // Dismiss overlay when tapping outside
+          GestureDetector(
+            onTap: () {
+              // Tapping background does nothing, user must use buttons
+            },
+            child: Container(
+              color: Colors.transparent,
+            ),
+          ),
+          _buildMiniMode(context),
+        ],
+      );
+    }
+    
     return Material(
       color: Colors.black.withValues(alpha: 0.95),
       child: Container(
@@ -175,6 +247,20 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
                           ),
                         ),
                       ),
+                    if (widget.allowMinimize) ...[
+                      const SizedBox(width: 12),
+                      IconButton(
+                        onPressed: () {
+                          _minimizeToFloating(context);
+                        },
+                        icon: const Icon(
+                          Icons.minimize,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                        tooltip: 'Minimize',
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -416,6 +502,167 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
     );
   }
 
+  Widget _buildMiniMode(BuildContext context) {
+    return Positioned(
+      top: 80,
+      left: 16,
+      right: 16,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _isMinimized = false;
+          });
+        },
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF4A90E2),
+                  const Color(0xFF357ABD),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header row
+                Row(
+                  children: [
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: _pulseAnimation.value,
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.25),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.phone_in_talk,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'IVR Call',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.driverName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () {
+                        setState(() {
+                          _isMinimized = false;
+                        });
+                      },
+                      icon: const Icon(
+                        Icons.open_in_full,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      tooltip: 'Expand',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Status row
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'In Progress',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const Spacer(),
+                    // End call button
+                    ElevatedButton(
+                      onPressed: widget.onCallEnded,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF4A90E2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'End Call',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildInstructionStep(String number, String text, IconData icon) {
     return Row(
       children: [
@@ -482,4 +729,220 @@ class _DottedCirclePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Mini floating widget that appears in the overlay
+class _MiniFloatingWidget extends StatefulWidget {
+  final String driverName;
+  final Animation<double> pulseAnimation;
+  final VoidCallback onExpand;
+  final VoidCallback onCallEnded;
+
+  const _MiniFloatingWidget({
+    required this.driverName,
+    required this.pulseAnimation,
+    required this.onExpand,
+    required this.onCallEnded,
+  });
+
+  @override
+  State<_MiniFloatingWidget> createState() => _MiniFloatingWidgetState();
+}
+
+class _MiniFloatingWidgetState extends State<_MiniFloatingWidget> {
+  double _top = 80;
+  double _left = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    const widgetWidth = 360.0;
+    const widgetHeight = 150.0;
+    
+    return Positioned(
+      top: _top,
+      left: _left,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(16),
+        child: GestureDetector(
+          onPanUpdate: (details) {
+            setState(() {
+              _left += details.delta.dx;
+              _top += details.delta.dy;
+              
+              // Keep widget within screen bounds with safe clamping
+              final maxLeft = (screenSize.width - widgetWidth).clamp(0.0, screenSize.width);
+              final maxTop = (screenSize.height - widgetHeight).clamp(0.0, screenSize.height);
+              
+              _left = _left.clamp(0.0, maxLeft);
+              _top = _top.clamp(0.0, maxTop);
+            });
+          },
+          child: Container(
+            width: 360,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF4A90E2),
+                  const Color(0xFF357ABD),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle indicator
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    AnimatedBuilder(
+                      animation: widget.pulseAnimation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: widget.pulseAnimation.value,
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.25),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.phone_in_talk,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'IVR Call',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.drag_indicator,
+                                color: Colors.white.withValues(alpha: 0.5),
+                                size: 16,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.driverName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: widget.onExpand,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.open_in_full,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'In Progress',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: widget.onCallEnded,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF4A90E2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'End Call',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

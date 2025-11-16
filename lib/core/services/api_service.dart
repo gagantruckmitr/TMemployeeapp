@@ -320,6 +320,7 @@ class ApiService {
       profileCompletion: _mapJsonToProfileCompletion(
         json['profile_completion'],
       ),
+      profilePicture: json['profilePicture'] ?? json['profile_picture'],
     );
   }
 
@@ -502,6 +503,7 @@ class ApiService {
     required String driverMobile,
     required int callerId,
     required String driverId,
+    String contactType = 'driver', // 'driver' or 'transporter'
   }) async {
     try {
       final uri = Uri.parse(
@@ -512,6 +514,7 @@ class ApiService {
         'driver_mobile': driverMobile,
         'caller_id': callerId,
         'driver_id': driverId,
+        'contact_type': contactType,
       };
 
       print('🔵 Manual Call API Request:');
@@ -579,28 +582,41 @@ class ApiService {
     String? feedback,
     String? remarks,
     int? callDuration,
+    String? driverName,
   }) async {
     try {
       final uri = Uri.parse(
         ApiConfig.click2CallIvrApi,
       ).replace(queryParameters: {'action': 'update_feedback'});
 
+      final requestBody = {
+        'reference_id': referenceId,
+        'call_status': callStatus,
+        'feedback': feedback,
+        'remarks': remarks,
+        'call_duration': callDuration,
+        'driver_name': driverName,
+      };
+
+      print('🔵 Update Feedback Request: ${json.encode(requestBody)}');
+
       final response = await http
           .post(
             uri,
             headers: {'Content-Type': 'application/json'},
-            body: json.encode({
-              'reference_id': referenceId,
-              'call_status': callStatus,
-              'feedback': feedback,
-              'remarks': remarks,
-              'call_duration': callDuration,
-            }),
+            body: json.encode(requestBody),
           )
           .timeout(timeout);
 
+      print('🔵 Update Feedback Response: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ Feedback updated successfully');
+        } else {
+          print('❌ Feedback update failed: ${data['error']}');
+        }
         return data['success'] == true;
       } else {
         throw Exception('HTTP ${response.statusCode}: ${response.body}');
@@ -963,5 +979,155 @@ class ApiService {
       print('❌ Failed to update leave status: $e');
       return false;
     }
+  }
+
+  // ==================== TRANSPORTER METHODS ====================
+
+  // Get transporters (uncalled transporters for welcome calls)
+  static Future<List<TransporterContact>> getTransporters({
+    int limit = 50,
+    String? callerId,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/transporter_leads_api.php').replace(
+        queryParameters: {
+          'action': 'transporter_leads',
+          'limit': limit.toString(),
+          'caller_id': callerId ?? _currentCallerId ?? '1',
+        },
+      );
+
+      print('🔵 Fetching transporters from: $uri');
+      final response = await http.get(uri).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> transportersJson = data['data'];
+          print('✅ Fetched ${transportersJson.length} transporters');
+          return transportersJson
+              .map((json) => _mapJsonToTransporterContact(json))
+              .toList();
+        } else {
+          throw Exception(data['error'] ?? 'Failed to fetch transporters');
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch transporters: $e');
+      throw Exception('Failed to fetch transporters: $e');
+    }
+  }
+
+  // Get transporters by status
+  static Future<List<TransporterContact>> getTransportersByStatus({
+    required String status,
+    int limit = 50,
+    String? callerId,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/transporter_leads_api.php').replace(
+        queryParameters: {
+          'action': 'transporter_leads',
+          'status': status,
+          'limit': limit.toString(),
+          'caller_id': callerId ?? _currentCallerId ?? '1',
+        },
+      );
+
+      print('🔵 Fetching transporters with status: $status');
+      final response = await http.get(uri).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> transportersJson = data['data'];
+          print('✅ Fetched ${transportersJson.length} transporters with status: $status');
+          return transportersJson
+              .map((json) => _mapJsonToTransporterContact(json))
+              .toList();
+        } else {
+          throw Exception(data['error'] ?? 'Failed to fetch transporters');
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch transporters by status: $e');
+      throw Exception('Failed to fetch transporters by status: $e');
+    }
+  }
+
+  // Update transporter call status
+  static Future<bool> updateTransporterCallStatus({
+    required String transporterId,
+    required CallStatus status,
+    String? feedback,
+    String? remarks,
+    String? callerId,
+  }) async {
+    try {
+      final uri = Uri.parse(
+        '$baseUrl/transporter_leads_api.php',
+      ).replace(queryParameters: {'action': 'mark_called'});
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'transporter_id': transporterId,
+              'status': _mapCallStatusToString(status),
+              'feedback': feedback,
+              'remarks': remarks,
+              'caller_id': callerId ?? _currentCallerId ?? '1',
+            }),
+          )
+          .timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['success'] == true;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Failed to update transporter call status: $e');
+    }
+  }
+
+  // Helper method to map JSON to TransporterContact
+  static TransporterContact _mapJsonToTransporterContact(Map<String, dynamic> json) {
+    DateTime? regDate;
+    if (json['registrationDate'] != null) {
+      regDate = DateTime.tryParse(json['registrationDate']);
+    } else if (json['createdAt'] != null) {
+      regDate = DateTime.tryParse(json['createdAt']);
+    }
+
+    return TransporterContact(
+      id: json['id']?.toString() ?? '',
+      tmid: json['tmid'] ?? 'TM000000',
+      name: json['name'] ?? 'Unknown Transporter',
+      company: json['company'] ?? json['transportName'] ?? '',
+      phoneNumber: json['phoneNumber'] ?? '',
+      state: json['state'] ?? 'Unknown',
+      subscriptionStatus: _mapStringToSubscriptionStatus(
+        json['subscriptionStatus'],
+      ),
+      status: _mapStringToCallStatus(json['callStatus']),
+      lastFeedback: json['lastFeedback'],
+      lastCallTime: json['lastCallTime'] != null
+          ? DateTime.tryParse(json['lastCallTime'])
+          : null,
+      remarks: json['remarks'],
+      paymentInfo: _mapJsonToPaymentInfo(json['paymentInfo']),
+      registrationDate: regDate,
+      profileCompletion: _mapJsonToProfileCompletion(
+        json['profile_completion'],
+      ),
+      profilePicture: json['profilePicture'] ?? json['profile_picture'],
+    );
   }
 }

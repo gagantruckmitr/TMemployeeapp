@@ -46,6 +46,83 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
 if ($action === 'get_social_media_leads') {
+    // Authentication check - verify user has tc_for = 'social-media'
+    $userId = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
+    
+    if ($userId === 0) {
+        http_response_code(401);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Authentication required. User ID not provided.'
+        ]);
+        exit;
+    }
+    
+    // First, try to find user in admins table by ID
+    $authSql = "SELECT id, name, mobile, tc_for FROM admins WHERE id = ? LIMIT 1";
+    $authStmt = $conn->prepare($authSql);
+    $authStmt->bind_param('i', $userId);
+    $authStmt->execute();
+    $authResult = $authStmt->get_result();
+    
+    $user = null;
+    
+    // If not found by ID, try to find by matching mobile number in users table
+    if ($authResult->num_rows === 0) {
+        $authStmt->close();
+        
+        // Get mobile from users table
+        $userSql = "SELECT mobile FROM users WHERE id = ? LIMIT 1";
+        $userStmt = $conn->prepare($userSql);
+        $userStmt->bind_param('i', $userId);
+        $userStmt->execute();
+        $userResult = $userStmt->get_result();
+        
+        if ($userResult->num_rows > 0) {
+            $userData = $userResult->fetch_assoc();
+            $mobile = $userData['mobile'];
+            $userStmt->close();
+            
+            // Now find in admins table by mobile
+            $authSql2 = "SELECT id, name, mobile, tc_for FROM admins WHERE mobile = ? LIMIT 1";
+            $authStmt2 = $conn->prepare($authSql2);
+            $authStmt2->bind_param('s', $mobile);
+            $authStmt2->execute();
+            $authResult2 = $authStmt2->get_result();
+            
+            if ($authResult2->num_rows > 0) {
+                $user = $authResult2->fetch_assoc();
+            }
+            $authStmt2->close();
+        } else {
+            $userStmt->close();
+        }
+    } else {
+        $user = $authResult->fetch_assoc();
+        $authStmt->close();
+    }
+    
+    // If still no user found
+    if ($user === null) {
+        http_response_code(401);
+        echo json_encode([
+            'success' => false,
+            'message' => 'User not found in social media system.'
+        ]);
+        exit;
+    }
+    
+    // Check if user has social-media access
+    if (strtolower($user['tc_for']) !== 'social-media') {
+        http_response_code(403);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Access denied. This feature is only available to users assigned to Social Media leads.',
+            'user_tc_for' => $user['tc_for'],
+            'user_mobile' => $user['mobile']
+        ]);
+        exit;
+    }
     // Get only leads that don't have call logs (not in history)
     // Exclude leads where a call log exists with matching mobile number and tc_for = 'social-media'
     // Use COLLATE to fix collation mismatch

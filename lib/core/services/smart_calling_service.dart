@@ -1,5 +1,6 @@
 import '../../models/smart_calling_models.dart';
 import 'api_service.dart';
+import 'easygo_ivr_service.dart';
 
 class SmartCallingService {
   static SmartCallingService? _instance;
@@ -10,10 +11,33 @@ class SmartCallingService {
     return _instance!;
   }
 
-  // Cache for drivers to avoid frequent API calls
+  // Cache variables for drivers
   List<DriverContact>? _cachedDrivers;
   DateTime? _lastFetchTime;
-  static const Duration cacheTimeout = Duration(minutes: 5);
+  
+  // Cache variables for transporters
+  List<TransporterContact>? _cachedTransporters;
+  DateTime? _lastTransporterFetchTime;
+  
+  // Cache timeout duration
+  final Duration cacheTimeout = const Duration(minutes: 5);
+
+  // Round robin pointer per telecaller
+  static final Map<String, int> _telecallerPointer = {};
+  static const int _leadsPerTelecaller = 10;
+
+  /// Returns a subset of fresh leads assigned to the given telecaller using round robin.
+  Future<List<DriverContact>> getLeadsForTelecaller(String telecallerId) async {
+    // Fetch fresh leads (uncalled drivers) without using cache to ensure fairness.
+    final allLeads = await getDrivers(forceRefresh: true);
+    if (allLeads.isEmpty) return [];
+    final start = _telecallerPointer[telecallerId] ?? 0;
+    final end = (start + _leadsPerTelecaller).clamp(0, allLeads.length);
+    final slice = allLeads.sublist(start, end);
+    // Update pointer for next request
+    _telecallerPointer[telecallerId] = end % allLeads.length;
+    return slice;
+  }
 
   // Get fresh leads (uncalled drivers) - REAL DATA ONLY
   Future<List<DriverContact>> getDrivers({
@@ -205,17 +229,50 @@ class SmartCallingService {
     }
   }
 
+  // Initiate EasyGo IVR call (New Integration)
+  Future<Map<String, dynamic>> initiateEasyGoIVR({
+    required String telecallerPhone,
+    required String clientPhone,
+    required String callerId,
+    required String contactId,
+    String contactType = 'driver',
+    String? driverName,
+    String duration = '',
+    String? callSource,
+  }) async {
+    try {
+      return await EasyGoIVRService.initiateCall(
+        exten: telecallerPhone,
+        number: clientPhone,
+        callerId: callerId,
+        contactId: contactId,
+        contactType: contactType,
+        driverName: driverName,
+        duration: duration,
+        callSource: callSource,
+      );
+    } catch (e) {
+      print('Failed to initiate EasyGo IVR: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+      };
+    }
+  }
+
   // Initiate manual call (direct phone dialer)
   Future<Map<String, dynamic>> initiateManualCall({
     required String driverMobile,
     required int callerId,
     required String driverId,
+    String contactType = 'driver', // 'driver' or 'transporter'
   }) async {
     try {
       return await ApiService.initiateManualCall(
         driverMobile: driverMobile,
         callerId: callerId,
         driverId: driverId,
+        contactType: contactType,
       );
     } catch (e) {
       print('Failed to initiate manual call: $e');
@@ -246,6 +303,7 @@ class SmartCallingService {
     String? feedback,
     String? remarks,
     int? callDuration,
+    String? driverName,
   }) async {
     try {
       return await ApiService.updateCallFeedback(
@@ -254,6 +312,7 @@ class SmartCallingService {
         feedback: feedback,
         remarks: remarks,
         callDuration: callDuration,
+        driverName: driverName,
       );
     } catch (e) {
       print('Failed to update call feedback: $e');
@@ -272,15 +331,82 @@ class SmartCallingService {
     return await ApiService.getDrivers(status: statusString);
   }
 
+  // Get transporters (uncalled transporters for welcome calls)
+  Future<List<TransporterContact>> getTransporters({
+    bool forceRefresh = false,
+    int limit = 50,
+  }) async {
+    final now = DateTime.now();
+    final shouldRefresh =
+        forceRefresh ||
+        _cachedTransporters == null ||
+        _lastTransporterFetchTime == null ||
+        now.difference(_lastTransporterFetchTime!) > cacheTimeout;
+
+    if (shouldRefresh) {
+      try {
+        _cachedTransporters = await ApiService.getTransporters(limit: limit);
+        _lastTransporterFetchTime = now;
+      } catch (e) {
+        print('Failed to fetch transporters: $e');
+        _cachedTransporters = [];
+      }
+    }
+
+    return _cachedTransporters ?? [];
+  }
+
+  // Update transporter call status
+  Future<bool> updateTransporterCallStatus({
+    required String transporterId,
+    required CallStatus status,
+    String? feedback,
+    String? remarks,
+  }) async {
+    try {
+      final success = await ApiService.updateTransporterCallStatus(
+        transporterId: transporterId,
+        status: status,
+        feedback: feedback,
+        remarks: remarks,
+      );
+
+      if (success) {
+        if (_cachedTransporters != null) {
+          final index = _cachedTransporters!.indexWhere((t) => t.id == transporterId);
+          if (index != -1) {
+            _cachedTransporters![index] = _cachedTransporters![index].copyWith(
+              status: status,
+              lastFeedback: feedback,
+              lastCallTime: DateTime.now(),
+              remarks: remarks,
+            );
+          }
+        }
+      }
+
+      return success;
+    } catch (e) {
+      print('Failed to update transporter call status: $e');
+      return false;
+    }
+  }
+
   // Clear cache
   void clearCache() {
     _cachedDrivers = null;
+    _cachedTransporters = null;
     _lastFetchTime = null;
+    _lastTransporterFetchTime = null;
   }
 
   // Refresh data
   Future<List<DriverContact>> refreshDrivers() async {
     return await getDrivers(forceRefresh: true);
+  }
+
+  Future<List<TransporterContact>> refreshTransporters() async {
+    return await getTransporters(forceRefresh: true);
   }
 
   // Helper method to map CallStatus to string

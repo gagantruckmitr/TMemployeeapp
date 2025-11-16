@@ -562,12 +562,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       debugPrint('🔐 Auto-logging into Phase 2 (Job Matchmaking)...');
       final success = await Phase2AuthService.login(mobile, password);
       if (success) {
-        debugPrint('✅ Phase 2 auto-login successful');
+        final user = await Phase2AuthService.getCurrentUser();
+        debugPrint('✅ Phase 2 auto-login successful - User: ${user?.name}, ID: ${user?.id}, tc_for: ${user?.tcFor}');
       } else {
-        debugPrint('⚠️ Phase 2 auto-login failed (will retry when accessing Phase 2 features)');
+        debugPrint('⚠️ Phase 2 auto-login failed - User may not have Phase 2 access');
       }
     } catch (e) {
-      debugPrint('⚠️ Phase 2 auto-login error: $e (will retry when accessing Phase 2 features)');
+      debugPrint('⚠️ Phase 2 auto-login error: $e');
     }
   }
 }

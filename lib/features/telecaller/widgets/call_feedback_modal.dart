@@ -45,6 +45,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   bool _showConnectedOptions = false;
   bool _showCallBackReasons = false;
   bool _showCallBackTimes = false;
+  bool _showCloseJobOption = false;
+  bool? _closeJob;
 
   // Recording upload state
   File? _selectedRecording;
@@ -54,7 +56,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   @override
   void initState() {
     super.initState();
-
+  
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,

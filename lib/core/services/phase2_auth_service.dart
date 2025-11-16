@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/phase2_user_model.dart';
+import 'session_manager.dart';
 
 class Phase2AuthService {
   static const String baseUrl = 'https://truckmitr.com/truckmitr-app/api';
@@ -34,6 +35,10 @@ class Phase2AuthService {
         if (data['success'] == true) {
           final user = Phase2User.fromJson(data['data']);
           await _saveUser(user);
+          
+          // Reset session timer on successful login
+          await SessionManager.instance.resetSession();
+          
           debugPrint('✅ Phase 2 login successful');
           return true;
         } else {
@@ -97,11 +102,26 @@ class Phase2AuthService {
   // Check if logged in
   static Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_isLoggedInKey) ?? false;
+    final isLoggedIn = prefs.getBool(_isLoggedInKey) ?? false;
+    
+    // Check session validity (20-minute inactivity timeout)
+    if (isLoggedIn) {
+      final isSessionValid = await SessionManager.instance.isSessionValid();
+      if (!isSessionValid) {
+        debugPrint('Session expired due to inactivity - logging out');
+        await logout();
+        return false;
+      }
+    }
+    
+    return isLoggedIn;
   }
 
   // Logout
   static Future<void> logout() async {
+    // Clear session manager
+    await SessionManager.instance.clearSession();
+    
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);
     await prefs.setBool(_isLoggedInKey, false);

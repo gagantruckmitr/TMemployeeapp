@@ -10,7 +10,7 @@ import 'call_history_screen.dart';
 import '../main_container.dart' as main;
 import '../jobs/widgets/job_brief_feedback_modal.dart';
 import '../telecaller/widgets/call_type_selection_dialog.dart';
-import '../telecaller/widgets/ivr_call_waiting_overlay.dart';
+import '../telecaller/widgets/easygo_ivr_call_helper.dart';
 
 class CallHistoryHubScreen extends StatefulWidget {
   const CallHistoryHubScreen({Key? key}) : super(key: key);
@@ -386,59 +386,21 @@ class _TransporterCard extends StatelessWidget {
             _showFeedbackModal(context, transporter);
           }
         }
-      } else if (callType == 'click2call') {
-        // IVR call
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📞 Initiating IVR call...'),
-            duration: Duration(seconds: 2),
-          ),
+      } else if (callType == 'easygo_ivr') {
+        // IVR call using EasyGo
+        await EasyGoIVRCallHelper.initiateCall(
+          context: context,
+          clientName: transporterName,
+          clientPhone: phoneNumber,
+          clientId: transporterTmid,
+          contactType: 'transporter',
+          callSource: null, // Regular call, not from job screens
+          onCallEnded: () {
+            if (context.mounted) {
+              _showFeedbackModal(context, transporter);
+            }
+          },
         );
-
-        final result = await SmartCallingService.instance.initiateClick2CallIVR(
-          driverMobile: cleanMobile,
-          callerId: callerId,
-          driverId: transporterTmid,
-        );
-
-        if (context.mounted) {
-          if (result['success'] == true) {
-            final referenceId = result['data']?['reference_id'];
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ IVR call initiated! Both phones will ring.'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
-            );
-
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                fullscreenDialog: true,
-                builder: (context) => PopScope(
-                  canPop: false,
-                  child: IVRCallWaitingOverlay(
-                    driverName: transporterName,
-                    referenceId: referenceId,
-                    onCallEnded: () {
-                      Navigator.of(context).pop();
-                      _showFeedbackModal(context, transporter);
-                    },
-                  ),
-                ),
-              ),
-            );
-          } else {
-            final errorMsg = result['error'] ?? 'Unknown error';
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to initiate IVR call: $errorMsg'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

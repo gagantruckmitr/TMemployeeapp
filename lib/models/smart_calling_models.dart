@@ -27,9 +27,24 @@ enum ConnectedFeedback {
   willSubscribeLater('Will Subscribe Later (Not sure when)'),
   willSubscribeWhenNeedJob('Will Subscribe when I need Job'),
   wantsDemoVideo('Wants Demo Video'),
-  wantsToThink('Wants to Think');
+  wantsToThink('Wants to Think'),
+  closeJob('Close Job');
 
   const ConnectedFeedback(this.displayName);
+  final String displayName;
+}
+
+// Transporter-specific feedback options for Welcome Call
+enum TransporterConnectedFeedback {
+  callBackLater('Callback Later'),
+  agreeForSubscription('Agree for Subscription'),
+  agreeForSubscriptionTomorrow('Agree for Subscription (Tomorrow)'),
+  jobDetailsReceived('Job Details received'),
+  notATransporter('Not a Transporter'),
+  driverRegisteredAsTransporter('Driver, but registered as Transporter'),
+  closeJob('Close Job');
+
+  const TransporterConnectedFeedback(this.displayName);
   final String displayName;
 }
 
@@ -127,6 +142,7 @@ class DriverContact {
   final PaymentInfo? paymentInfo;
   final DateTime? registrationDate;
   final ProfileCompletion? profileCompletion;
+  final String? profilePicture;
 
   DriverContact({
     required this.id,
@@ -143,6 +159,7 @@ class DriverContact {
     this.paymentInfo,
     this.registrationDate,
     this.profileCompletion,
+    this.profilePicture,
   });
 
   DriverContact copyWith({
@@ -160,6 +177,7 @@ class DriverContact {
     PaymentInfo? paymentInfo,
     DateTime? registrationDate,
     ProfileCompletion? profileCompletion,
+    String? profilePicture,
   }) {
     return DriverContact(
       id: id ?? this.id,
@@ -176,6 +194,7 @@ class DriverContact {
       paymentInfo: paymentInfo ?? this.paymentInfo,
       registrationDate: registrationDate ?? this.registrationDate,
       profileCompletion: profileCompletion ?? this.profileCompletion,
+      profilePicture: profilePicture ?? this.profilePicture,
     );
   }
 }
@@ -183,19 +202,96 @@ class DriverContact {
 class CallFeedback {
   final CallStatus status;
   final ConnectedFeedback? connectedFeedback;
+  final TransporterConnectedFeedback? transporterConnectedFeedback;
   final CallBackReason? callBackReason;
   final CallBackTime? callBackTime;
   final String? remarks;
   final dynamic recordingFile; // File object for recording upload
+  final bool? closeJob; // Whether to close the job after feedback
 
   CallFeedback({
     required this.status,
     this.connectedFeedback,
+    this.transporterConnectedFeedback,
     this.callBackReason,
     this.callBackTime,
     this.remarks,
     this.recordingFile,
+    this.closeJob,
   });
+}
+
+// Transporter Contact Model (similar to DriverContact)
+class TransporterContact {
+  final String id;
+  final String tmid;
+  final String name;
+  final String company;
+  final String phoneNumber;
+  final String state;
+  final SubscriptionStatus subscriptionStatus;
+  final CallStatus status;
+  final String? lastFeedback;
+  final DateTime? lastCallTime;
+  final String? remarks;
+  final PaymentInfo? paymentInfo;
+  final DateTime? registrationDate;
+  final ProfileCompletion? profileCompletion;
+  final String? profilePicture;
+
+  TransporterContact({
+    required this.id,
+    required this.tmid,
+    required this.name,
+    required this.company,
+    required this.phoneNumber,
+    required this.state,
+    required this.subscriptionStatus,
+    required this.status,
+    this.lastFeedback,
+    this.lastCallTime,
+    this.remarks,
+    this.paymentInfo,
+    this.registrationDate,
+    this.profileCompletion,
+    this.profilePicture,
+  });
+
+  TransporterContact copyWith({
+    String? id,
+    String? tmid,
+    String? name,
+    String? company,
+    String? phoneNumber,
+    String? state,
+    SubscriptionStatus? subscriptionStatus,
+    CallStatus? status,
+    String? lastFeedback,
+    DateTime? lastCallTime,
+    String? remarks,
+    PaymentInfo? paymentInfo,
+    DateTime? registrationDate,
+    ProfileCompletion? profileCompletion,
+    String? profilePicture,
+  }) {
+    return TransporterContact(
+      id: id ?? this.id,
+      tmid: tmid ?? this.tmid,
+      name: name ?? this.name,
+      company: company ?? this.company,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      state: state ?? this.state,
+      subscriptionStatus: subscriptionStatus ?? this.subscriptionStatus,
+      status: status ?? this.status,
+      lastFeedback: lastFeedback ?? this.lastFeedback,
+      lastCallTime: lastCallTime ?? this.lastCallTime,
+      remarks: remarks ?? this.remarks,
+      paymentInfo: paymentInfo ?? this.paymentInfo,
+      registrationDate: registrationDate ?? this.registrationDate,
+      profileCompletion: profileCompletion ?? this.profileCompletion,
+      profilePicture: profilePicture ?? this.profilePicture,
+    );
+  }
 }
 
 // Contact categorization helper

@@ -5,12 +5,17 @@ import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/smart_calling_models.dart';
+import '../../../models/phase2_user_model.dart';
 import '../../../core/services/smart_calling_service.dart';
 import '../../../core/services/real_auth_service.dart';
+import '../../../core/services/phase2_auth_service.dart';
 import '../../../core/services/pending_feedback_service.dart';
+import '../../../core/services/call_hit_service.dart';
+import '../../../core/utils/phone_masking_utils.dart';
 import '../widgets/call_feedback_modal.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/ivr_call_waiting_overlay.dart';
+import '../widgets/easygo_ivr_call_helper.dart';
 
 class CallHistoryScreen extends StatefulWidget {
   final String? initialFilter;
@@ -505,14 +510,29 @@ class _CallHistoryCardState extends State<_CallHistoryCard> {
 
   Future<void> _makeCall() async {
     try {
+      // Check both auth services for user
       final currentUser = RealAuthService.instance.currentUser;
-      if (currentUser == null) {
+      Phase2User? phase2User = await Phase2AuthService.getCurrentUser();
+      
+      // If RealAuthService has user but Phase2AuthService doesn't, create Phase2User from RealAuth data
+      if (currentUser != null && phase2User == null) {
+        print('🔄 Syncing user from RealAuthService to Phase2AuthService');
+        // Create a Phase2User object from RealAuthService data
+        phase2User = Phase2User(
+          id: int.tryParse(currentUser.id) ?? 0,
+          name: currentUser.name,
+          mobile: currentUser.mobile,
+          email: currentUser.email,
+          role: currentUser.role,
+          tcFor: '', // Not available in RealAuthService
+          createdAt: DateTime.now().toIso8601String(),
+        );
+      }
+      
+      if (currentUser == null && phase2User == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ User not logged in'),
-              backgroundColor: Colors.red,
-            ),
+            const SnackBar(content: Text('❌ User not logged in'), backgroundColor: Colors.red),
           );
         }
         return;
@@ -521,115 +541,74 @@ class _CallHistoryCardState extends State<_CallHistoryCard> {
       // Show call type selection dialog
       final callType = await showDialog<String>(
         context: context,
-        builder: (context) => CallTypeSelectionDialog(
-          driverName: widget.entry.driverName,
-        ),
+        builder: (context) => CallTypeSelectionDialog(driverName: widget.entry.driverName),
       );
 
       if (callType == null) return;
 
-      final callerId = int.tryParse(currentUser.id) ?? 1;
+      // Log call hit
+      await CallHitService.instance.logCallHit(
+        contactId: widget.entry.driverId,
+        contactName: widget.entry.driverName,
+        contactType: 'driver',
+        callType: callType,
+        sourceScreen: 'telecaller_call_history',
+        phoneNumber: widget.entry.phoneNumber,
+      );
+
+      // Use appropriate user ID based on which auth service has the user
+      final callerId = currentUser != null 
+          ? (int.tryParse(currentUser.id) ?? 1)
+          : (phase2User?.id ?? 1);
       final cleanPhone = widget.entry.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
 
       if (callType == 'manual') {
-        // Manual call
+        // For manual calls, phone number might be hidden for privacy
+        // The manual_call_api will fetch the actual number from database
         final result = await SmartCallingService.instance.initiateManualCall(
-          driverMobile: cleanPhone,
+          driverMobile: cleanPhone.isEmpty ? widget.entry.driverId : cleanPhone,
           callerId: callerId,
           driverId: widget.entry.driverId,
         );
 
         if (result['success'] == true && mounted) {
-          final referenceId = result['data']?['reference_id'];
           final driverMobileRaw = result['data']?['driver_mobile_raw'];
-
-          // Save pending feedback
-          await PendingFeedbackService.instance.savePendingFeedback(
-            referenceId: referenceId,
-            driverId: widget.entry.driverId,
-            driverName: widget.entry.driverName,
-            driverPhone: widget.entry.phoneNumber,
-            driverCompany: '',
-            callerId: callerId,
-          );
-
-          // Make the call
           await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
-          
-          // Show feedback modal immediately after call
           await Future.delayed(const Duration(milliseconds: 500));
-          
-          if (mounted) {
-            _showUpdateFeedbackModal();
-          }
+          if (mounted) _showUpdateFeedbackModal();
         }
-      } else if (callType == 'click2call') {
-        // IVR call
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('📞 Initiating IVR call...'),
-              duration: Duration(seconds: 2),
-            ),
+      } else if (callType == 'easygo_ivr') {
+        // For IVR calls, if phone number is empty, fetch it from database first
+        String phoneToUse = widget.entry.phoneNumber;
+        
+        if (cleanPhone.isEmpty) {
+          // Fetch phone number from database using the same API as manual calls
+          final result = await SmartCallingService.instance.initiateManualCall(
+            driverMobile: widget.entry.driverId,
+            callerId: callerId,
+            driverId: widget.entry.driverId,
           );
-        }
-
-        final result = await SmartCallingService.instance.initiateClick2CallIVR(
-          driverMobile: cleanPhone,
-          callerId: callerId,
-          driverId: widget.entry.driverId,
-        );
-
-        if (mounted) {
+          
           if (result['success'] == true) {
-            final referenceId = result['data']?['reference_id'];
-
-            // Save pending feedback
-            await PendingFeedbackService.instance.savePendingFeedback(
-              referenceId: referenceId,
-              driverId: widget.entry.driverId,
-              driverName: widget.entry.driverName,
-              driverPhone: widget.entry.phoneNumber,
-              driverCompany: '',
-              callerId: callerId,
-            );
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ IVR call initiated! Both phones will ring.'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
-            );
-
-            // Show IVR waiting overlay
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                fullscreenDialog: true,
-                builder: (context) => PopScope(
-                  canPop: false,
-                  child: IVRCallWaitingOverlay(
-                    driverName: widget.entry.driverName,
-                    referenceId: referenceId,
-                    onCallEnded: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                ),
-              ),
-            );
-          } else {
-            final errorMsg = result['error'] ?? 'Unknown error';
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to initiate IVR call: $errorMsg'),
-                backgroundColor: Colors.red,
-              ),
-            );
+            phoneToUse = result['data']?['driver_mobile_raw'] ?? '';
           }
         }
+        
+        await EasyGoIVRCallHelper.initiateCall(
+          context: context,
+          clientName: widget.entry.driverName,
+          clientPhone: phoneToUse,
+          clientId: widget.entry.driverId,
+          contactType: 'driver',
+          callSource: null, // Regular telecaller call, not from job screens
+          onCallEnded: () {
+            if (mounted) _showUpdateFeedbackModal();
+          },
+        );
       }
+      
     } catch (e) {
+      print('❌ CALL HISTORY: Exception in _makeCall: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -860,7 +839,7 @@ class _CallHistoryCardState extends State<_CallHistoryCard> {
                         ),
                       ),
                       Text(
-                        widget.entry.phoneNumber,
+                        PhoneMaskingUtils.maskPhoneNumber(widget.entry.phoneNumber),
                         style: AppTheme.bodyMedium.copyWith(
                           color: Colors.grey.shade600,
                           fontSize: 13,

@@ -54,6 +54,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             exit;
         }
         
+        // Authentication check - verify user has tc_for = 'social-media'
+        $authSql = "SELECT id, name, tc_for FROM admin WHERE id = ? LIMIT 1";
+        $authStmt = $conn->prepare($authSql);
+        $authStmt->bind_param('i', $callerId);
+        $authStmt->execute();
+        $authResult = $authStmt->get_result();
+        
+        if ($authResult->num_rows === 0) {
+            http_response_code(401);
+            echo json_encode([
+                'success' => false,
+                'message' => 'User not found.'
+            ]);
+            exit;
+        }
+        
+        $user = $authResult->fetch_assoc();
+        
+        if (strtolower($user['tc_for']) !== 'social-media') {
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Access denied. This feature is only available to users assigned to Social Media leads.'
+            ]);
+            exit;
+        }
+        
+        $authStmt->close();
+        
         $sql = "SELECT * FROM call_logs 
                 WHERE caller_id = $callerId 
                 AND tc_for = 'social-media'
@@ -114,6 +143,35 @@ if ($callerId === 0) {
     echo json_encode(['success' => false, 'message' => 'Caller ID required']);
     exit;
 }
+
+// Authentication check - verify user has tc_for = 'social-media'
+$authSql = "SELECT id, name, tc_for FROM admin WHERE id = ? LIMIT 1";
+$authStmt = $conn->prepare($authSql);
+$authStmt->bind_param('i', $callerId);
+$authStmt->execute();
+$authResult = $authStmt->get_result();
+
+if ($authResult->num_rows === 0) {
+    http_response_code(401);
+    echo json_encode([
+        'success' => false,
+        'message' => 'User not found.'
+    ]);
+    exit;
+}
+
+$user = $authResult->fetch_assoc();
+
+if (strtolower($user['tc_for']) !== 'social-media') {
+    http_response_code(403);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Access denied. Only users assigned to Social Media can submit feedback for social media leads.'
+    ]);
+    exit;
+}
+
+$authStmt->close();
 
 if (empty($mobile)) {
     http_response_code(400);

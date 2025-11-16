@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/smart_calling_service.dart';
+import '../../../core/services/real_auth_service.dart';
+import '../../../core/services/call_hit_service.dart';
 import '../../../models/smart_calling_models.dart';
 import '../widgets/driver_contact_card.dart';
+import '../widgets/call_type_selection_dialog.dart';
+import '../widgets/ivr_call_waiting_overlay.dart';
+import '../widgets/call_feedback_modal.dart';
 
 class PendingCallsScreen extends StatefulWidget {
   const PendingCallsScreen({super.key});
@@ -222,14 +228,214 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
     );
   }
 
-  void _initiateCall(DriverContact lead) {
+  Future<void> _initiateCall(DriverContact lead) async {
     HapticFeedback.lightImpact();
-    // Navigate to smart calling with this lead
-    // You can implement this based on your navigation setup
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Calling ${lead.name}...'),
-        duration: const Duration(seconds: 2),
+    
+    try {
+      // Get current user
+      final currentUser = RealAuthService.instance.currentUser;
+      if (currentUser == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ User not logged in. Please login again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final callerId = int.tryParse(currentUser.id) ?? 1;
+
+      // Show call type selection dialog
+      if (mounted) {
+        final callType = await showDialog<String>(
+          context: context,
+          builder: (context) => CallTypeSelectionDialog(
+            driverName: lead.name,
+          ),
+        );
+
+        if (callType == null) return;
+
+        // Log call hit
+        await CallHitService.instance.logCallHit(
+          contactId: lead.id,
+          contactName: lead.name,
+          contactType: 'driver',
+          callType: callType,
+          sourceScreen: 'pending_calls',
+          phoneNumber: lead.phoneNumber,
+        );
+
+        if (callType == 'manual') {
+          await _handleManualCall(lead, callerId);
+        } else if (callType == 'easygo_ivr' || callType == 'click2call') {
+          await _handleIVRCall(lead, callerId);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error initiating call: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleManualCall(DriverContact lead, int callerId) async {
+    try {
+      final cleanMobile = lead.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+
+      final result = await SmartCallingService.instance.initiateManualCall(
+        driverMobile: cleanMobile,
+        callerId: callerId,
+        driverId: lead.id,
+      );
+
+      if (mounted) {
+        if (result['success'] == true) {
+          final driverMobileRaw = result['data']?['driver_mobile_raw'];
+          final referenceId = result['data']?['reference_id'];
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('📱 Calling ${lead.name}...'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          if (mounted) {
+            _showFeedbackModal(lead, referenceId: referenceId);
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleIVRCall(DriverContact lead, int callerId) async {
+    try {
+      final cleanMobile = lead.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+      final currentUser = RealAuthService.instance.currentUser;
+      if (currentUser == null) return;
+
+      final telecallerPhone = currentUser.mobile.replaceAll(RegExp(r'[^\d]'), '');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📞 Initiating IVR call...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      final result = await SmartCallingService.instance.initiateEasyGoIVR(
+        telecallerPhone: telecallerPhone,
+        clientPhone: cleanMobile,
+        callerId: callerId.toString(),
+        contactId: lead.id,
+        contactType: 'driver',
+      );
+
+      if (mounted) {
+        if (result['success'] == true) {
+          final referenceId = result['reference_id'] ?? 
+                             result['data']?['call_id'] ?? 
+                             DateTime.now().millisecondsSinceEpoch.toString();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ IVR call initiated! Both phones will ring.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (context) => PopScope(
+                canPop: false,
+                child: IVRCallWaitingOverlay(
+                  driverName: lead.name,
+                  referenceId: referenceId,
+                  onCallEnded: () {
+                    Navigator.of(context).pop();
+                    _showFeedbackModal(lead, referenceId: referenceId);
+                  },
+                ),
+              ),
+            ),
+          );
+        } else {
+          final errorMsg = result['error'] ?? 'Unknown error';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to initiate IVR call: $errorMsg'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showFeedbackModal(DriverContact lead, {String? referenceId}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: CallFeedbackModal(
+          contact: lead,
+          referenceId: referenceId,
+          onFeedbackSubmitted: (feedback) async {
+            // Remove lead from list after feedback
+            setState(() {
+              _pendingLeads?.removeWhere((c) => c.id == lead.id);
+            });
+            Navigator.of(context).pop();
+            
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Call completed for ${lead.name}'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          },
+        ),
       ),
     );
   }

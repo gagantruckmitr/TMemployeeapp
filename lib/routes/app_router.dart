@@ -6,6 +6,7 @@ import '../features/auth/login_page.dart';
 import '../features/telecaller/main_navigation_container.dart';
 import '../features/telecaller/smart_calling_page.dart';
 import '../features/telecaller/performance_analytics_page.dart';
+import '../features/telecaller/subscriptions/subscriptions_screen.dart';
 import '../features/telecaller/screens/dynamic_profile_screen.dart';
 import '../features/telecaller/screens/edit_profile_screen.dart';
 import '../features/telecaller/screens/settings_screen.dart';
@@ -39,6 +40,7 @@ class AppRouter {
   static const String dashboard = '/dashboard';
   static const String managerDashboard = '/manager-dashboard';
   static const String smartCalling = '/dashboard/smart-calling';
+  static const String subscriptions = '/dashboard/subscriptions';
   static const String performanceAnalytics = '/dashboard/performance-analytics';
   static const String profile = '/dashboard/profile';
   static const String editProfile = '/dashboard/profile/edit';
@@ -149,6 +151,23 @@ class AppRouter {
             pageBuilder: (context, state) => CustomTransitionPage(
               key: state.pageKey,
               child: const SmartCallingPage(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(1.0, 0.0),
+                    end: Offset.zero,
+                  ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
+                  child: child,
+                );
+              },
+            ),
+          ),
+          GoRoute(
+            path: 'subscriptions',
+            name: 'subscriptions',
+            pageBuilder: (context, state) => CustomTransitionPage(
+              key: state.pageKey,
+              child: const SubscriptionsScreen(),
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
                 return SlideTransition(
                   position: Tween<Offset>(

@@ -5,6 +5,7 @@ import 'core/theme/app_theme.dart';
 import 'core/utils/screenshot_helper.dart';
 import 'routes/app_router.dart';
 import 'core/database/database_setup.dart';
+import 'core/services/session_manager.dart';
 
 class TMEmployeeApp extends StatelessWidget {
   const TMEmployeeApp({super.key});
@@ -27,11 +28,18 @@ class TMEmployeeApp extends StatelessWidget {
 
     return Screenshot(
       controller: ScreenshotHelper.controller,
-      child: MaterialApp.router(
-        title: 'TruckMitr Employee',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        routerConfig: AppRouter.router,
+      child: GestureDetector(
+        // Record user activity on any interaction
+        onTap: () => SessionManager.instance.recordActivity(),
+        onPanDown: (_) => SessionManager.instance.recordActivity(),
+        onScaleStart: (_) => SessionManager.instance.recordActivity(),
+        behavior: HitTestBehavior.translucent,
+        child: MaterialApp.router(
+          title: 'TruckMitr Employee',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          routerConfig: AppRouter.router,
+        ),
       ),
     );
   }
