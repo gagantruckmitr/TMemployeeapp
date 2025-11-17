@@ -5,11 +5,12 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/toll_free_service.dart';
 import '../../../core/services/toll_free_feedback_service.dart';
+import '../../../core/services/smart_calling_service.dart';
+import '../../../core/services/real_auth_service.dart';
 import '../../../models/toll_free_lead_model.dart';
 import '../../../models/smart_calling_models.dart';
 import '../../../core/utils/state_code_mapper.dart';
 import '../widgets/call_feedback_modal.dart';
-import '../widgets/profile_completion_avatar.dart';
 import 'toll_free_history_screen.dart';
 import 'toll_free_profile_details_screen.dart';
 
@@ -77,45 +78,34 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
 
   Future<void> _makeCall(TollFreeUser user) async {
     try {
+      // Show call type selection dialog
       final callType = await showDialog<String>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('📞 Select Call Type'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Choose how to call ${user.name}:',
-                style: AppTheme.bodyLarge,
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: Icon(Icons.phone, color: AppTheme.success),
-                title: const Text('Manual Call'),
-                subtitle: const Text('Direct phone dialer'),
-                onTap: () => Navigator.pop(context, 'manual'),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: AppTheme.success),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('Cancel'),
-            ),
-          ],
+        builder: (context) => CallTypeSelectionDialog(
+          driverName: user.name,
         ),
       );
 
       if (callType == null || !mounted) return;
 
+      final currentUser = RealAuthService.instance.currentUser;
+      if (currentUser == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ User not logged in'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final callerId = int.tryParse(currentUser.id) ?? 1;
       final cleanNumber = user.mobile.replaceAll(RegExp(r'[^\d]'), '');
 
       HapticFeedback.mediumImpact();
-
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('📱 Calling ${user.name}...'),
@@ -125,9 +115,9 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
       );
 
       await FlutterPhoneDirectCaller.callNumber(cleanNumber);
-
+      
       await Future.delayed(const Duration(milliseconds: 500));
-
+      
       if (mounted) {
         _showFeedbackModal(user);
       }

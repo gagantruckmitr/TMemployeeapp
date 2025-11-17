@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
+import '../../core/services/phase2_auth_service.dart';
+import '../../core/services/smart_calling_service.dart';
 import '../../models/job_model.dart';
 import 'transporter_call_history_screen.dart';
 import 'call_history_screen.dart';
 import '../main_container.dart' as main;
 import '../jobs/widgets/job_brief_feedback_modal.dart';
+import '../telecaller/widgets/call_type_selection_dialog.dart';
+import '../telecaller/widgets/ivr_call_waiting_overlay.dart';
 
 class CallHistoryHubScreen extends StatefulWidget {
   const CallHistoryHubScreen({Key? key}) : super(key: key);
@@ -306,6 +311,148 @@ class _TransporterCard extends StatelessWidget {
   Future<void> _makeCall(BuildContext context, Map<String, dynamic> transporter) async {
     final transporterName = _getDisplayName(transporter);
     final transporterTmid = transporter['tmid'] ?? '';
+    final phoneNumber = transporter['phone']?.toString() ?? '';
+    
+    // Check if phone number is available
+    if (phoneNumber.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.info_outline, color: AppColors.primary),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Phone Number Required',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Phone number not available for $transporterName. Please update the contact details in the Jobs section.',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Show call type selection dialog
+    final callType = await showDialog<String>(
+      context: context,
+      builder: (context) => CallTypeSelectionDialog(
+        driverName: transporterName,
+      ),
+    );
+
+    if (callType == null) return;
+
+    try {
+      final callerId = await Phase2AuthService.getUserId();
+      final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+
+      if (callType == 'manual') {
+        // Manual call
+        final result = await SmartCallingService.instance.initiateManualCall(
+          driverMobile: cleanMobile,
+          callerId: callerId,
+          driverId: transporterTmid,
+        );
+
+        if (result['success'] == true) {
+          final driverMobileRaw = result['data']?['driver_mobile_raw'];
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('📱 Calling $transporterName...'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          if (context.mounted) {
+            _showFeedbackModal(context, transporter);
+          }
+        }
+      } else if (callType == 'click2call') {
+        // IVR call
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📞 Initiating IVR call...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        final result = await SmartCallingService.instance.initiateClick2CallIVR(
+          driverMobile: cleanMobile,
+          callerId: callerId,
+          driverId: transporterTmid,
+        );
+
+        if (context.mounted) {
+          if (result['success'] == true) {
+            final referenceId = result['data']?['reference_id'];
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ IVR call initiated! Both phones will ring.'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                fullscreenDialog: true,
+                builder: (context) => PopScope(
+                  canPop: false,
+                  child: IVRCallWaitingOverlay(
+                    driverName: transporterName,
+                    referenceId: referenceId,
+                    onCallEnded: () {
+                      Navigator.of(context).pop();
+                      _showFeedbackModal(context, transporter);
+                    },
+                  ),
+                ),
+              ),
+            );
+          } else {
+            final errorMsg = result['error'] ?? 'Unknown error';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to initiate IVR call: $errorMsg'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showFeedbackModal(BuildContext context, Map<String, dynamic> transporter) {
+    final transporterName = _getDisplayName(transporter);
+    final transporterTmid = transporter['tmid'] ?? '';
     
     // Generate a placeholder job ID for direct transporter calls
     final placeholderJobId = 'DIRECT_CALL_${transporterTmid}_${DateTime.now().millisecondsSinceEpoch}';
@@ -348,7 +495,7 @@ class _TransporterCard extends StatelessWidget {
       assignedToName: null,
     );
     
-    // Show feedback modal immediately
+    // Show feedback modal
     showJobBriefFeedbackModal(
       context: context,
       job: dummyJob,

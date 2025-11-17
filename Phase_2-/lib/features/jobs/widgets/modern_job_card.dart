@@ -3,11 +3,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/phase2_api_service.dart';
 import '../../../core/services/phase2_auth_service.dart';
+import '../../../core/services/smart_calling_service.dart';
 import '../../../models/job_model.dart';
 import '../../../widgets/profile_completion_avatar.dart';
 import '../job_applicants_screen.dart';
 import 'job_brief_feedback_modal.dart';
 import 'show_transporter_call_feedback.dart';
+import '../../telecaller/widgets/call_type_selection_dialog.dart';
+import '../../telecaller/widgets/ivr_call_waiting_overlay.dart';
 
 class ModernJobCard extends StatefulWidget {
   final JobModel job;
@@ -118,8 +121,147 @@ class _ModernJobCardState extends State<ModernJobCard> {
       return;
     }
 
-    final Uri phoneUri = Uri(scheme: 'tel', path: phone);
-    if (await canLaunchUrl(phoneUri)) await launchUrl(phoneUri);
+    // Show call type selection dialog
+    final callType = await showDialog<String>(
+      context: context,
+      builder: (context) => CallTypeSelectionDialog(
+        driverName: widget.job.transporterName,
+      ),
+    );
+
+    if (callType == null) return;
+
+    // Get current user for caller ID
+    final user = await Phase2AuthService.getCurrentUser();
+    final callerId = user?.id ?? 0;
+
+    if (callType == 'manual') {
+      // Manual call - just open phone dialer
+      final Uri phoneUri = Uri(scheme: 'tel', path: phone);
+      if (await canLaunchUrl(phoneUri)) await launchUrl(phoneUri);
+    } else if (callType == 'click2call') {
+      // IVR call
+      await _handleIVRCall(phone, callerId);
+    }
+  }
+
+  Future<void> _handleIVRCall(String phone, int callerId) async {
+    try {
+      // Clean phone number
+      final cleanMobile = phone.replaceAll(RegExp(r'[^\d]'), '');
+
+      // Show loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📞 Initiating IVR call...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Initiate IVR call
+      final result = await SmartCallingService.instance.initiateClick2CallIVR(
+        driverMobile: cleanMobile,
+        callerId: callerId,
+        driverId: widget.job.transporterTmid,
+      );
+
+      if (mounted) {
+        if (result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ IVR call initiated! Both phones will ring.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          // Show IVR waiting overlay
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => IVRCallWaitingOverlay(
+              driverName: widget.job.transporterName,
+              onCallEnded: () {
+                Navigator.pop(context);
+                // Show call feedback after IVR call
+                _showTransporterCallFeedbackAfterIVR();
+              },
+            ),
+          );
+        } else {
+          final errorMsg = result['error'] ?? 'Unknown error';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to initiate IVR call: $errorMsg'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showTransporterCallFeedbackAfterIVR() async {
+    await showTransporterCallFeedback(
+      context: context,
+      transporterTmid: widget.job.transporterTmid,
+      transporterName: widget.job.transporterName,
+      jobId: widget.job.jobId,
+      onSubmit: (callStatus, notes, recordingFile) async {
+        Navigator.pop(context);
+
+        if (callStatus == 'Connected: Details Received') {
+          showJobBriefFeedbackModal(
+            context: context,
+            job: widget.job,
+            onSubmit: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Job brief saved with call status: $callStatus'),
+                ),
+              );
+            },
+          );
+        } else {
+          try {
+            await Phase2ApiService.saveJobBrief(
+              uniqueId: widget.job.transporterTmid,
+              jobId: widget.job.jobId,
+              callStatusFeedback: callStatus,
+            );
+
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Call status saved: $callStatus'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error saving: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        }
+      },
+    );
   }
 
   @override
@@ -482,66 +624,8 @@ class _ModernJobCardState extends State<ModernJobCard> {
           child: InkWell(
             onTap: _isAssignedToMe
                 ? () async {
-                    // Step 1: Make the actual phone call
+                    // Make the phone call (will show IVR or manual call dialog)
                     await _makePhoneCall(widget.job.transporterPhone);
-
-                    // Step 2: Show hierarchical call status selection
-                    await showTransporterCallFeedback(
-                      context: context,
-                      transporterTmid: widget.job.transporterTmid,
-                      transporterName: widget.job.transporterName,
-                      jobId: widget.job.jobId,
-                      onSubmit: (callStatus, notes, recordingFile) async {
-                        // Close the first modal
-                        Navigator.pop(context);
-
-                        // Step 3: If "Connected: Details Received", show job brief form
-                        if (callStatus == 'Connected: Details Received') {
-                          // Show the detailed job brief feedback modal
-                          showJobBriefFeedbackModal(
-                            context: context,
-                            job: widget.job,
-                            onSubmit: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      'Job brief saved with call status: $callStatus'),
-                                ),
-                              );
-                            },
-                          );
-                        } else {
-                          // For other statuses, save to API with the call status
-                          try {
-                            await Phase2ApiService.saveJobBrief(
-                              uniqueId: widget.job.transporterTmid,
-                              jobId: widget.job.jobId,
-                              callStatusFeedback: callStatus,
-                              // Notes are saved in the callStatusFeedback if provided
-                            );
-
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content:
-                                      Text('Call status saved: $callStatus'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error saving: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        }
-                      },
-                    );
                   }
                 : () {
                     // Show message for non-assigned jobs

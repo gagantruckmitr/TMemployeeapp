@@ -325,18 +325,19 @@ function getTransportersList() {
         // Build the WHERE clause for caller_id filtering
         $whereClause = $callerId > 0 ? "WHERE jb.caller_id = $callerId" : "";
         
-        // Query to get transporters with their names from users table
+        // Query to get transporters with their names and phone numbers from users table
         // Filter by caller_id so each telecaller only sees transporters they called
         $query = "SELECT 
                     jb.unique_id as tmid,
                     COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown') as name,
+                    u.mobile as phone,
                     jb.job_location as location,
                     COUNT(jb.id) as call_count,
                     MAX(jb.created_at) as last_call_date
                   FROM job_brief_table jb
                   LEFT JOIN users u ON jb.unique_id = u.unique_id AND u.role = 'transporter'
                   $whereClause
-                  GROUP BY jb.unique_id, COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown'), jb.job_location
+                  GROUP BY jb.unique_id, COALESCE(u.Transport_Name, u.name_eng, u.name, 'Unknown'), u.mobile, jb.job_location
                   ORDER BY last_call_date DESC";
         
         $result = $conn->query($query);
@@ -350,6 +351,7 @@ function getTransportersList() {
             $transporters[] = [
                 'tmid' => $row['tmid'],
                 'name' => $row['name'],
+                'phone' => $row['phone'] ?? '',
                 'location' => $row['location'],
                 'callCount' => (int)$row['call_count'],
                 'lastCallDate' => $row['last_call_date'],

@@ -6,6 +6,8 @@ class CallHistoryLog {
   final String uniqueIdDriver;
   final String driverName;
   final String transporterName;
+  final String driverMobile;
+  final String transporterMobile;
   final String feedback;
   final String matchStatus;
   final String remark;
@@ -22,6 +24,8 @@ class CallHistoryLog {
     required this.uniqueIdDriver,
     required this.driverName,
     required this.transporterName,
+    required this.driverMobile,
+    required this.transporterMobile,
     required this.feedback,
     required this.matchStatus,
     required this.remark,
@@ -40,6 +44,8 @@ class CallHistoryLog {
       uniqueIdDriver: json['uniqueIdDriver'] ?? '',
       driverName: json['driverName'] ?? '',
       transporterName: json['transporterName'] ?? '',
+      driverMobile: json['driverMobile'] ?? '',
+      transporterMobile: json['transporterMobile'] ?? '',
       feedback: json['feedback'] ?? '',
       matchStatus: json['matchStatus'] ?? '',
       remark: json['remark'] ?? '',
@@ -53,4 +59,5 @@ class CallHistoryLog {
   String get contactName => driverName.isNotEmpty ? driverName : transporterName;
   String get contactId => uniqueIdDriver.isNotEmpty ? uniqueIdDriver : uniqueIdTransporter;
   String get contactType => uniqueIdDriver.isNotEmpty ? 'Driver' : 'Transporter';
+  String get contactMobile => driverMobile.isNotEmpty ? driverMobile : transporterMobile;
 }

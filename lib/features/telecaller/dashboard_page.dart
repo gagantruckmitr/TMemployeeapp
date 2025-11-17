@@ -5,15 +5,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/constants.dart';
 import '../../models/dummy_models.dart';
 import '../../models/smart_calling_models.dart';
 import '../../routes/app_router.dart';
 import 'widgets/smart_call_button.dart';
+import 'widgets/call_type_selection_dialog.dart';
+import 'widgets/ivr_call_waiting_overlay.dart';
 import '../../core/services/real_auth_service.dart';
 import '../../core/services/telecaller_service.dart';
 import '../../core/services/activity_tracker_service.dart';
+import '../../core/services/smart_calling_service.dart';
 import 'screens/search_users_screen.dart';
 import 'screens/pending_calls_screen.dart';
 import 'performance_analytics_page.dart';
@@ -1697,137 +1701,187 @@ class _DashboardPageState extends State<DashboardPage>
     context.push(AppRouter.smartCalling);
   }
 
-  void _initiateCall(Lead lead) {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.phone_in_talk_rounded,
-                    color: AppTheme.primaryBlue,
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    'Call ${lead.companyName}',
-                    style: AppTheme.headingMedium.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Contact: ${lead.contactPerson}',
-                  style: AppTheme.bodyLarge.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Action: ${lead.notes}',
-                  style: AppTheme.bodyMedium.copyWith(
-                    color: AppTheme.gray,
-                    fontStyle: FontStyle.italic,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.accentPurple.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: AppTheme.accentPurple.withOpacity(0.2),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.security_rounded,
-                        color: AppTheme.accentPurple,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Privacy Notice: IVR-controlled call. Phone number remains concealed.',
-                          style: AppTheme.bodyMedium.copyWith(
-                            color: AppTheme.accentPurple.withOpacity(0.9),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  'Cancel',
-                  style: AppTheme.bodyLarge.copyWith(
-                    color: AppTheme.gray,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _startSmartCalling();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryBlue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                ),
-                child: Text(
-                  'Start Call',
-                  style: AppTheme.bodyLarge.copyWith(
-                    color: AppTheme.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ],
+  Future<void> _initiateCall(Lead lead) async {
+    try {
+      // Show call type selection dialog
+      final callType = await showDialog<String>(
+        context: context,
+        builder: (context) => CallTypeSelectionDialog(
+          driverName: lead.contactPerson,
+        ),
+      );
+
+      if (callType == null) return;
+
+      // Get current user
+      final currentUser = RealAuthService.instance.currentUser;
+      if (currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ User not logged in. Please login again.'),
+            backgroundColor: Colors.red,
           ),
-    );
+        );
+        return;
+      }
+
+      final callerId = int.tryParse(currentUser.id) ?? 1;
+      
+      // For demo purposes, using a placeholder phone number
+      // In production, you should fetch the actual phone number from the lead data
+      final phoneNumber = lead.phoneNumber ?? '';
+      
+      if (phoneNumber.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Phone number not available for this contact'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (callType == 'manual') {
+        await _handleManualCall(lead, phoneNumber, callerId);
+      } else if (callType == 'click2call') {
+        await _handleIVRCall(lead, phoneNumber, callerId);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error initiating call: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleManualCall(Lead lead, String phoneNumber, int callerId) async {
+    try {
+      final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+
+      // Log manual call
+      final result = await SmartCallingService.instance.initiateManualCall(
+        driverMobile: cleanMobile,
+        callerId: callerId,
+        driverId: lead.id.toString(),
+      );
+
+      if (result['success'] == true) {
+        final driverMobileRaw = result['data']?['driver_mobile_raw'];
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📱 Calling ${lead.contactPerson}...'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Make direct call
+        await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Call completed with ${lead.contactPerson}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        final errorMsg = result['error'] ?? 'Unknown error';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to log call: $errorMsg'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleIVRCall(Lead lead, String phoneNumber, int callerId) async {
+    try {
+      final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📞 Initiating IVR call...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Initiate IVR call
+      final result = await SmartCallingService.instance.initiateClick2CallIVR(
+        driverMobile: cleanMobile,
+        callerId: callerId,
+        driverId: lead.id.toString(),
+      );
+
+      if (mounted) {
+        if (result['success'] == true) {
+          final referenceId = result['data']?['reference_id'];
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ IVR call initiated! Both phones will ring.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          // Show IVR waiting overlay
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (context) => PopScope(
+                canPop: false,
+                child: IVRCallWaitingOverlay(
+                  driverName: lead.contactPerson,
+                  referenceId: referenceId,
+                  onCallEnded: () {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Call completed with ${lead.contactPerson}'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+        } else {
+          final errorMsg = result['error'] ?? 'Unknown error';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to initiate IVR call: $errorMsg'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _markFollowupComplete(Lead lead) {
