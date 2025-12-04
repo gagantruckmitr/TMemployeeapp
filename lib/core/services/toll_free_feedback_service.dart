@@ -173,9 +173,8 @@ class TollFreeFeedbackService {
     required int callerId,
   }) async {
     try {
-      print('📞 Submitting welcome call feedback...');
-      // TODO: Upload toll_free_feedback_api.php to server, then change back to toll_free_feedback_api.php
-      final uri = Uri.parse('${ApiConfig.baseUrl}/social_media_feedback_api.php');
+      print('📞 Submitting toll-free feedback...');
+      final uri = Uri.parse('${ApiConfig.baseUrl}/toll_free_feedback_api.php?action=submit_feedback');
       print('API URL: $uri');
 
       // Build feedback string based on status

@@ -464,7 +464,9 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             ),
             child: Center(
               child: Text(
-                widget.contact.name.substring(0, 1).toUpperCase(),
+                widget.contact.name.isNotEmpty
+                    ? widget.contact.name.substring(0, 1).toUpperCase()
+                    : '?',
                 style: AppTheme.titleMedium.copyWith(
                   color: AppTheme.primaryBlue,
                   fontWeight: FontWeight.bold,

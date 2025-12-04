@@ -15,15 +15,33 @@ class CallbackRequestsService {
     final userId = RealAuthService.instance.currentUser?.id;
     final token = await RealAuthService.instance.getAuthToken();
 
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/callback_requests_api.php',
-    ).replace(
-      queryParameters: {
-        'action': 'index',
-        if (userId != null) 'auth_admin_id': userId,
-      },
-    );
+    final uri = Uri.parse('${ApiConfig.baseUrl}/callback_requests_api.php')
+        .replace(
+          queryParameters: {
+            'action': 'index',
+            if (userId != null) 'auth_admin_id': userId,
+          },
+        );
 
+    return _fetchData(uri, token);
+  }
+
+  Future<List<CallbackRequest>> fetchCallbackHistory() async {
+    final userId = RealAuthService.instance.currentUser?.id;
+    final token = await RealAuthService.instance.getAuthToken();
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/callback_requests_api.php')
+        .replace(
+          queryParameters: {
+            'action': 'history',
+            if (userId != null) 'auth_admin_id': userId,
+          },
+        );
+
+    return _fetchData(uri, token);
+  }
+
+  Future<List<CallbackRequest>> _fetchData(Uri uri, String? token) async {
     final headers = <String, String>{
       'Content-Type': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
@@ -33,10 +51,6 @@ class CallbackRequestsService {
       final response = await http
           .get(uri, headers: headers)
           .timeout(ApiConfig.timeout);
-
-      print(
-        '📞 CallbackRequestsService: status=${response.statusCode}, body=${response.body}',
-      );
 
       if (response.statusCode != 200) {
         throw Exception('Request failed with status ${response.statusCode}');
@@ -51,7 +65,7 @@ class CallbackRequestsService {
           (statusValue is bool && statusValue);
 
       if (!isSuccess) {
-        throw Exception(jsonBody['message'] ?? 'Failed to fetch requests');
+        throw Exception(jsonBody['message'] ?? 'Failed to fetch data');
       }
 
       final data = jsonBody['data'];
@@ -64,8 +78,52 @@ class CallbackRequestsService {
       }
 
       return [];
+    } on FormatException catch (e) {
+      throw Exception('Invalid response format: $e');
     } catch (error) {
-      throw Exception('Unable to load callback requests: $error');
+      throw Exception('Unable to load data: $error');
+    }
+  }
+
+  Future<bool> updateCallbackRequest({
+    required int requestId,
+    required String status,
+    String? notes,
+  }) async {
+    final userId = RealAuthService.instance.currentUser?.id;
+    final token = await RealAuthService.instance.getAuthToken();
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/callback_requests_api.php');
+
+    final body = {
+      'action': 'update_status',
+      'request_id': requestId.toString(),
+      'status': status,
+      if (notes != null) 'notes': notes,
+      if (userId != null) 'auth_admin_id': userId,
+    };
+
+    try {
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              if (token != null && token.isNotEmpty)
+                'Authorization': 'Bearer $token',
+            },
+            body: body,
+          )
+          .timeout(ApiConfig.timeout);
+
+      if (response.statusCode != 200) {
+        throw Exception('Request failed with status ${response.statusCode}');
+      }
+
+      final Map<String, dynamic> jsonBody = json.decode(response.body);
+      return jsonBody['success'] == true;
+    } catch (e) {
+      throw Exception('Unable to update callback request: $e');
     }
   }
 }

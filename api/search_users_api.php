@@ -49,6 +49,8 @@ function searchUsers($pdo) {
         createSearchIndexes($pdo);
         
         // Optimized query - fetch ALL fields needed for accurate profile completion
+        // Optimized query - fetch ALL fields needed for accurate profile completion
+        // Use subqueries for payment info to avoid duplicates (1 row per user)
         $sql = "SELECT 
                     u.id,
                     u.unique_id,
@@ -88,12 +90,11 @@ function searchUsers($pdo) {
                     u.pan_number,
                     u.pan_image,
                     u.gst_certificate,
-                    p.amount as payment_amount,
-                    p.end_at as payment_end_date,
-                    p.created_at as payment_created_date,
-                    p.payment_status as payment_status
+                    (SELECT amount FROM payments WHERE unique_id = u.unique_id ORDER BY CASE WHEN payment_status = 'captured' THEN 1 ELSE 2 END, created_at DESC LIMIT 1) as payment_amount,
+                    (SELECT end_at FROM payments WHERE unique_id = u.unique_id ORDER BY CASE WHEN payment_status = 'captured' THEN 1 ELSE 2 END, created_at DESC LIMIT 1) as payment_end_date,
+                    (SELECT created_at FROM payments WHERE unique_id = u.unique_id ORDER BY CASE WHEN payment_status = 'captured' THEN 1 ELSE 2 END, created_at DESC LIMIT 1) as payment_created_date,
+                    (SELECT payment_status FROM payments WHERE unique_id = u.unique_id ORDER BY CASE WHEN payment_status = 'captured' THEN 1 ELSE 2 END, created_at DESC LIMIT 1) as payment_status
                 FROM users u
-                LEFT JOIN payments p ON u.unique_id = p.unique_id
                 WHERE u.role IN ('driver', 'transporter')";
         
         // Add search conditions if query provided
@@ -134,13 +135,18 @@ function searchUsers($pdo) {
             $sql .= " AND YEAR(u.Created_at) = :filter_year";
         }
         
-        // Add subscription filter (based on payment_status)
-        if ($filterSubscription === 'active') {
-            $sql .= " AND p.payment_status = 'captured' AND p.end_at > NOW()";
-        } elseif ($filterSubscription === 'expired') {
-            $sql .= " AND p.payment_status = 'captured' AND p.end_at <= NOW()";
-        } elseif ($filterSubscription === 'inactive') {
-            $sql .= " AND (p.payment_status IS NULL OR p.payment_status != 'captured')";
+        // Add subscription filter (based on payment_status subquery)
+        // Note: We can't use WHERE on alias in same level, so we use HAVING or repeat subquery
+        // For simplicity and performance, we'll filter in PHP for subscription status if needed, 
+        // or use HAVING which is cleaner here
+        if ($filterSubscription) {
+            if ($filterSubscription === 'active') {
+                $sql .= " HAVING payment_status = 'captured' AND payment_end_date > NOW()";
+            } elseif ($filterSubscription === 'expired') {
+                $sql .= " HAVING payment_status = 'captured' AND payment_end_date <= NOW()";
+            } elseif ($filterSubscription === 'inactive') {
+                $sql .= " HAVING (payment_status IS NULL OR payment_status != 'captured')";
+            }
         }
         
         // Increase limit if we have post-processing filters (profile completion or call status)
@@ -292,6 +298,36 @@ function searchUsers($pdo) {
             
             // Build company name (simplified)
             $company = $user['city'] ? $user['city'] . ' Transport' : '';
+
+            // Parse profile picture
+            $profilePicture = null;
+            if (!empty($user['images'])) {
+                // Try to decode as JSON
+                $decodedImages = json_decode($user['images'], true);
+                if (is_array($decodedImages) && !empty($decodedImages)) {
+                    // Get first image
+                    $firstImage = $decodedImages[0];
+                    if (is_string($firstImage)) {
+                        $profilePicture = $firstImage;
+                    }
+                } else if (is_string($user['images']) && !empty($user['images']) && $user['images'] !== '[]') {
+                    // Maybe comma separated or single URL
+                    if (strpos($user['images'], ',') !== false) {
+                        $parts = explode(',', $user['images']);
+                        $profilePicture = trim($parts[0]);
+                    } else {
+                        $profilePicture = $user['images'];
+                    }
+                }
+            }
+            
+            // Ensure full URL if needed (assuming relative paths might exist)
+            if ($profilePicture && !filter_var($profilePicture, FILTER_VALIDATE_URL)) {
+                // If it's a relative path, prepend base URL
+                // Assuming images are stored in public/uploads or similar
+                // Adjust this base URL as per your actual storage location
+                $profilePicture = 'https://truckmitr.com/truckmitr-app/public/' . ltrim($profilePicture, '/');
+            }
             
             return [
                 'id' => (string)$user['id'],
@@ -311,7 +347,8 @@ function searchUsers($pdo) {
                 'remarks' => $remarks,
                 'paymentInfo' => $paymentInfo,
                 'registrationDate' => $user['Created_at'] ?? date('Y-m-d H:i:s'),
-                'profile_completion' => $profileCompletion . '%'
+                'profile_completion' => $profileCompletion . '%',
+                'profilePicture' => $profilePicture
             ];
         }, $users);
         

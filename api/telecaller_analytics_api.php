@@ -20,6 +20,8 @@ try {
     $recentCalls = getRecentCalls($pdo, $callerId, 10);
     $performanceMetrics = getPerformanceMetrics($pdo, $callerId, $dateCondition);
     $hourlyActivity = getHourlyActivity($pdo, $callerId);
+    $interestedCalls = getInterestedCalls($pdo, $callerId, $dateCondition);
+    $notInterestedCalls = getNotInterestedCalls($pdo, $callerId, $dateCondition);
     
     echo json_encode([
         'success' => true,
@@ -30,6 +32,8 @@ try {
             'recent_calls' => $recentCalls,
             'performance_metrics' => $performanceMetrics,
             'hourly_activity' => $hourlyActivity,
+            'interested_calls' => $interestedCalls,
+            'not_interested_calls' => $notInterestedCalls,
         ],
         'caller_id' => $callerId,
         'period' => $period,
@@ -48,12 +52,12 @@ try {
 
 function getDateCondition($period) {
     switch($period) {
-        case 'today': return "DATE(call_time) = CURDATE()";
-        case 'week': return "call_time >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
-        case 'month': return "call_time >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
-        case 'year': return "call_time >= DATE_SUB(CURDATE(), INTERVAL 365 DAY)";
+        case 'today': return "DATE(created_at) = CURDATE()";
+        case 'week': return "created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+        case 'month': return "created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+        case 'year': return "created_at >= DATE_SUB(CURDATE(), INTERVAL 365 DAY)";
         case 'all': return "1=1"; // All time data
-        default: return "call_time >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
+        default: return "created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
     }
 }
 
@@ -63,8 +67,26 @@ function getOverviewStats($pdo, $callerId, $dateCondition) {
             COUNT(*) as total_calls,
             SUM(CASE WHEN call_status = 'connected' THEN 1 ELSE 0 END) as connected_calls,
             SUM(CASE WHEN call_status IN ('callback', 'callback_later') THEN 1 ELSE 0 END) as callbacks,
-            SUM(CASE WHEN call_status = 'not_interested' THEN 1 ELSE 0 END) as not_interested,
-            SUM(CASE WHEN feedback LIKE '%interested%' OR feedback LIKE '%agree%' THEN 1 ELSE 0 END) as interested_count,
+            SUM(CASE 
+                WHEN call_status = 'not_interested' 
+                OR (feedback IS NOT NULL AND (
+                    LOWER(feedback) LIKE '%not interested%' 
+                    OR LOWER(feedback) LIKE '%not_interested%'
+                    OR LOWER(feedback) LIKE '%notinterested%'
+                ))
+                THEN 1 ELSE 0 
+            END) as not_interested,
+            SUM(CASE 
+                WHEN feedback IS NOT NULL 
+                AND feedback != ''
+                AND (LOWER(feedback) LIKE '%agree%' 
+                     OR LOWER(feedback) LIKE '%demo%' 
+                     OR LOWER(feedback) LIKE '%subscribe%'
+                     OR LOWER(feedback) LIKE '%interested%')
+                AND LOWER(feedback) NOT LIKE '%not%interested%'
+                AND call_status != 'not_interested'
+                THEN 1 ELSE 0 
+            END) as interested_count,
             AVG(CASE WHEN call_status = 'connected' THEN call_duration ELSE NULL END) as avg_duration
         FROM call_logs 
         WHERE caller_id = ? AND $dateCondition
@@ -114,13 +136,13 @@ function getCallTrends($pdo, $callerId, $period) {
     
     $stmt = $pdo->prepare("
         SELECT 
-            DATE(call_time) as date,
+            DATE(created_at) as date,
             COUNT(*) as total_calls,
             SUM(CASE WHEN call_status = 'connected' THEN 1 ELSE 0 END) as connected,
-            SUM(CASE WHEN feedback LIKE '%interested%' OR feedback LIKE '%agree%' THEN 1 ELSE 0 END) as interested
+            SUM(CASE WHEN (feedback LIKE '%interested%' OR feedback LIKE '%agree%') AND feedback NOT LIKE '%not interested%' AND feedback NOT LIKE '%not_interested%' THEN 1 ELSE 0 END) as interested
         FROM call_logs 
-        WHERE caller_id = ? AND call_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-        GROUP BY DATE(call_time)
+        WHERE caller_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        GROUP BY DATE(created_at)
         ORDER BY date ASC
     ");
     $stmt->execute([$callerId, $days]);
@@ -167,11 +189,14 @@ function getRecentCalls($pdo, $callerId, $limit = 50) {
     $stmt = $pdo->prepare("
         SELECT 
             cl.*,
-            COALESCE(cl.call_initiated_at, cl.call_time) as actual_call_time,
-            TIMESTAMPDIFF(SECOND, COALESCE(cl.call_initiated_at, cl.call_time), NOW()) as seconds_ago
+            COALESCE(cl.driver_name, u.name) as driver_name,
+            COALESCE(cl.user_number, u.mobile) as driver_mobile,
+            COALESCE(cl.call_initiated_at, cl.created_at) as actual_call_time,
+            TIMESTAMPDIFF(SECOND, COALESCE(cl.call_initiated_at, cl.created_at), NOW()) as seconds_ago
         FROM call_logs cl
+        LEFT JOIN users u ON cl.user_id = u.id
         WHERE cl.caller_id = ?
-        ORDER BY COALESCE(cl.call_initiated_at, cl.call_time) DESC
+        ORDER BY COALESCE(cl.call_initiated_at, cl.created_at) DESC
         LIMIT $limit
     ");
     $stmt->execute([$callerId]);
@@ -183,14 +208,14 @@ function getRecentCalls($pdo, $callerId, $limit = 50) {
         $call['duration_formatted'] = formatDuration($duration);
         
         // Use actual_call_time for accurate time display
-        $callTime = $call['actual_call_time'] ?? $call['call_time'];
+        $callTime = $call['actual_call_time'] ?? $call['created_at'];
         $call['time_ago'] = timeAgo($callTime);
         $call['date'] = date('M d, Y', strtotime($callTime));
         $call['time'] = date('h:i A', strtotime($callTime));
         
         // Set default values for missing fields
         $call['driver_name'] = $call['driver_name'] ?? 'Unknown';
-        $call['driver_mobile'] = $call['driver_mobile'] ?? $call['user_number'] ?? 'N/A';
+        $call['driver_mobile'] = $call['driver_mobile'] ?? 'N/A';
     }
     
     return $calls;
@@ -201,7 +226,7 @@ function getPerformanceMetrics($pdo, $callerId, $dateCondition) {
         SELECT 
             COUNT(*) as total_calls,
             SUM(CASE WHEN call_status = 'connected' THEN 1 ELSE 0 END) as connected,
-            SUM(CASE WHEN feedback LIKE '%interested%' OR feedback LIKE '%agree%' THEN 1 ELSE 0 END) as interested,
+            SUM(CASE WHEN (feedback LIKE '%interested%' OR feedback LIKE '%agree%') AND feedback NOT LIKE '%not interested%' AND feedback NOT LIKE '%not_interested%' THEN 1 ELSE 0 END) as interested,
             SUM(CASE WHEN call_status IN ('callback', 'callback_later') THEN 1 ELSE 0 END) as callbacks,
             AVG(CASE WHEN call_status = 'connected' THEN call_duration ELSE NULL END) as avg_duration
         FROM call_logs 
@@ -215,7 +240,7 @@ function getPerformanceMetrics($pdo, $callerId, $dateCondition) {
         SELECT 
             COUNT(*) as total_calls,
             SUM(CASE WHEN call_status = 'connected' THEN 1 ELSE 0 END) as connected,
-            SUM(CASE WHEN feedback LIKE '%interested%' OR feedback LIKE '%agree%' THEN 1 ELSE 0 END) as interested,
+            SUM(CASE WHEN (feedback LIKE '%interested%' OR feedback LIKE '%agree%') AND feedback NOT LIKE '%not interested%' AND feedback NOT LIKE '%not_interested%' THEN 1 ELSE 0 END) as interested,
             AVG(CASE WHEN call_status = 'connected' THEN call_duration ELSE NULL END) as avg_duration
         FROM call_logs 
         WHERE caller_id = ? AND $prevDateCondition
@@ -251,11 +276,11 @@ function getPerformanceMetrics($pdo, $callerId, $dateCondition) {
 function getHourlyActivity($pdo, $callerId) {
     $stmt = $pdo->prepare("
         SELECT 
-            HOUR(call_time) as hour,
+            HOUR(created_at) as hour,
             COUNT(*) as calls
         FROM call_logs 
-        WHERE caller_id = ? AND DATE(call_time) = CURDATE()
-        GROUP BY HOUR(call_time)
+        WHERE caller_id = ? AND DATE(created_at) = CURDATE()
+        GROUP BY HOUR(created_at)
         ORDER BY hour ASC
     ");
     $stmt->execute([$callerId]);
@@ -282,5 +307,85 @@ function timeAgo($datetime) {
     if ($diff < 3600) return floor($diff / 60) . 'm ago';
     if ($diff < 86400) return floor($diff / 3600) . 'h ago';
     return floor($diff / 86400) . 'd ago';
+}
+
+function getInterestedCalls($pdo, $callerId, $dateCondition) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            cl.*,
+            COALESCE(cl.driver_name, u.name) as driver_name,
+            COALESCE(cl.user_number, u.mobile) as driver_mobile,
+            COALESCE(cl.call_initiated_at, cl.created_at) as actual_call_time
+        FROM call_logs cl
+        LEFT JOIN users u ON cl.user_id = u.id
+        WHERE cl.caller_id = ? 
+        AND $dateCondition
+        AND cl.feedback IS NOT NULL
+        AND cl.feedback != ''
+        AND (LOWER(cl.feedback) LIKE '%agree%' 
+             OR LOWER(cl.feedback) LIKE '%demo%' 
+             OR LOWER(cl.feedback) LIKE '%subscribe%'
+             OR LOWER(cl.feedback) LIKE '%interested%')
+        AND LOWER(cl.feedback) NOT LIKE '%not%interested%'
+        AND cl.call_status != 'not_interested'
+        ORDER BY COALESCE(cl.call_initiated_at, cl.created_at) DESC
+    ");
+    $stmt->execute([$callerId]);
+    
+    $calls = $stmt->fetchAll();
+    
+    foreach ($calls as &$call) {
+        $duration = isset($call['call_duration']) ? (int)$call['call_duration'] : 0;
+        $call['duration_formatted'] = formatDuration($duration);
+        
+        $callTime = $call['actual_call_time'] ?? $call['created_at'];
+        $call['time_ago'] = timeAgo($callTime);
+        $call['date'] = date('M d, Y', strtotime($callTime));
+        $call['time'] = date('h:i A', strtotime($callTime));
+        
+        $call['driver_name'] = $call['driver_name'] ?? 'Unknown';
+        $call['driver_mobile'] = $call['driver_mobile'] ?? 'N/A';
+    }
+    
+    return $calls;
+}
+
+function getNotInterestedCalls($pdo, $callerId, $dateCondition) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            cl.*,
+            COALESCE(cl.driver_name, u.name) as driver_name,
+            COALESCE(cl.user_number, u.mobile) as driver_mobile,
+            COALESCE(cl.call_initiated_at, cl.created_at) as actual_call_time
+        FROM call_logs cl
+        LEFT JOIN users u ON cl.user_id = u.id
+        WHERE cl.caller_id = ? 
+        AND $dateCondition
+        AND (cl.call_status = 'not_interested' 
+             OR (cl.feedback IS NOT NULL AND (
+                LOWER(cl.feedback) LIKE '%not interested%' 
+                OR LOWER(cl.feedback) LIKE '%not_interested%'
+                OR LOWER(cl.feedback) LIKE '%notinterested%'
+             )))
+        ORDER BY COALESCE(cl.call_initiated_at, cl.created_at) DESC
+    ");
+    $stmt->execute([$callerId]);
+    
+    $calls = $stmt->fetchAll();
+    
+    foreach ($calls as &$call) {
+        $duration = isset($call['call_duration']) ? (int)$call['call_duration'] : 0;
+        $call['duration_formatted'] = formatDuration($duration);
+        
+        $callTime = $call['actual_call_time'] ?? $call['created_at'];
+        $call['time_ago'] = timeAgo($callTime);
+        $call['date'] = date('M d, Y', strtotime($callTime));
+        $call['time'] = date('h:i A', strtotime($callTime));
+        
+        $call['driver_name'] = $call['driver_name'] ?? 'Unknown';
+        $call['driver_mobile'] = $call['driver_mobile'] ?? 'N/A';
+    }
+    
+    return $calls;
 }
 ?>

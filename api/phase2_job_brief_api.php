@@ -9,12 +9,14 @@
  * created_at, updated_at, call_status_feedback
  */
 
-// Enable error reporting for debugging
+// Enable error reporting for debugging but log to file instead of output
 error_reporting(E_ALL);
-ini_set('display_errors', 0); // Don't display errors in output
+ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
 require_once 'config.php';
+// Ensure display_errors is off even if config.php turned it on
+ini_set('display_errors', 0);
 
 // Ensure we have helper functions
 if (!function_exists('sendError')) {
@@ -45,7 +47,7 @@ header('Content-Type: application/json');
 
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'insert') {
         insertJobBrief();
     } elseif ($action === 'update') {
@@ -55,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         saveJobBrief(); // Legacy endpoint
     }
-} elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
+} elseif (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'GET') {
     if ($action === 'get_all') {
         getAllJobBriefs();
     } elseif ($action === 'get_by_id') {
@@ -76,22 +78,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function saveJobBrief() {
     global $conn;
     
+    // Log the request
+    error_log('=== SAVE JOB BRIEF API CALLED ===');
+    error_log('Request Method: ' . $_SERVER['REQUEST_METHOD']);
+    error_log('Content Type: ' . ($_SERVER['CONTENT_TYPE'] ?? 'not set'));
+    
     if (!$conn) {
+        error_log('ERROR: Database connection not available');
         sendError('Database connection not available', 500);
     }
     
-    $data = json_decode(file_get_contents('php://input'), true);
+    $rawInput = file_get_contents('php://input');
+    error_log('Raw Input: ' . $rawInput);
+    
+    $data = json_decode($rawInput, true);
     
     if (!$data) {
+        error_log('ERROR: Invalid JSON data');
+        error_log('JSON Error: ' . json_last_error_msg());
         sendError('Invalid JSON data', 400);
     }
+    
+    error_log('Decoded Data: ' . print_r($data, true));
     
     // Required fields
     $uniqueId = isset($data['uniqueId']) ? $conn->real_escape_string($data['uniqueId']) : '';
     $jobId = isset($data['jobId']) ? $conn->real_escape_string($data['jobId']) : '';
     $callerId = isset($data['callerId']) ? (int)$data['callerId'] : NULL;
     
+    error_log('uniqueId: ' . $uniqueId);
+    error_log('jobId: ' . $jobId);
+    error_log('callerId: ' . $callerId);
+    
     if (empty($uniqueId) || empty($jobId)) {
+        error_log('ERROR: Missing required fields');
         sendError('Transporter ID and Job ID are required', 400);
     }
     
@@ -102,16 +122,17 @@ function saveJobBrief() {
     $vehicleType = isset($data['vehicleType']) ? $conn->real_escape_string($data['vehicleType']) : NULL;
     $licenseType = isset($data['licenseType']) ? $conn->real_escape_string($data['licenseType']) : NULL;
     $experience = isset($data['experience']) ? $conn->real_escape_string($data['experience']) : NULL;
-    $salaryFixed = isset($data['salaryFixed']) && !empty($data['salaryFixed']) ? (float)$data['salaryFixed'] : NULL;
-    $salaryVariable = isset($data['salaryVariable']) && !empty($data['salaryVariable']) ? (float)$data['salaryVariable'] : NULL;
+    $salaryFixed = isset($data['salaryFixed']) && is_numeric($data['salaryFixed']) ? (float)$data['salaryFixed'] : NULL;
+    $salaryVariable = isset($data['salaryVariable']) && is_numeric($data['salaryVariable']) ? (float)$data['salaryVariable'] : NULL;
     $esiPf = isset($data['esiPf']) ? $conn->real_escape_string($data['esiPf']) : 'No';
-    $foodAllowance = isset($data['foodAllowance']) && !empty($data['foodAllowance']) ? (float)$data['foodAllowance'] : NULL;
-    $tripIncentive = isset($data['tripIncentive']) && !empty($data['tripIncentive']) ? (float)$data['tripIncentive'] : NULL;
+    $foodAllowance = isset($data['foodAllowance']) && is_numeric($data['foodAllowance']) ? (float)$data['foodAllowance'] : NULL;
+    $tripIncentive = isset($data['tripIncentive']) && is_numeric($data['tripIncentive']) ? (float)$data['tripIncentive'] : NULL;
     $rehneKiSuvidha = isset($data['rehneKiSuvidha']) ? $conn->real_escape_string($data['rehneKiSuvidha']) : 'No';
     $mileage = isset($data['mileage']) ? $conn->real_escape_string($data['mileage']) : NULL;
-    $fastTagRoadKharcha = isset($data['fastTagRoadKharcha']) ? $conn->real_escape_string($data['fastTagRoadKharcha']) : 'Company';
+    $fastTagRoadKharcha = isset($data['fastTagRoadKharcha']) && is_numeric($data['fastTagRoadKharcha']) ? (float)$data['fastTagRoadKharcha'] : NULL;
     $callStatusFeedback = isset($data['callStatusFeedback']) ? $conn->real_escape_string($data['callStatusFeedback']) : NULL;
     $callRecording = isset($data['callRecording']) ? $conn->real_escape_string($data['callRecording']) : NULL;
+    $requiredDrivers = isset($data['requiredDrivers']) ? $conn->real_escape_string($data['requiredDrivers']) : NULL;
     
     // Check if job should be closed (when feedback is "Not a Transporter", "He is Driver...", or "Close Job")
     $closedJob = 0;
@@ -124,90 +145,78 @@ function saveJobBrief() {
     }
     
     try {
-        // First check if a record exists for this unique_id and job_id combination
-        $checkQuery = "SELECT id FROM job_brief_table WHERE unique_id = '$uniqueId' AND job_id = '$jobId' LIMIT 1";
-        $checkResult = $conn->query($checkQuery);
+        // ALWAYS INSERT NEW RECORD for call feedback tracking
+        // Each call should create a new entry to maintain call history
+        error_log('Inserting new call feedback record (always insert for call tracking)');
         
-        if ($checkResult && $checkResult->num_rows > 0) {
-            // Record exists, update it
-            $row = $checkResult->fetch_assoc();
-            $existingId = $row['id'];
+        $query = "INSERT INTO job_brief_table (
+            unique_id, job_id, caller_id, name, job_location, route, vehicle_type, license_type, 
+            experience, salary_fixed, salary_variable, esi_pf, food_allowance, 
+            trip_incentive, rehne_ki_suvidha, mileage, fast_tag_road_kharcha, 
+            call_status_feedback, call_recording, required_drivers, closed_job, created_at, updated_at
+        ) VALUES (
+            '$uniqueId', '$jobId', " . ($callerId !== NULL ? $callerId : "NULL") . ", " . 
+            ($name ? "'$name'" : "NULL") . ", " .
+            ($jobLocation ? "'$jobLocation'" : "NULL") . ", " .
+            ($route ? "'$route'" : "NULL") . ", " .
+            ($vehicleType ? "'$vehicleType'" : "NULL") . ", " .
+            ($licenseType ? "'$licenseType'" : "NULL") . ", " .
+            ($experience ? "'$experience'" : "NULL") . ", " .
+            ($salaryFixed !== NULL ? $salaryFixed : "NULL") . ", " .
+            ($salaryVariable !== NULL ? $salaryVariable : "NULL") . ", " .
+            "'$esiPf', " .
+            ($foodAllowance !== NULL ? $foodAllowance : "NULL") . ", " .
+            ($tripIncentive !== NULL ? $tripIncentive : "NULL") . ", " .
+            "'$rehneKiSuvidha', " .
+            ($mileage ? "'$mileage'" : "NULL") . ", " .
+            ($fastTagRoadKharcha !== NULL ? "'$fastTagRoadKharcha'" : "NULL") . ", " .
+            ($callStatusFeedback ? "'$callStatusFeedback'" : "NULL") . ", " .
+            ($callRecording ? "'$callRecording'" : "NULL") . ", " .
+            ($requiredDrivers ? "'$requiredDrivers'" : "NULL") . ", " .
+            "$closedJob, " .
+            "NOW(), NOW()
+        ) ON DUPLICATE KEY UPDATE
+            caller_id = VALUES(caller_id),
+            name = VALUES(name),
+            job_location = VALUES(job_location),
+            route = VALUES(route),
+            vehicle_type = VALUES(vehicle_type),
+            license_type = VALUES(license_type),
+            experience = VALUES(experience),
+            salary_fixed = VALUES(salary_fixed),
+            salary_variable = VALUES(salary_variable),
+            esi_pf = VALUES(esi_pf),
+            food_allowance = VALUES(food_allowance),
+            trip_incentive = VALUES(trip_incentive),
+            rehne_ki_suvidha = VALUES(rehne_ki_suvidha),
+            mileage = VALUES(mileage),
+            fast_tag_road_kharcha = VALUES(fast_tag_road_kharcha),
+            call_status_feedback = VALUES(call_status_feedback),
+            call_recording = VALUES(call_recording),
+            required_drivers = VALUES(required_drivers),
+            closed_job = VALUES(closed_job),
+            updated_at = NOW()";
+        error_log('Insert Query: ' . $query);
+        
+        if ($conn->query($query)) {
+            $insertId = $conn->insert_id;
+            error_log('✓ Insert successful, ID: ' . $insertId);
             
-            $updateFields = [];
-            if ($callerId !== NULL) $updateFields[] = "caller_id = $callerId";
-            if ($name !== NULL) $updateFields[] = "name = '$name'";
-            if ($jobLocation !== NULL) $updateFields[] = "job_location = '$jobLocation'";
-            if ($route !== NULL) $updateFields[] = "route = '$route'";
-            if ($vehicleType !== NULL) $updateFields[] = "vehicle_type = '$vehicleType'";
-            if ($licenseType !== NULL) $updateFields[] = "license_type = '$licenseType'";
-            if ($experience !== NULL) $updateFields[] = "experience = '$experience'";
-            if ($salaryFixed !== NULL) $updateFields[] = "salary_fixed = $salaryFixed";
-            if ($salaryVariable !== NULL) $updateFields[] = "salary_variable = $salaryVariable";
-            $updateFields[] = "esi_pf = '$esiPf'";
-            if ($foodAllowance !== NULL) $updateFields[] = "food_allowance = $foodAllowance";
-            if ($tripIncentive !== NULL) $updateFields[] = "trip_incentive = $tripIncentive";
-            $updateFields[] = "rehne_ki_suvidha = '$rehneKiSuvidha'";
-            if ($mileage !== NULL) $updateFields[] = "mileage = '$mileage'";
-            $updateFields[] = "fast_tag_road_kharcha = '$fastTagRoadKharcha'";
-            if ($callStatusFeedback !== NULL) $updateFields[] = "call_status_feedback = '$callStatusFeedback'";
-            if ($callRecording !== NULL) $updateFields[] = "call_recording = '$callRecording'";
-            $updateFields[] = "closed_job = $closedJob";
-            $updateFields[] = "updated_at = NOW()";
-            
-            $query = "UPDATE job_brief_table SET " . implode(', ', $updateFields) . " WHERE id = $existingId";
-            
-            if ($conn->query($query)) {
-                sendSuccess([
-                    'id' => $existingId,
-                    'uniqueId' => $uniqueId,
-                    'jobId' => $jobId,
-                    'updated' => true
-                ], 'Job brief updated successfully');
-            } else {
-                sendError('Failed to update job brief: ' . $conn->error, 500);
-            }
+
+
+            sendSuccess([
+                'id' => $insertId,
+                'uniqueId' => $uniqueId,
+                'jobId' => $jobId,
+                'inserted' => true
+            ], 'Call feedback saved successfully');
         } else {
-            // Record doesn't exist, insert new one
-            $query = "INSERT INTO job_brief_table (
-                unique_id, job_id, caller_id, name, job_location, route, vehicle_type, license_type, 
-                experience, salary_fixed, salary_variable, esi_pf, food_allowance, 
-                trip_incentive, rehne_ki_suvidha, mileage, fast_tag_road_kharcha, 
-                call_status_feedback, call_recording, closed_job, created_at, updated_at
-            ) VALUES (
-                '$uniqueId', '$jobId', " . ($callerId !== NULL ? $callerId : "NULL") . ", " . 
-                ($name ? "'$name'" : "NULL") . ", " .
-                ($jobLocation ? "'$jobLocation'" : "NULL") . ", " .
-                ($route ? "'$route'" : "NULL") . ", " .
-                ($vehicleType ? "'$vehicleType'" : "NULL") . ", " .
-                ($licenseType ? "'$licenseType'" : "NULL") . ", " .
-                ($experience ? "'$experience'" : "NULL") . ", " .
-                ($salaryFixed !== NULL ? $salaryFixed : "NULL") . ", " .
-                ($salaryVariable !== NULL ? $salaryVariable : "NULL") . ", " .
-                "'$esiPf', " .
-                ($foodAllowance !== NULL ? $foodAllowance : "NULL") . ", " .
-                ($tripIncentive !== NULL ? $tripIncentive : "NULL") . ", " .
-                "'$rehneKiSuvidha', " .
-                ($mileage ? "'$mileage'" : "NULL") . ", " .
-                "'$fastTagRoadKharcha', " .
-                ($callStatusFeedback ? "'$callStatusFeedback'" : "NULL") . ", " .
-                ($callRecording ? "'$callRecording'" : "NULL") . ", " .
-                "$closedJob, " .
-                "NOW(), NOW()
-            )";
-            
-            if ($conn->query($query)) {
-                sendSuccess([
-                    'id' => $conn->insert_id,
-                    'uniqueId' => $uniqueId,
-                    'jobId' => $jobId,
-                    'updated' => false
-                ], 'Job brief saved successfully');
-            } else {
-                sendError('Failed to save job brief: ' . $conn->error, 500);
-            }
+            error_log('✗ Insert failed: ' . $conn->error);
+            sendError('Failed to save call feedback: ' . $conn->error, 500);
         }
         
     } catch (Exception $e) {
+        error_log('✗ Exception: ' . $e->getMessage());
         sendError('Error: ' . $e->getMessage(), 500);
     }
 }
@@ -317,6 +326,8 @@ function getCallHistory() {
             }
         }
         
+
+        
         sendSuccess($history, 'Call history fetched successfully');
         
     } catch (Exception $e) {
@@ -410,6 +421,7 @@ function updateJobBrief() {
     if (isset($data['fastTagRoadKharcha'])) $updateFields[] = "fast_tag_road_kharcha = '" . $conn->real_escape_string($data['fastTagRoadKharcha']) . "'";
     if (isset($data['callStatusFeedback'])) $updateFields[] = "call_status_feedback = '" . $conn->real_escape_string($data['callStatusFeedback']) . "'";
     if (isset($data['callRecording'])) $updateFields[] = "call_recording = '" . $conn->real_escape_string($data['callRecording']) . "'";
+    if (isset($data['requiredDrivers'])) $updateFields[] = "required_drivers = '" . $conn->real_escape_string($data['requiredDrivers']) . "'";
     
     if (empty($updateFields)) {
         sendError('No fields to update', 400);
@@ -523,16 +535,17 @@ function insertJobBrief() {
     $vehicleType = isset($data['vehicle_type']) ? $conn->real_escape_string($data['vehicle_type']) : NULL;
     $licenseType = isset($data['license_type']) ? $conn->real_escape_string($data['license_type']) : NULL;
     $experience = isset($data['experience']) ? $conn->real_escape_string($data['experience']) : NULL;
-    $salaryFixed = isset($data['salary_fixed']) && !empty($data['salary_fixed']) ? (float)$data['salary_fixed'] : NULL;
-    $salaryVariable = isset($data['salary_variable']) && !empty($data['salary_variable']) ? (float)$data['salary_variable'] : NULL;
+    $salaryFixed = isset($data['salary_fixed']) && is_numeric($data['salary_fixed']) ? (float)$data['salary_fixed'] : NULL;
+    $salaryVariable = isset($data['salary_variable']) && is_numeric($data['salary_variable']) ? (float)$data['salary_variable'] : NULL;
     $esiPf = isset($data['esi_pf']) ? $conn->real_escape_string($data['esi_pf']) : 'No';
-    $foodAllowance = isset($data['food_allowance']) && !empty($data['food_allowance']) ? (float)$data['food_allowance'] : NULL;
-    $tripIncentive = isset($data['trip_incentive']) && !empty($data['trip_incentive']) ? (float)$data['trip_incentive'] : NULL;
+    $foodAllowance = isset($data['food_allowance']) && is_numeric($data['food_allowance']) ? (float)$data['food_allowance'] : NULL;
+    $tripIncentive = isset($data['trip_incentive']) && is_numeric($data['trip_incentive']) ? (float)$data['trip_incentive'] : NULL;
     $rehneKiSuvidha = isset($data['rehne_ki_suvidha']) ? $conn->real_escape_string($data['rehne_ki_suvidha']) : 'No';
     $mileage = isset($data['mileage']) ? $conn->real_escape_string($data['mileage']) : NULL;
-    $fastTagRoadKharcha = isset($data['fast_tag_road_kharcha']) ? $conn->real_escape_string($data['fast_tag_road_kharcha']) : 'Company';
+    $fastTagRoadKharcha = isset($data['fast_tag_road_kharcha']) && is_numeric($data['fast_tag_road_kharcha']) ? (float)$data['fast_tag_road_kharcha'] : NULL;
     $callStatusFeedback = isset($data['call_status_feedback']) ? $conn->real_escape_string($data['call_status_feedback']) : NULL;
     $callRecording = isset($data['call_recording']) ? $conn->real_escape_string($data['call_recording']) : NULL;
+    $requiredDrivers = isset($data['required_drivers']) ? $conn->real_escape_string($data['required_drivers']) : NULL;
     $closedJob = isset($data['closed_job']) ? (int)$data['closed_job'] : 0;
     
     try {
@@ -540,7 +553,7 @@ function insertJobBrief() {
                     unique_id, job_id, caller_id, name, job_location, route, vehicle_type, license_type, 
                     experience, salary_fixed, salary_variable, esi_pf, food_allowance, 
                     trip_incentive, rehne_ki_suvidha, mileage, fast_tag_road_kharcha, 
-                    call_status_feedback, call_recording, closed_job, created_at, updated_at
+                    call_status_feedback, call_recording, required_drivers, closed_job, created_at, updated_at
                 ) VALUES (
                     '$uniqueId', '$jobId', " . ($callerId !== NULL ? $callerId : "NULL") . ", " . 
                     ($name ? "'$name'" : "NULL") . ", " .
@@ -556,12 +569,33 @@ function insertJobBrief() {
                     ($tripIncentive !== NULL ? $tripIncentive : "NULL") . ", " .
                     "'$rehneKiSuvidha', " .
                     ($mileage ? "'$mileage'" : "NULL") . ", " .
-                    "'$fastTagRoadKharcha', " .
+                    ($fastTagRoadKharcha !== NULL ? "'$fastTagRoadKharcha'" : "NULL") . ", " .
                     ($callStatusFeedback ? "'$callStatusFeedback'" : "NULL") . ", " .
                     ($callRecording ? "'$callRecording'" : "NULL") . ", " .
+                    ($requiredDrivers ? "'$requiredDrivers'" : "NULL") . ", " .
                     "$closedJob, " .
                     "NOW(), NOW()
-                )";
+                ) ON DUPLICATE KEY UPDATE
+                    caller_id = VALUES(caller_id),
+                    name = VALUES(name),
+                    job_location = VALUES(job_location),
+                    route = VALUES(route),
+                    vehicle_type = VALUES(vehicle_type),
+                    license_type = VALUES(license_type),
+                    experience = VALUES(experience),
+                    salary_fixed = VALUES(salary_fixed),
+                    salary_variable = VALUES(salary_variable),
+                    esi_pf = VALUES(esi_pf),
+                    food_allowance = VALUES(food_allowance),
+                    trip_incentive = VALUES(trip_incentive),
+                    rehne_ki_suvidha = VALUES(rehne_ki_suvidha),
+                    mileage = VALUES(mileage),
+                    fast_tag_road_kharcha = VALUES(fast_tag_road_kharcha),
+                    call_status_feedback = VALUES(call_status_feedback),
+                    call_recording = VALUES(call_recording),
+                    required_drivers = VALUES(required_drivers),
+                    closed_job = VALUES(closed_job),
+                    updated_at = NOW()";
         
         if ($conn->query($query)) {
             $insertedId = $conn->insert_id;
@@ -571,6 +605,8 @@ function insertJobBrief() {
             $result = $conn->query($selectQuery);
             $insertedRecord = $result->fetch_assoc();
             
+
+
             sendSuccess([
                 'id' => $insertedId,
                 'data' => formatJobBriefRow($insertedRecord)
@@ -730,6 +766,7 @@ function formatJobBriefRow($row) {
         'fast_tag_road_kharcha' => $row['fast_tag_road_kharcha'],
         'call_status_feedback' => $row['call_status_feedback'],
         'call_recording' => isset($row['call_recording']) ? $row['call_recording'] : null,
+        'required_drivers' => isset($row['required_drivers']) ? $row['required_drivers'] : null,
         'closed_job' => isset($row['closed_job']) ? (int)$row['closed_job'] : 0,
         'created_at' => $row['created_at'],
         'updated_at' => $row['updated_at'],
@@ -749,6 +786,7 @@ function formatJobBriefRow($row) {
         'fastTagRoadKharcha' => $row['fast_tag_road_kharcha'],
         'callStatusFeedback' => $row['call_status_feedback'],
         'callRecording' => isset($row['call_recording']) ? $row['call_recording'] : null,
+        'requiredDrivers' => isset($row['required_drivers']) ? $row['required_drivers'] : null,
         'closedJob' => isset($row['closed_job']) ? (int)$row['closed_job'] : 0,
         'createdAt' => $row['created_at'],
         'updatedAt' => $row['updated_at'],

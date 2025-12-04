@@ -14,11 +14,11 @@ class SmartCallingService {
   // Cache variables for drivers
   List<DriverContact>? _cachedDrivers;
   DateTime? _lastFetchTime;
-  
+
   // Cache variables for transporters
   List<TransporterContact>? _cachedTransporters;
   DateTime? _lastTransporterFetchTime;
-  
+
   // Cache timeout duration
   final Duration cacheTimeout = const Duration(minutes: 5);
 
@@ -222,10 +222,7 @@ class SmartCallingService {
       );
     } catch (e) {
       print('Failed to initiate Click2Call IVR: $e');
-      return {
-        'success': false,
-        'error': e.toString(),
-      };
+      return {'success': false, 'error': e.toString()};
     }
   }
 
@@ -253,10 +250,7 @@ class SmartCallingService {
       );
     } catch (e) {
       print('Failed to initiate EasyGo IVR: $e');
-      return {
-        'success': false,
-        'error': e.toString(),
-      };
+      return {'success': false, 'error': e.toString()};
     }
   }
 
@@ -266,6 +260,7 @@ class SmartCallingService {
     required int callerId,
     required String driverId,
     String contactType = 'driver', // 'driver' or 'transporter'
+    String? callSource,
   }) async {
     try {
       return await ApiService.initiateManualCall(
@@ -273,13 +268,11 @@ class SmartCallingService {
         callerId: callerId,
         driverId: driverId,
         contactType: contactType,
+        callSource: callSource,
       );
     } catch (e) {
       print('Failed to initiate manual call: $e');
-      return {
-        'success': false,
-        'error': e.toString(),
-      };
+      return {'success': false, 'error': e.toString()};
     }
   }
 
@@ -289,10 +282,7 @@ class SmartCallingService {
       return await ApiService.getCallStatus(referenceId);
     } catch (e) {
       print('Failed to get call status: $e');
-      return {
-        'success': false,
-        'error': e.toString(),
-      };
+      return {'success': false, 'error': e.toString()};
     }
   }
 
@@ -373,7 +363,9 @@ class SmartCallingService {
 
       if (success) {
         if (_cachedTransporters != null) {
-          final index = _cachedTransporters!.indexWhere((t) => t.id == transporterId);
+          final index = _cachedTransporters!.indexWhere(
+            (t) => t.id == transporterId,
+          );
           if (index != -1) {
             _cachedTransporters![index] = _cachedTransporters![index].copyWith(
               status: status,
@@ -455,12 +447,24 @@ class SmartCallingService {
   }
 
   // Get call history
-  Future<List<dynamic>> getCallHistory({String? status}) async {
+  Future<Map<String, dynamic>> getCallHistory({
+    String? status,
+    String? feedback,
+    String? remarks,
+    String? search,
+    int limit = 1000,
+  }) async {
     try {
-      return await ApiService.getCallHistory(status: status);
+      return await ApiService.getCallHistory(
+        status: status,
+        feedback: feedback,
+        remarks: remarks,
+        search: search,
+        limit: limit,
+      );
     } catch (e) {
       print('Failed to get call history: $e');
-      return [];
+      return {'data': [], 'total': 0};
     }
   }
 
@@ -501,10 +505,7 @@ class SmartCallingService {
       );
     } catch (e) {
       print('Failed to upload call recording: $e');
-      return {
-        'success': false,
-        'error': e.toString(),
-      };
+      return {'success': false, 'error': e.toString()};
     }
   }
 }

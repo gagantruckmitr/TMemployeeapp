@@ -240,7 +240,7 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
                           ),
                         ),
                         child: Text(
-                          'Ref: ${widget.referenceId!.substring(0, 8)}...',
+                          'Ref: ${widget.referenceId!.length > 8 ? '${widget.referenceId!.substring(0, 8)}...' : widget.referenceId}',
                           style: AppTheme.bodySmall.copyWith(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 11,

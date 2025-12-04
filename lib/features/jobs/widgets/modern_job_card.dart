@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:flutter/services.dart';
+import '../../../core/config/api_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/phase2_api_service.dart';
 import '../../../core/services/phase2_auth_service.dart';
@@ -15,59 +17,71 @@ import '../../telecaller/widgets/easygo_ivr_call_helper.dart';
 class ModernJobCard extends StatefulWidget {
   final JobModel job;
   final bool isSearchResult;
+  final int? currentUserId;
 
-  const ModernJobCard(
-      {super.key, required this.job, this.isSearchResult = false});
+  const ModernJobCard({
+    super.key,
+    required this.job,
+    this.isSearchResult = false,
+    this.currentUserId,
+  });
 
   @override
   State<ModernJobCard> createState() => _ModernJobCardState();
 }
 
 class _ModernJobCardState extends State<ModernJobCard> {
-  bool _isAssignedToMe = false;
+  int? _localUserId;
+
+  bool get _isAssignedToMe {
+    final userId = widget.currentUserId ?? _localUserId;
+
+    // Debug prints
+    print(
+      'Card Check: Job=${widget.job.jobId}, AssignedTo=${widget.job.assignedTo}, CurrentUser=$userId',
+    );
+
+    if (userId == null || widget.job.assignedTo == null) {
+      return false;
+    }
+    return widget.job.assignedTo.toString() == userId.toString();
+  }
 
   @override
   void initState() {
     super.initState();
-    _checkAssignment();
+    if (widget.currentUserId == null) {
+      _fetchUserLocally();
+    }
   }
 
-  Future<void> _checkAssignment() async {
+  Future<void> _fetchUserLocally() async {
     final user = await Phase2AuthService.getCurrentUser();
-    if (user != null && mounted) {
-      // Debug logging
-      print('=== ASSIGNMENT CHECK ===');
-      print('Job ID: ${widget.job.jobId}');
-      print('Job assignedTo: ${widget.job.assignedTo}');
-      print('Job assignedToName: ${widget.job.assignedToName}');
-      print('Current User ID: ${user.id}');
-      print(
-          'Match: ${widget.job.assignedTo != null && widget.job.assignedTo.toString() == user.id.toString()}');
-
+    if (mounted && user != null) {
       setState(() {
-        // Check if this job is assigned to the current user
-        _isAssignedToMe = widget.job.assignedTo != null &&
-            widget.job.assignedTo.toString() == user.id.toString();
+        _localUserId = user.id;
       });
     }
   }
 
   String? _getProfileImageUrl(String? imagePath) {
-    if (imagePath == null || imagePath.isEmpty || imagePath.toLowerCase() == 'null') {
+    if (imagePath == null ||
+        imagePath.isEmpty ||
+        imagePath.toLowerCase() == 'null') {
       return null;
     }
-    
+
     // If it's already a full URL
     if (imagePath.startsWith('http')) {
       return imagePath;
     }
-    
+
     // If it's a relative path, prepend the correct base URL
     String cleanPath = imagePath;
     if (cleanPath.startsWith('/')) {
       cleanPath = cleanPath.substring(1);
     }
-    return 'https://truckmitr.com/public/$cleanPath';
+    return '${ApiConfig.publicUrl}/$cleanPath';
   }
 
   String _maskPhone(String phone) {
@@ -85,21 +99,19 @@ class _ModernJobCardState extends State<ModernJobCard> {
     }
   }
 
-
-
   String _getTimeAgoString() {
     if (widget.job.createdAt.isEmpty) return 'N/A';
-    
+
     try {
       final createdDate = DateTime.parse(widget.job.createdAt);
-      
+
       // Format time as HH:MM AM/PM
       final hour = createdDate.hour;
       final minute = createdDate.minute;
       final period = hour >= 12 ? 'PM' : 'AM';
       final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
       final formattedMinute = minute.toString().padLeft(2, '0');
-      
+
       return '$displayHour:$formattedMinute $period';
     } catch (e) {
       return 'N/A';
@@ -112,7 +124,9 @@ class _ModernJobCardState extends State<ModernJobCard> {
     if (!_isAssignedToMe) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('This job is assigned to ${widget.job.assignedToName ?? "another telecaller"}'),
+          content: Text(
+            'This job is assigned to ${widget.job.assignedToName ?? "another telecaller"}',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -122,7 +136,8 @@ class _ModernJobCardState extends State<ModernJobCard> {
     try {
       final callType = await showDialog<String>(
         context: context,
-        builder: (context) => CallTypeSelectionDialog(driverName: widget.job.transporterName),
+        builder: (context) =>
+            CallTypeSelectionDialog(driverName: widget.job.transporterName),
       );
 
       if (callType == null) return;
@@ -153,7 +168,7 @@ class _ModernJobCardState extends State<ModernJobCard> {
     final user = await Phase2AuthService.getCurrentUser();
     final callerId = user?.id ?? 0;
     final cleanPhone = phone.replaceAll(RegExp(r'[^\d]'), '');
-    
+
     final result = await SmartCallingService.instance.initiateManualCall(
       driverMobile: cleanPhone,
       callerId: callerId,
@@ -169,43 +184,106 @@ class _ModernJobCardState extends State<ModernJobCard> {
   }
 
   Future<void> _showTransporterCallFeedbackAfterIVR() async {
+    print('=== SHOWING TRANSPORTER FEEDBACK MODAL ===');
+    print('Transporter TMID: ${widget.job.transporterTmid}');
+    print('Transporter Name: ${widget.job.transporterName}');
+    print('Job ID: ${widget.job.jobId}');
+
     await showTransporterCallFeedback(
       context: context,
       transporterTmid: widget.job.transporterTmid,
       transporterName: widget.job.transporterName,
       jobId: widget.job.jobId,
       onSubmit: (callStatus, notes, recordingFile) async {
+        print('=== FEEDBACK SUBMITTED ===');
+        print('Call Status: $callStatus');
+        print('Notes: $notes');
+        print('Recording File: ${recordingFile?.path}');
+
         Navigator.pop(context);
 
         if (callStatus == 'Connected: Details Received') {
+          print('Opening job brief modal for Details Received');
           showJobBriefFeedbackModal(
             context: context,
             job: widget.job,
             onSubmit: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Job brief saved with call status: $callStatus'),
+                  content: Text(
+                    'Job brief saved with call status: $callStatus',
+                  ),
                 ),
               );
             },
           );
         } else {
+          print('Saving feedback to database...');
           try {
+            // Get current user for caller_id
+            final user = await Phase2AuthService.getCurrentUser();
+            final callerId = user?.id ?? 0;
+
+            print('Caller ID: $callerId');
+            print('User: ${user?.name}');
+
+            // Upload recording file if provided
+            String? recordingUrl;
+            if (recordingFile != null) {
+              print('Uploading recording file...');
+              try {
+                final uploadResult =
+                    await Phase2ApiService.uploadTransporterCallRecording(
+                      filePath: recordingFile.path,
+                      jobId: widget.job.jobId,
+                      callerId: callerId,
+                      transporterTmid: widget.job.transporterTmid,
+                    );
+                recordingUrl = uploadResult['recording_url'];
+                print('Recording uploaded: $recordingUrl');
+              } catch (e) {
+                print('Recording upload failed: $e');
+                // Continue with feedback submission even if recording fails
+              }
+            }
+
+            // Build the complete feedback string with notes if provided
+            String completeFeedback = callStatus;
+            if (notes != null && notes.isNotEmpty) {
+              completeFeedback = '$callStatus - Notes: $notes';
+            }
+
+            print('=== CALLING API ===');
+            print('uniqueId: ${widget.job.transporterTmid}');
+            print('jobId: ${widget.job.jobId}');
+            print('callerId: $callerId');
+            print('name: ${widget.job.transporterName}');
+            print('callStatusFeedback: $completeFeedback');
+            print('callRecording: $recordingUrl');
+
+            // Save job brief with feedback, notes, and recording
             await Phase2ApiService.saveJobBrief(
               uniqueId: widget.job.transporterTmid,
               jobId: widget.job.jobId,
-              callStatusFeedback: callStatus,
+              callerId: callerId,
+              name: widget.job.transporterName,
+              callStatusFeedback: completeFeedback,
+              callRecording: recordingUrl,
             );
+
+            print('✓ API call successful');
 
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Call status saved: $callStatus'),
+                  content: Text('Feedback saved successfully'),
                   backgroundColor: Colors.green,
                 ),
               );
             }
           } catch (e) {
+            print('✗ ERROR SAVING FEEDBACK: $e');
+            print('Stack trace: ${StackTrace.current}');
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -225,20 +303,29 @@ class _ModernJobCardState extends State<ModernJobCard> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: widget.job.isExpiredByDeadline
-            ? const Color(0xFFFEF2F2)
-            : Colors.white,
+        color: widget.job.isClosed
+            ? Colors.grey.shade50
+            : (widget.job.isExpiredByDeadline
+                  ? const Color(0xFFFEF2F2)
+                  : Colors.white),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: widget.job.isExpiredByDeadline
-                ? const Color(0xFFEF4444)
-                : Colors.grey.shade200,
-            width: widget.job.isExpiredByDeadline ? 2 : 1),
+          color: widget.job.isClosed
+              ? Colors.grey.shade300
+              : (widget.job.isExpiredByDeadline
+                    ? const Color(0xFFEF4444)
+                    : Colors.grey.shade200),
+          width: (widget.job.isExpiredByDeadline || widget.job.isClosed)
+              ? 2
+              : 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: widget.job.isExpiredByDeadline
-                ? const Color(0xFFEF4444).withValues(alpha: 0.1)
-                : Colors.black.withValues(alpha: 0.04),
+            color: widget.job.isClosed
+                ? Colors.black.withValues(alpha: 0.05)
+                : (widget.job.isExpiredByDeadline
+                      ? const Color(0xFFEF4444).withValues(alpha: 0.1)
+                      : Colors.black.withValues(alpha: 0.04)),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -264,7 +351,9 @@ class _ModernJobCardState extends State<ModernJobCard> {
             userId: int.tryParse(widget.job.transporterId) ?? 0,
             userType: 'transporter',
             completionPercentage: widget.job.transporterProfileCompletion,
-            profileImageUrl: _getProfileImageUrl(widget.job.transporterProfilePhoto),
+            profileImageUrl: _getProfileImageUrl(
+              widget.job.transporterProfilePhoto,
+            ),
             gender: widget.job.transporterGender,
             size: 70,
           ),
@@ -284,11 +373,37 @@ class _ModernJobCardState extends State<ModernJobCard> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  widget.job.transporterTmid.isNotEmpty
-                      ? widget.job.transporterTmid
-                      : 'No TMID',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                InkWell(
+                  onTap: widget.job.transporterTmid.isNotEmpty
+                      ? () {
+                          Clipboard.setData(
+                            ClipboardData(text: widget.job.transporterTmid),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('TMID copied to clipboard'),
+                            ),
+                          );
+                        }
+                      : null,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.job.transporterTmid.isNotEmpty
+                            ? widget.job.transporterTmid
+                            : 'No TMID',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      if (widget.job.transporterTmid.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        Icon(Icons.copy, size: 12, color: Colors.grey.shade600),
+                      ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -296,11 +411,42 @@ class _ModernJobCardState extends State<ModernJobCard> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              // Show Closed badge
+              if (widget.job.isClosed) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade700,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock, color: Colors.white, size: 12),
+                      SizedBox(width: 4),
+                      Text(
+                        'CLOSED',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
               // Show expired badge first and more prominently
               if (widget.job.isExpiredByDeadline) ...[
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEF4444),
                     borderRadius: BorderRadius.circular(8),
@@ -324,18 +470,20 @@ class _ModernJobCardState extends State<ModernJobCard> {
                 const SizedBox(height: 4),
               ],
               _buildStatusBadge(
-                  'Approval',
-                  widget.job.isApproved ? 'Approved' : 'Pending',
-                  widget.job.isApproved
-                      ? const Color(0xFF10B981)
-                      : const Color(0xFFF59E0B)),
+                'Approval',
+                widget.job.isApproved ? 'Approved' : 'Pending',
+                widget.job.isApproved
+                    ? const Color(0xFF10B981)
+                    : const Color(0xFFF59E0B),
+              ),
               const SizedBox(height: 4),
               _buildStatusBadge(
-                  'Status',
-                  widget.job.isActive ? 'Active' : 'Inactive',
-                  widget.job.isActive
-                      ? const Color(0xFF3B82F6)
-                      : const Color(0xFF6B7280)),
+                'Status',
+                widget.job.isActive ? 'Active' : 'Inactive',
+                widget.job.isActive
+                    ? const Color(0xFF3B82F6)
+                    : const Color(0xFF6B7280),
+              ),
             ],
           ),
         ],
@@ -359,9 +507,10 @@ class _ModernJobCardState extends State<ModernJobCard> {
                 child: Text(
                   widget.job.jobId,
                   style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -374,9 +523,10 @@ class _ModernJobCardState extends State<ModernJobCard> {
                           ? widget.job.jobTitle
                           : 'Driver Required',
                       style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.darkGray),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.darkGray,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -385,7 +535,9 @@ class _ModernJobCardState extends State<ModernJobCard> {
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: _isAssignedToMe
                               ? Colors.green.shade50
@@ -428,51 +580,65 @@ class _ModernJobCardState extends State<ModernJobCard> {
   Widget _buildInfoGrid() {
     return Column(
       children: [
-        _buildInfoRow('Posted', _formatDate(widget.job.createdAt), 'Deadline',
-            _formatDate(widget.job.applicationDeadline)),
+        _buildInfoRow(
+          'Posted',
+          _formatDate(widget.job.createdAt),
+          'Deadline',
+          _formatDate(widget.job.applicationDeadline),
+        ),
         const SizedBox(height: 8),
         _buildInfoRow(
-            'City',
-            widget.job.transporterCity.isNotEmpty
-                ? widget.job.transporterCity
-                : 'N/A',
-            'State',
-            widget.job.transporterState.isNotEmpty
-                ? widget.job.transporterState
-                : 'N/A'),
+          'City',
+          widget.job.transporterCity.isNotEmpty
+              ? widget.job.transporterCity
+              : 'N/A',
+          'State',
+          widget.job.transporterState.isNotEmpty
+              ? widget.job.transporterState
+              : 'N/A',
+        ),
         const SizedBox(height: 8),
         _buildSingleInfo(
-            'Route',
-            widget.job.jobLocation.isNotEmpty
-                ? widget.job.jobLocation
-                : 'Not specified'),
+          'Route',
+          widget.job.jobLocation.isNotEmpty
+              ? widget.job.jobLocation
+              : 'Not specified',
+        ),
         const SizedBox(height: 8),
         _buildInfoRow(
-            'Vehicle',
-            widget.job.vehicleType.isNotEmpty ? widget.job.vehicleType : 'N/A',
-            'License',
-            widget.job.typeOfLicense.isNotEmpty
-                ? widget.job.typeOfLicense
-                : 'N/A'),
+          'Vehicle',
+          widget.job.vehicleType.isNotEmpty ? widget.job.vehicleType : 'N/A',
+          'License',
+          widget.job.typeOfLicense.isNotEmpty
+              ? widget.job.typeOfLicense
+              : 'N/A',
+        ),
         const SizedBox(height: 8),
         _buildInfoRow(
-            'Salary',
-            widget.job.salaryRange.isNotEmpty ? widget.job.salaryRange : 'N/A',
-            'Experience',
-            widget.job.requiredExperience.isNotEmpty
-                ? widget.job.requiredExperience
-                : 'N/A'),
+          'Salary',
+          widget.job.salaryRange.isNotEmpty ? widget.job.salaryRange : 'N/A',
+          'Experience',
+          widget.job.requiredExperience.isNotEmpty
+              ? widget.job.requiredExperience
+              : 'N/A',
+        ),
         const SizedBox(height: 8),
         _buildSingleInfo('Posted At', _getTimeAgoString()),
         const SizedBox(height: 8),
         _buildSingleInfo(
-            'Drivers Required', '${widget.job.numberOfDriverRequired}'),
+          'Drivers Required',
+          '${widget.job.numberOfDriverRequired}',
+        ),
       ],
     );
   }
 
   Widget _buildInfoRow(
-      String label1, String value1, String label2, String value2) {
+    String label1,
+    String value1,
+    String label2,
+    String value2,
+  ) {
     return Row(
       children: [
         Expanded(child: _buildInfoItem(label1, value1)),
@@ -531,14 +697,18 @@ class _ModernJobCardState extends State<ModernJobCard> {
           Text(
             '$label: ',
             style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade600),
+              fontSize: 9,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade600,
+            ),
           ),
           Text(
             value,
             style: TextStyle(
-                fontSize: 9, fontWeight: FontWeight.w700, color: color),
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
           ),
         ],
       ),
@@ -556,20 +726,25 @@ class _ModernJobCardState extends State<ModernJobCard> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => JobApplicantsScreen(
-                        jobId: widget.job.jobId, jobTitle: widget.job.jobTitle),
+                      jobId: widget.job.jobId,
+                      jobTitle: widget.job.jobTitle,
+                    ),
                   ),
                 );
               }
             },
             icon: const Icon(Icons.people_outline, size: 16),
-            label: Text('${widget.job.applicantsCount} Applicants',
-                style: const TextStyle(fontSize: 12)),
+            label: Text(
+              '${widget.job.applicantsCount} Applicants',
+              style: const TextStyle(fontSize: 12),
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: BorderSide(color: Colors.grey.shade300),
               padding: const EdgeInsets.symmetric(vertical: 10),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           ),
         ),
@@ -587,8 +762,9 @@ class _ModernJobCardState extends State<ModernJobCard> {
                     // Show message for non-assigned jobs
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content:
-                            Text('This job is assigned to another telecaller'),
+                        content: Text(
+                          'This job is assigned to another telecaller',
+                        ),
                         backgroundColor: Colors.orange,
                         duration: Duration(seconds: 2),
                       ),
@@ -610,8 +786,11 @@ class _ModernJobCardState extends State<ModernJobCard> {
             borderRadius: BorderRadius.circular(10),
             child: Container(
               padding: const EdgeInsets.all(10),
-              child: const Icon(Icons.visibility_outlined,
-                  color: Colors.white, size: 18),
+              child: const Icon(
+                Icons.visibility_outlined,
+                color: Colors.white,
+                size: 18,
+              ),
             ),
           ),
         ),
@@ -629,7 +808,9 @@ class _ModernJobCardState extends State<ModernJobCard> {
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
         ),
         child: Column(
           children: [
@@ -638,8 +819,9 @@ class _ModernJobCardState extends State<ModernJobCard> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2)),
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(20),
@@ -649,20 +831,28 @@ class _ModernJobCardState extends State<ModernJobCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Job Details',
-                            style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.darkGray)),
-                        Text(widget.job.jobId,
-                            style: const TextStyle(
-                                fontSize: 14, color: AppColors.softGray)),
+                        const Text(
+                          'Job Details',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.darkGray,
+                          ),
+                        ),
+                        Text(
+                          widget.job.jobId,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.softGray,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close)),
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
                 ],
               ),
             ),
@@ -673,93 +863,126 @@ class _ModernJobCardState extends State<ModernJobCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Transporter Information',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.darkGray)),
+                    const Text(
+                      'Transporter Information',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkGray,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     _buildDetailItem('Name', widget.job.transporterName),
                     _buildDetailItem(
-                        'TMID',
-                        widget.job.transporterTmid.isNotEmpty
-                            ? widget.job.transporterTmid
-                            : 'N/A'),
+                      'TMID',
+                      widget.job.transporterTmid.isNotEmpty
+                          ? widget.job.transporterTmid
+                          : 'N/A',
+                    ),
                     _buildDetailItem(
-                        'Phone', _maskPhone(widget.job.transporterPhone)),
+                      'Phone',
+                      _maskPhone(widget.job.transporterPhone),
+                    ),
                     _buildDetailItem(
-                        'City',
-                        widget.job.transporterCity.isNotEmpty
-                            ? widget.job.transporterCity
-                            : 'N/A'),
+                      'City',
+                      widget.job.transporterCity.isNotEmpty
+                          ? widget.job.transporterCity
+                          : 'N/A',
+                    ),
                     _buildDetailItem(
-                        'State',
-                        widget.job.transporterState.isNotEmpty
-                            ? widget.job.transporterState
-                            : 'N/A'),
-                    _buildDetailItem('Profile Completion',
-                        '${widget.job.transporterProfileCompletion}%'),
+                      'State',
+                      widget.job.transporterState.isNotEmpty
+                          ? widget.job.transporterState
+                          : 'N/A',
+                    ),
+                    _buildDetailItem(
+                      'Profile Completion',
+                      '${widget.job.transporterProfileCompletion}%',
+                    ),
                     const SizedBox(height: 24),
-                    const Text('Job Information',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.darkGray)),
+                    const Text(
+                      'Job Information',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkGray,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     _buildDetailItem('Job Title', widget.job.jobTitle),
                     _buildDetailItem('Job ID', widget.job.jobId),
                     _buildDetailItem(
-                        'Posted Date', _formatDate(widget.job.createdAt)),
-                    _buildDetailItem('Deadline',
-                        _formatDate(widget.job.applicationDeadline)),
+                      'Posted Date',
+                      _formatDate(widget.job.createdAt),
+                    ),
                     _buildDetailItem(
-                        'Salary Range',
-                        widget.job.salaryRange.isNotEmpty
-                            ? widget.job.salaryRange
-                            : 'Not specified'),
+                      'Deadline',
+                      _formatDate(widget.job.applicationDeadline),
+                    ),
                     _buildDetailItem(
-                        'Route/Location',
-                        widget.job.jobLocation.isNotEmpty
-                            ? widget.job.jobLocation
-                            : 'Not specified'),
+                      'Salary Range',
+                      widget.job.salaryRange.isNotEmpty
+                          ? widget.job.salaryRange
+                          : 'Not specified',
+                    ),
                     _buildDetailItem(
-                        'Vehicle Type',
-                        widget.job.vehicleType.isNotEmpty
-                            ? widget.job.vehicleType
-                            : 'Not specified'),
+                      'Route/Location',
+                      widget.job.jobLocation.isNotEmpty
+                          ? widget.job.jobLocation
+                          : 'Not specified',
+                    ),
                     _buildDetailItem(
-                        'Required Experience',
-                        widget.job.requiredExperience.isNotEmpty
-                            ? widget.job.requiredExperience
-                            : 'Not specified'),
+                      'Vehicle Type',
+                      widget.job.vehicleType.isNotEmpty
+                          ? widget.job.vehicleType
+                          : 'Not specified',
+                    ),
                     _buildDetailItem(
-                        'License Type',
-                        widget.job.typeOfLicense.isNotEmpty
-                            ? widget.job.typeOfLicense
-                            : 'Not specified'),
+                      'Required Experience',
+                      widget.job.requiredExperience.isNotEmpty
+                          ? widget.job.requiredExperience
+                          : 'Not specified',
+                    ),
+                    _buildDetailItem(
+                      'License Type',
+                      widget.job.typeOfLicense.isNotEmpty
+                          ? widget.job.typeOfLicense
+                          : 'Not specified',
+                    ),
                     _buildDetailItem('Posted At', _getTimeAgoString()),
-                    _buildDetailItem('Drivers Required',
-                        widget.job.numberOfDriverRequired.toString()),
                     _buildDetailItem(
-                        'Applicants', widget.job.applicantsCount.toString()),
+                      'Drivers Required',
+                      widget.job.numberOfDriverRequired.toString(),
+                    ),
+                    _buildDetailItem(
+                      'Applicants',
+                      widget.job.applicantsCount.toString(),
+                    ),
                     if (widget.job.jobDescription.isNotEmpty) ...[
                       const SizedBox(height: 24),
-                      const Text('Job Description',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.darkGray)),
+                      const Text(
+                        'Job Description',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.darkGray,
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12)),
-                        child: Text(widget.job.jobDescription,
-                            style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.darkGray,
-                                height: 1.5)),
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          widget.job.jobDescription,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.darkGray,
+                            height: 1.5,
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -780,18 +1003,24 @@ class _ModernJobCardState extends State<ModernJobCard> {
         children: [
           SizedBox(
             width: 140,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.softGray,
-                    fontWeight: FontWeight.w500)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.softGray,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.darkGray,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.darkGray,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),

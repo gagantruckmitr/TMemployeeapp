@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import '../../../core/config/api_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/job_model.dart';
 import '../../../core/services/phase2_api_service.dart';
@@ -54,10 +55,24 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
   final _foodAllowanceController = TextEditingController();
   final _tripIncentiveController = TextEditingController();
   final _mileageController = TextEditingController();
+  final _requiredDriversController = TextEditingController();
 
   String _esiPf = 'No';
   String _rehneKiSuvidha = 'No';
   String _fastTagRoadKharcha = 'Company';
+  String _callStatusFeedback = 'Connected: Details Received';
+
+  // Call status options
+  final List<String> _callStatusOptions = [
+    'Connected: Details Received',
+    'Connected: Not Interested',
+    'Connected: Hire from other source',
+    'Connected: Not a Genuine Transporter',
+    'Connected: He is Driver, mistakenly registered as Transporter',
+    'Not Connected: Ringing / Call Busy',
+    'Not Connected: Switched Off / Not Reachable',
+    'Not Connected: Wrong Number',
+  ];
 
   // Recording upload
   File? _selectedRecordingFile;
@@ -87,6 +102,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
     _foodAllowanceController.dispose();
     _tripIncentiveController.dispose();
     _mileageController.dispose();
+    _requiredDriversController.dispose();
     super.dispose();
   }
 
@@ -145,7 +161,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
           var request = http.MultipartRequest(
             'POST',
             Uri.parse(
-                'https://truckmitr.com/truckmitr-app/api/phase2_upload_transporter_recording_api.php'),
+                '${ApiConfig.baseUrl}/phase2_upload_transporter_recording_api.php'),
           );
 
           request.files.add(await http.MultipartFile.fromPath(
@@ -198,8 +214,9 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
         rehneKiSuvidha: _rehneKiSuvidha,
         mileage: _mileageController.text,
         fastTagRoadKharcha: _fastTagRoadKharcha,
-        callStatusFeedback: 'Connected: Details Received',
+        callStatusFeedback: _callStatusFeedback,
         callRecording: recordingUrl,
+        requiredDrivers: _requiredDriversController.text,
       );
 
       if (mounted) {
@@ -251,6 +268,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
                     _buildTextField('Name', _nameController, required: true),
                     _buildTextField('Job Location', _jobLocationController),
                     _buildTextField('Route', _routeController, maxLines: 2),
+                    _buildTextField('Required Drivers', _requiredDriversController),
                   ]),
                   const SizedBox(height: 20),
                   _buildSection('Vehicle & License', [
@@ -288,6 +306,14 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
                         _fastTagRoadKharcha,
                         ['Company', 'Driver'],
                         (val) => setState(() => _fastTagRoadKharcha = val!)),
+                  ]),
+                  const SizedBox(height: 20),
+                  _buildSection('Call Status', [
+                    _buildDropdown(
+                        'Call Status Feedback',
+                        _callStatusFeedback,
+                        _callStatusOptions,
+                        (val) => setState(() => _callStatusFeedback = val!)),
                   ]),
                   const SizedBox(height: 20),
                   _buildRecordingUploadSection(),

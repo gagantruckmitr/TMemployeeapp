@@ -16,7 +16,7 @@ $payment_status = isset($_GET['payment_status']) ? $_GET['payment_status'] : 'ca
 try {
     // Main query: Get subscriptions from call_logs table
     // Match call_logs.user_id with payments.user_id where payment_status = 'captured'
-    // and payment created_at is after call_time
+    // and payment created_at is after created_at
     $query = "
         SELECT 
             cl.id as call_log_id,
@@ -25,12 +25,12 @@ try {
             COALESCE(cl.user_number, u.mobile) as driver_phone,
             cl.caller_id as telecaller_id,
             a.name as telecaller_name,
-            cl.call_time,
+            cl.created_at as call_time,
             cl.call_status,
             cl.call_duration,
             p.created_at as payment_created_at,
             FROM_UNIXTIME(p.start_at) AS payment_start_time,
-            TIMESTAMPDIFF(MINUTE, cl.call_time, p.created_at) as minutes_after_call,
+            TIMESTAMPDIFF(MINUTE, cl.created_at, p.created_at) as minutes_after_call,
             p.amount,
             p.payment_id,
             p.payment_status,
@@ -41,7 +41,7 @@ try {
         LEFT JOIN users u ON cl.user_id = u.id
         LEFT JOIN admins a ON cl.caller_id = a.id
         WHERE p.payment_status = 'captured'
-        AND p.created_at > cl.call_time
+        AND p.created_at > cl.created_at
     ";
     
     // Add filters
@@ -50,14 +50,14 @@ try {
     }
     
     if ($start_date) {
-        $query .= " AND DATE(cl.call_time) >= '" . $conn->real_escape_string($start_date) . "'";
+        $query .= " AND DATE(cl.created_at) >= '" . $conn->real_escape_string($start_date) . "'";
     }
     
     if ($end_date) {
-        $query .= " AND DATE(cl.call_time) <= '" . $conn->real_escape_string($end_date) . "'";
+        $query .= " AND DATE(cl.created_at) <= '" . $conn->real_escape_string($end_date) . "'";
     }
     
-    $query .= " ORDER BY cl.call_time DESC";
+    $query .= " ORDER BY cl.created_at DESC";
     
     // Execute query
     $result = $conn->query($query);
@@ -81,7 +81,7 @@ try {
         FROM call_logs cl
         JOIN payments p ON cl.user_id = p.user_id
         WHERE p.payment_status = 'captured'
-        AND p.created_at > cl.call_time
+        AND p.created_at > cl.created_at
     ";
     
     if ($telecaller_id) {
@@ -89,11 +89,11 @@ try {
     }
     
     if ($start_date) {
-        $summary_query .= " AND DATE(cl.call_time) >= '" . $conn->real_escape_string($start_date) . "'";
+        $summary_query .= " AND DATE(cl.created_at) >= '" . $conn->real_escape_string($start_date) . "'";
     }
     
     if ($end_date) {
-        $summary_query .= " AND DATE(cl.call_time) <= '" . $conn->real_escape_string($end_date) . "'";
+        $summary_query .= " AND DATE(cl.created_at) <= '" . $conn->real_escape_string($end_date) . "'";
     }
     
     $summary_result = $conn->query($summary_query);
@@ -116,15 +116,15 @@ try {
         JOIN payments p ON cl.user_id = p.user_id
         LEFT JOIN admins a ON cl.caller_id = a.id
         WHERE p.payment_status = 'captured'
-        AND p.created_at > cl.call_time
+        AND p.created_at > cl.created_at
     ";
     
     if ($start_date) {
-        $performance_query .= " AND DATE(cl.call_time) >= '" . $conn->real_escape_string($start_date) . "'";
+        $performance_query .= " AND DATE(cl.created_at) >= '" . $conn->real_escape_string($start_date) . "'";
     }
     
     if ($end_date) {
-        $performance_query .= " AND DATE(cl.call_time) <= '" . $conn->real_escape_string($end_date) . "'";
+        $performance_query .= " AND DATE(cl.created_at) <= '" . $conn->real_escape_string($end_date) . "'";
     }
     
     $performance_query .= " GROUP BY cl.caller_id, a.name ORDER BY subscriptions_count DESC";

@@ -11,7 +11,7 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header('Content-Type: application/json; charset=utf-8');
 
 // Handle preflight OPTIONS requests
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
@@ -173,10 +173,10 @@ error_log('PHP Timezone: ' . date_default_timezone_get() . ' | Current time: ' .
 // ============================================
 // ERROR REPORTING
 // ============================================
-if (DB_HOST === 'localhost') {
+if (DB_HOST === 'localhost' || DB_HOST === '127.0.0.1') {
     // Development: Show all errors
     error_reporting(E_ALL);
-    ini_set('display_errors', 1);
+    ini_set('display_errors', 0); // Changed to 0 to prevent HTML output breaking JSON
 } else {
     // Production: Hide errors, log them instead
     error_reporting(E_ALL);

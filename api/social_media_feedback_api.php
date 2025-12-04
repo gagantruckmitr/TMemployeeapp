@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
         
         // Authentication check - verify user has tc_for = 'social-media'
-        $authSql = "SELECT id, name, tc_for FROM admin WHERE id = ? LIMIT 1";
+        $authSql = "SELECT id, name, tc_for FROM admins WHERE id = ? LIMIT 1";
         $authStmt = $conn->prepare($authSql);
         $authStmt->bind_param('i', $callerId);
         $authStmt->execute();
@@ -72,14 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         
         $user = $authResult->fetch_assoc();
         
-        if (strtolower($user['tc_for']) !== 'social-media') {
-            http_response_code(403);
-            echo json_encode([
-                'success' => false,
-                'message' => 'Access denied. This feature is only available to users assigned to Social Media leads.'
-            ]);
-            exit;
-        }
+        // All telecallers can access social media leads
+        // No tc_for restriction needed
         
         $authStmt->close();
         
@@ -145,7 +139,7 @@ if ($callerId === 0) {
 }
 
 // Authentication check - verify user has tc_for = 'social-media'
-$authSql = "SELECT id, name, tc_for FROM admin WHERE id = ? LIMIT 1";
+$authSql = "SELECT id, name, tc_for FROM admins WHERE id = ? LIMIT 1";
 $authStmt = $conn->prepare($authSql);
 $authStmt->bind_param('i', $callerId);
 $authStmt->execute();
@@ -162,14 +156,8 @@ if ($authResult->num_rows === 0) {
 
 $user = $authResult->fetch_assoc();
 
-if (strtolower($user['tc_for']) !== 'social-media') {
-    http_response_code(403);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Access denied. Only users assigned to Social Media can submit feedback for social media leads.'
-    ]);
-    exit;
-}
+// All telecallers can submit feedback for social media leads
+// No tc_for restriction needed
 
 $authStmt->close();
 

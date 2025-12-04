@@ -22,6 +22,7 @@ class JobBrief {
   final String? mileage;
   final String fastTagRoadKharcha;
   final String? callStatusFeedback;
+  final String? requiredDrivers;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -49,6 +50,7 @@ class JobBrief {
     this.mileage,
     this.fastTagRoadKharcha = 'Company',
     this.callStatusFeedback,
+    this.requiredDrivers,
     this.createdAt,
     this.updatedAt,
   });
@@ -74,6 +76,7 @@ class JobBrief {
       if (mileage != null) 'mileage': mileage,
       'fastTagRoadKharcha': fastTagRoadKharcha,
       if (callStatusFeedback != null) 'callStatusFeedback': callStatusFeedback,
+      if (requiredDrivers != null) 'requiredDrivers': requiredDrivers,
     };
   }
 
@@ -102,6 +105,7 @@ class JobBrief {
       mileage: json['mileage'],
       fastTagRoadKharcha: json['fastTagRoadKharcha'] ?? 'Company',
       callStatusFeedback: json['callStatusFeedback'],
+      requiredDrivers: json['requiredDrivers'],
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt']) : null,
       updatedAt: json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt']) : null,
     );

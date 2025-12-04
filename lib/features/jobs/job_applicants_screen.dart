@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:flutter/services.dart';
+import '../../core/config/api_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
@@ -13,14 +15,18 @@ import 'match_making_screen.dart';
 import '../calls/widgets/call_feedback_modal.dart';
 import '../telecaller/widgets/call_type_selection_dialog.dart';
 import '../telecaller/widgets/easygo_ivr_call_helper.dart';
+import 'driver_detailed_info_screen.dart';
 import '../main_container.dart' as main;
 
 class JobApplicantsScreen extends StatefulWidget {
   final String jobId;
   final String jobTitle;
 
-  const JobApplicantsScreen(
-      {super.key, required this.jobId, required this.jobTitle});
+  const JobApplicantsScreen({
+    super.key,
+    required this.jobId,
+    required this.jobTitle,
+  });
 
   @override
   State<JobApplicantsScreen> createState() => _JobApplicantsScreenState();
@@ -34,6 +40,29 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   List<DriverApplicant> _filteredApplicants = [];
   bool _isLoading = true;
   String _error = '';
+  String _selectedFeedbackFilter = 'All'; // Filter state
+  
+  // Available feedback filter options
+  final List<String> _feedbackFilterOptions = [
+    'All',
+    'No Feedback',
+    'Interview Done',
+    'Not Selected',
+    'Not Interested',
+    'Interview Fixed',
+    'Ready for Interview',
+    'Will Confirm Later',
+    'Match Making Done',
+    'Ringing',
+    'Call Busy',
+    'Switched Off',
+    'Not Reachable',
+    'Disconnected',
+    'Busy Right Now',
+    'Call Tomorrow Morning',
+    'Call in Evening',
+    'Call After 2 Days',
+  ];
 
   @override
   void initState() {
@@ -65,10 +94,27 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   void _onSearchChanged() {
     final query = _searchController.text.toLowerCase();
     setState(() {
+      var filtered = _applicants;
+      
+      // Apply feedback filter first
+      if (_selectedFeedbackFilter != 'All') {
+        if (_selectedFeedbackFilter == 'No Feedback') {
+          filtered = filtered.where((driver) {
+            final hasFeedback = driver.callFeedback == null || driver.callFeedback!.isEmpty;
+            return hasFeedback;
+          }).toList();
+        } else {
+          filtered = filtered.where((driver) {
+            return driver.callFeedback?.toLowerCase() == _selectedFeedbackFilter.toLowerCase();
+          }).toList();
+        }
+      }
+      
+      // Then apply search filter
       if (query.isEmpty) {
-        _filteredApplicants = _applicants;
+        _filteredApplicants = filtered;
       } else {
-        _filteredApplicants = _applicants.where((driver) {
+        _filteredApplicants = filtered.where((driver) {
           return driver.name.toLowerCase().contains(query) ||
               driver.driverTmid.toLowerCase().contains(query) ||
               driver.city.toLowerCase().contains(query) ||
@@ -86,8 +132,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       _error = '';
     });
     try {
-      final applicants =
-          await Phase2ApiService.fetchJobApplicants(widget.jobId);
+      final applicants = await Phase2ApiService.fetchJobApplicants(
+        widget.jobId,
+      );
       setState(() {
         _applicants = applicants;
         _sortApplicants();
@@ -104,7 +151,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
   String? _getProfileImageUrl(String imagePath) {
     if (imagePath.isEmpty || imagePath.toLowerCase() == 'null') return null;
-    
+
     // Try to parse as JSON array
     try {
       final decoded = json.decode(imagePath);
@@ -114,21 +161,21 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     } catch (e) {
       // Not JSON, use as is
     }
-    
+
     // If it's already a full URL
     if (imagePath.startsWith('http')) {
       return imagePath;
     }
-    
+
     // If it's a relative path, prepend the correct base URL
     if (imagePath.isNotEmpty) {
       // Remove leading slash if present
       if (imagePath.startsWith('/')) {
         imagePath = imagePath.substring(1);
       }
-      return 'https://truckmitr.com/public/$imagePath';
+      return '${ApiConfig.publicUrl}/$imagePath';
     }
-    
+
     return null;
   }
 
@@ -160,8 +207,11 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                     );
                   }
                 },
-                icon: const Icon(Icons.arrow_back_ios_rounded,
-                    color: Colors.white, size: 20),
+                icon: const Icon(
+                  Icons.arrow_back_ios_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
               title: const Text(
                 'Job Applicants',
@@ -172,6 +222,59 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                 ),
               ),
               actions: [
+                // Feedback Filter Button
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => _showFilterBottomSheet(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _selectedFeedbackFilter != 'All'
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.filter_list_rounded,
+                            color: _selectedFeedbackFilter != 'All'
+                                ? const Color(0xFF007BFF)
+                                : Colors.white,
+                            size: 18,
+                          ),
+                          if (_selectedFeedbackFilter != 'All') ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF007BFF),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                '1',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.only(right: 16),
                   child: GestureDetector(
@@ -188,7 +291,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                         : null,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(20),
@@ -209,8 +314,11 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(Icons.compare_arrows_rounded,
-                              color: Colors.white, size: 16),
+                          const Icon(
+                            Icons.compare_arrows_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
                         ],
                       ),
                     ),
@@ -230,50 +338,119 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                     ),
                     child: SafeArea(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 80, 16, 50),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: TextField(
-                                controller: _searchController,
-                                style: const TextStyle(fontSize: 15),
-                                decoration: InputDecoration(
-                                  hintText: 'Search applicants...',
-                                  hintStyle: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                  prefixIcon: Icon(Icons.search_rounded,
-                                      color: AppColors.primary, size: 22),
-                                  suffixIcon: _searchController.text.isNotEmpty
-                                      ? IconButton(
-                                          icon: Icon(Icons.clear_rounded,
+                        padding: const EdgeInsets.fromLTRB(16, 80, 16, 40),
+                        child: SingleChildScrollView(
+                          physics: const NeverScrollableScrollPhysics(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.1),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: TextField(
+                                  controller: _searchController,
+                                  style: const TextStyle(fontSize: 14),
+                                  decoration: InputDecoration(
+                                    hintText: 'Search applicants...',
+                                    hintStyle: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                    prefixIcon: Icon(
+                                      Icons.search_rounded,
+                                      color: AppColors.primary,
+                                      size: 20,
+                                    ),
+                                    suffixIcon: _searchController.text.isNotEmpty
+                                        ? IconButton(
+                                            icon: Icon(
+                                              Icons.clear_rounded,
                                               color: Colors.grey.shade600,
-                                              size: 20),
-                                          onPressed: () {
-                                            _searchController.clear();
-                                          },
-                                        )
-                                      : null,
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 16),
+                                              size: 18,
+                                            ),
+                                            onPressed: () {
+                                              _searchController.clear();
+                                            },
+                                          )
+                                        : null,
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                              // Show active filter chip below search
+                              if (_selectedFeedbackFilter != 'All') ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Colors.blue.shade200,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.filter_alt,
+                                        size: 13,
+                                        color: Colors.blue.shade700,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          _selectedFeedbackFilter,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.blue.shade700,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedFeedbackFilter = 'All';
+                                            _onSearchChanged();
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(2),
+                                          child: Icon(
+                                            Icons.close,
+                                            size: 13,
+                                            color: Colors.blue.shade700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -294,8 +471,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   Widget _buildContent() {
     if (_isLoading) {
       return SliverFillRemaining(
-        child:
-            Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
       );
     }
     if (_error.isNotEmpty) {
@@ -304,14 +482,20 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline_rounded,
-                  size: 60, color: Colors.red.shade300),
+              Icon(
+                Icons.error_outline_rounded,
+                size: 60,
+                color: Colors.red.shade300,
+              ),
               const SizedBox(height: 16),
-              Text('Error loading applicants',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700)),
+              Text(
+                'Error loading applicants',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: _loadApplicants,
@@ -320,10 +504,13 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
             ],
@@ -337,14 +524,20 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.person_off_outlined,
-                  size: 70, color: Colors.grey.shade300),
+              Icon(
+                Icons.person_off_outlined,
+                size: 70,
+                color: Colors.grey.shade300,
+              ),
               const SizedBox(height: 16),
-              Text('No applicants yet',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600)),
+              Text(
+                'No applicants yet',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade600,
+                ),
+              ),
             ],
           ),
         ),
@@ -356,36 +549,39 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.search_off_rounded,
-                  size: 70, color: Colors.grey.shade300),
+              Icon(
+                Icons.search_off_rounded,
+                size: 70,
+                color: Colors.grey.shade300,
+              ),
               const SizedBox(height: 16),
-              Text('No results found',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600)),
+              Text(
+                'No results found',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade600,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('Try different search terms',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+              Text(
+                'Try different search terms',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+              ),
             ],
           ),
         ),
       );
     }
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final isLast = index == _filteredApplicants.length - 1;
-          return Container(
-            width: double.infinity,
-            margin: EdgeInsets.only(
-              bottom: isLast ? 24 : 12,
-            ),
-            child: _buildDriverCard(_filteredApplicants[index]),
-          );
-        },
-        childCount: _filteredApplicants.length,
-      ),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final isLast = index == _filteredApplicants.length - 1;
+        return Container(
+          width: double.infinity,
+          margin: EdgeInsets.only(bottom: isLast ? 24 : 12),
+          child: _buildDriverCard(_filteredApplicants[index]),
+        );
+      }, childCount: _filteredApplicants.length),
     );
   }
 
@@ -437,7 +633,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                   userType: 'driver',
                   size: 56,
                   completionPercentage: driver.profileCompletion,
-                  profileImageUrl: driver.profileImage != null && driver.profileImage!.isNotEmpty
+                  profileImageUrl:
+                      driver.profileImage != null &&
+                          driver.profileImage!.isNotEmpty
                       ? _getProfileImageUrl(driver.profileImage!)
                       : null,
                   gender: driver.gender,
@@ -461,25 +659,98 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                       Text(
                         '${driver.city}, ${driver.state}',
                         style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade600),
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      InkWell(
+                        onTap: driver.driverTmid.isNotEmpty
+                            ? () {
+                                Clipboard.setData(
+                                  ClipboardData(text: driver.driverTmid),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('TMID copied to clipboard'),
+                                  ),
+                                );
+                              }
+                            : null,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              driver.driverTmid.isNotEmpty
+                                  ? driver.driverTmid
+                                  : 'No TMID',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            if (driver.driverTmid.isNotEmpty) ...[
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.copy,
+                                size: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-                Material(
-                  color: Colors.green,
-                  borderRadius: BorderRadius.circular(10),
-                  child: InkWell(
-                    onTap: () => _initiateCall(driver),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      child:
-                          const Icon(Icons.call, color: Colors.white, size: 18),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Material(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => DriverDetailedInfoScreen(
+                                driverId: driver.driverId,
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.all(9),
+                          child: Icon(
+                            Icons.info_outline_rounded,
+                            color: Colors.blue.shade700,
+                            size: 17,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    Material(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: () => _initiateCall(driver),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.all(9),
+                          child: const Icon(
+                            Icons.call,
+                            color: Colors.white,
+                            size: 17,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -488,11 +759,14 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
             if (driver.matchStatus != null &&
                 driver.matchStatus!.isNotEmpty) ...[
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
-                  color: _getMatchStatusBorderColor(driver.matchStatus)
-                      .withValues(alpha: 0.3),
+                  color: _getMatchStatusBorderColor(
+                    driver.matchStatus,
+                  ).withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -504,12 +778,39 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        'Status: ${driver.matchStatus}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _getMatchStatusTextColor(driver.matchStatus),
+                      child: RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Status: ${driver.matchStatus}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _getMatchStatusTextColor(
+                                  driver.matchStatus,
+                                ),
+                                fontFamily: 'Inter', // Ensure font consistency
+                              ),
+                            ),
+                            if (driver.matchMakerName != null &&
+                                driver.matchMakerName!.isNotEmpty &&
+                                (driver.matchStatus!.toLowerCase() ==
+                                        'matchmaking done' ||
+                                    driver.matchStatus!.toLowerCase() ==
+                                        'match making done'))
+                              TextSpan(
+                                text: ' (by ${driver.matchMakerName})',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  fontStyle: FontStyle.italic,
+                                  color: _getMatchStatusTextColor(
+                                    driver.matchStatus,
+                                  ),
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ),
@@ -520,11 +821,14 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
             ] else if (driver.callFeedback != null &&
                 driver.callFeedback!.isNotEmpty) ...[
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
-                  color: _getFeedbackBorderColor(driver.callFeedback)
-                      .withValues(alpha: 0.3),
+                  color: _getFeedbackBorderColor(
+                    driver.callFeedback,
+                  ).withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -552,17 +856,22 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
             ],
             Divider(height: 1, color: Colors.grey.shade200),
             const SizedBox(height: 12),
-            _buildInfoItem('Vehicle',
-                driver.vehicleType.isNotEmpty ? driver.vehicleType : 'N/A'),
+            _buildInfoItem(
+              'Vehicle',
+              driver.vehicleType.isNotEmpty ? driver.vehicleType : 'N/A',
+            ),
             const SizedBox(height: 8),
             _buildInfoItem(
-                'Experience',
-                driver.drivingExperience.isNotEmpty
-                    ? driver.drivingExperience
-                    : 'N/A'),
+              'Experience',
+              driver.drivingExperience.isNotEmpty
+                  ? driver.drivingExperience
+                  : 'N/A',
+            ),
             const SizedBox(height: 8),
-            _buildInfoItem('License',
-                driver.licenseType.isNotEmpty ? driver.licenseType : 'N/A'),
+            _buildInfoItem(
+              'License',
+              driver.licenseType.isNotEmpty ? driver.licenseType : 'N/A',
+            ),
             const SizedBox(height: 8),
             _buildInfoItem('Applied', _formatDate(driver.appliedAt)),
             const SizedBox(height: 8),
@@ -574,11 +883,11 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    width: 80,
+                    width: 75,
                     child: Text(
                       'Subscription:',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: Colors.grey.shade700,
                       ),
@@ -588,7 +897,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                     child: Text(
                       _formatDate(driver.subscriptionStartDate ?? ''),
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: Colors.green,
                       ),
@@ -597,13 +906,13 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                     ),
                   ),
                   if (driver.subscriptionAmount != null &&
-                      driver.subscriptionAmount!.isNotEmpty)
-                    Container(
-                      constraints: const BoxConstraints(maxWidth: 80),
+                      driver.subscriptionAmount!.isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    Flexible(
                       child: Text(
                         '₹${driver.subscriptionAmount}',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: Colors.grey.shade800,
                         ),
@@ -611,25 +920,133 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                  ],
                 ],
               ),
               const SizedBox(height: 8),
             ],
-            const SizedBox(height: 12),
+            if (driver.feedbackNotes != null &&
+                driver.feedbackNotes!.isNotEmpty) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Notes:',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      driver.feedbackNotes!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () => _showDriverDetails(context, driver),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: BorderSide(color: Colors.grey.shade300),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                child: const Text('View Profile',
-                    style:
-                        TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Material(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => DriverDetailedInfoScreen(
+                                driverId: driver.driverId,
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                color: Colors.blue.shade700,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Jobs (${driver.otherAppliedJobs?.split(',').length ?? 0})',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Material(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: () => _initiateCall(driver),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.call, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Call Driver',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -643,11 +1060,11 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 80,
+          width: 75,
           child: Text(
             '$label:',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
               color: Colors.grey.shade700,
             ),
@@ -657,7 +1074,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
           child: Text(
             value,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w500,
               color: Colors.grey.shade600,
             ),
@@ -674,19 +1091,19 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   DateTime _parseISTDateTime(String dateStr) {
     // Remove microseconds if present
     final cleanStr = dateStr.split('.')[0];
-    
+
     // Parse the components manually
     final parts = cleanStr.split(' ');
     final dateParts = parts[0].split('-');
     final timeParts = parts.length > 1 ? parts[1].split(':') : ['0', '0', '0'];
-    
+
     final year = int.parse(dateParts[0]);
     final month = int.parse(dateParts[1]);
     final day = int.parse(dateParts[2]);
     final hour = int.parse(timeParts[0]);
     final minute = int.parse(timeParts[1]);
     final second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
-    
+
     // Return a DateTime with these EXACT values - no conversion
     // Using DateTime() constructor (not .utc()) creates a local DateTime
     // but we're just using it to hold the values for display
@@ -695,9 +1112,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
   String _formatDate(String date) {
     if (date.isEmpty) return 'N/A';
-    
 
-    
     try {
       DateTime dt;
 
@@ -708,8 +1123,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
         dt = _parseISTDateTime(date);
       } else if (date.contains('/')) {
         // Handle DD/MM/YYYY format
-        final parts =
-            date.split(' ')[0].split('/'); // Take only date part if datetime
+        final parts = date
+            .split(' ')[0]
+            .split('/'); // Take only date part if datetime
         if (parts.length == 3) {
           final day = int.parse(parts[0]);
           final month = int.parse(parts[1]);
@@ -757,8 +1173,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     } catch (e) {
       // Last resort: try to extract numbers and format them
       try {
-        final numbers =
-            RegExp(r'\d+').allMatches(date).map((m) => m.group(0)!).toList();
+        final numbers = RegExp(
+          r'\d+',
+        ).allMatches(date).map((m) => m.group(0)!).toList();
         if (numbers.length >= 3) {
           var day = int.parse(numbers[0]);
           var month = int.parse(numbers[1]);
@@ -794,10 +1211,10 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
   String _formatTime(String date) {
     if (date.isEmpty) return 'N/A';
-    
+
     // Debug: Show original database time
     print('📅 Original database time: $date');
-    
+
     try {
       DateTime dt;
 
@@ -834,12 +1251,14 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       } else {
         dt = DateTime.parse(date);
       }
-      
+
       // Log if datetime is in the future but keep the original time from database
       final now = DateTime.now();
-      
+
       if (dt.isAfter(now)) {
-        print('ℹ️ Database contains future datetime: $dt, current: $now (keeping original)');
+        print(
+          'ℹ️ Database contains future datetime: $dt, current: $now (keeping original)',
+        );
         // Keep the original database time - don't modify it
       }
 
@@ -991,6 +1410,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
     switch (matchStatus.toLowerCase()) {
       case 'selected':
+      case 'match making done':
+      case 'matchmaking done':
         return Colors.green.shade50;
       case 'not selected':
         return Colors.red.shade50;
@@ -1006,6 +1427,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
     switch (matchStatus.toLowerCase()) {
       case 'selected':
+      case 'match making done':
+      case 'matchmaking done':
         return Colors.green.shade200;
       case 'not selected':
         return Colors.red.shade200;
@@ -1021,6 +1444,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
     switch (matchStatus.toLowerCase()) {
       case 'selected':
+      case 'match making done':
+      case 'matchmaking done':
         return Colors.green.shade700;
       case 'not selected':
         return Colors.red.shade700;
@@ -1033,7 +1458,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
   Future<void> _initiateCall(DriverApplicant driver) async {
     print('🟢 _initiateCall called for driver: ${driver.name}');
-    
+
     if (driver.mobile.isEmpty) {
       print('❌ Driver mobile is empty!');
       return;
@@ -1043,9 +1468,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       // Show call type selection dialog
       final callType = await showDialog<String>(
         context: context,
-        builder: (context) => CallTypeSelectionDialog(
-          driverName: driver.name,
-        ),
+        builder: (context) => CallTypeSelectionDialog(driverName: driver.name),
       );
 
       if (callType == null) return; // User cancelled
@@ -1071,7 +1494,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   Future<void> _handleManualCall(DriverApplicant driver, int callerId) async {
     try {
       final cleanMobile = driver.mobile.replaceAll(RegExp(r'[^\d]'), '');
-      
+
       // Log manual call
       final result = await SmartCallingService.instance.initiateManualCall(
         driverMobile: cleanMobile,
@@ -1081,7 +1504,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
       if (result['success'] == true) {
         final driverMobileRaw = result['data']?['driver_mobile_raw'];
-        
+
         _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Text('📱 Calling ${driver.name}...'),
@@ -1093,7 +1516,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
         // Make direct call
         await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
         await Future.delayed(const Duration(milliseconds: 500));
-        
+
         if (mounted) {
           _showCallFeedbackModal(driver);
         }
@@ -1115,14 +1538,219 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     );
   }
 
-
+  void _showFilterBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          children: [
+            // Drag handle
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.filter_list_rounded,
+                    color: Color(0xFF007BFF),
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Filter by Status',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.darkGray,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (_selectedFeedbackFilter != 'All')
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedFeedbackFilter = 'All';
+                          _onSearchChanged();
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: const Text(
+                        'Clear',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF007BFF),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // Scrollable filter options
+            Expanded(
+              child: ListView.builder(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: _feedbackFilterOptions.length,
+                itemBuilder: (context, index) {
+                  final option = _feedbackFilterOptions[index];
+                  final isSelected = option == _selectedFeedbackFilter;
+                  
+                  // Get category info
+                  String? category;
+                  Color categoryColor = Colors.grey;
+                  
+                  if (index == 0) {
+                    category = null; // "All" has no category
+                  } else if (index == 1) {
+                    category = null; // "No Feedback" has no category
+                  } else if (index <= 8) {
+                    category = 'Connected';
+                    categoryColor = Colors.green;
+                  } else if (index <= 13) {
+                    category = 'Not Connected';
+                    categoryColor = Colors.orange;
+                  } else {
+                    category = 'Call Back Later';
+                    categoryColor = Colors.blue;
+                  }
+                  
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Category header
+                      if (category != null && (
+                        (index == 2) || 
+                        (index == 9) || 
+                        (index == 14)
+                      ))
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                          child: Text(
+                            category,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: categoryColor,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      // Filter option
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedFeedbackFilter = option;
+                              _onSearchChanged();
+                            });
+                            Navigator.pop(context);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFF007BFF).withValues(alpha: 0.08)
+                                  : Colors.transparent,
+                            ),
+                            child: Row(
+                              children: [
+                                // Icon
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? const Color(0xFF007BFF)
+                                          : Colors.grey.shade300,
+                                      width: 2,
+                                    ),
+                                    color: isSelected
+                                        ? const Color(0xFF007BFF)
+                                        : Colors.transparent,
+                                  ),
+                                  child: isSelected
+                                      ? const Icon(
+                                          Icons.check,
+                                          size: 16,
+                                          color: Colors.white,
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: 16),
+                                // Text
+                                Expanded(
+                                  child: Text(
+                                    option,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
+                                      color: isSelected
+                                          ? const Color(0xFF007BFF)
+                                          : AppColors.darkGray,
+                                    ),
+                                  ),
+                                ),
+                                // Count badge (optional - you can add counts later)
+                                if (isSelected)
+                                  const Icon(
+                                    Icons.check_circle,
+                                    size: 20,
+                                    color: Color(0xFF007BFF),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showDriverDetails(BuildContext context, DriverApplicant driver) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _DriverDetailsSheet(driver: driver, onCall: () => _initiateCall(driver)),
+      builder: (context) => _DriverDetailsSheet(
+        driver: driver,
+        onCall: () => _initiateCall(driver),
+      ),
     );
   }
 
@@ -1135,7 +1763,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
         userType: 'driver',
         userName: driver.name,
         userTmid: driver.driverTmid,
-        transporterTmid: driver.transporterTmid.isNotEmpty ? driver.transporterTmid : null,
+        transporterTmid: driver.transporterTmid.isNotEmpty
+            ? driver.transporterTmid
+            : null,
         jobId: widget.jobId,
         onSubmit: (feedback, matchStatus, notes) async {
           try {
@@ -1151,13 +1781,17 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
             print('Feedback: $feedback');
             print('Match Status: $matchStatus');
             print('================================');
-            
+
             await Phase2ApiService.saveCallFeedback(
               callerId: callerId,
-              transporterTmid: driver.transporterTmid.isNotEmpty ? driver.transporterTmid : null,
+              transporterTmid: driver.transporterTmid.isNotEmpty
+                  ? driver.transporterTmid
+                  : null,
               driverTmid: driver.driverTmid,
               driverName: driver.name,
-              transporterName: driver.transporterName.isNotEmpty ? driver.transporterName : null,
+              transporterName: driver.transporterName.isNotEmpty
+                  ? driver.transporterName
+                  : null,
               feedback: feedback,
               matchStatus: matchStatus,
               notes: notes,
@@ -1166,8 +1800,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
 
             // Update the driver's feedback status locally
             setState(() {
-              final index =
-                  _applicants.indexWhere((d) => d.driverId == driver.driverId);
+              final index = _applicants.indexWhere(
+                (d) => d.driverId == driver.driverId,
+              );
               if (index != -1) {
                 _applicants[index] = DriverApplicant(
                   jobId: driver.jobId,
@@ -1221,7 +1856,8 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
             _scaffoldMessengerKey.currentState?.showSnackBar(
               SnackBar(
                 content: Text(
-                    'Error: Exception: Failed to save call feedback: Exception: ${e.toString()}'),
+                  'Error: Exception: Failed to save call feedback: Exception: ${e.toString()}',
+                ),
                 backgroundColor: Colors.red,
                 duration: const Duration(seconds: 4),
               ),
@@ -1281,7 +1917,7 @@ class _DriverDetailsSheetState extends State<_DriverDetailsSheet> {
     setState(() {
       _selectedTabIndex = index;
     });
-    
+
     // Auto-scroll selected tab into view
     if (_tabScrollController.hasClients) {
       final double tabWidth = 130.0;
@@ -1393,12 +2029,15 @@ class _DriverDetailsSheetState extends State<_DriverDetailsSheet> {
                       child: ListView.builder(
                         controller: _tabScrollController,
                         scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         itemCount: _tabs.length,
                         itemBuilder: (context, index) {
                           final tab = _tabs[index];
                           final isSelected = _selectedTabIndex == index;
-                          
+
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: _buildTabChip(
@@ -1536,7 +2175,7 @@ class _DriverDetailsSheetState extends State<_DriverDetailsSheet> {
         children: _getFieldsForTab(tabIndex).map((field) {
           // Special styling for Job ID field
           final isJobId = field.label == 'Job ID';
-          
+
           return Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: Column(
@@ -1551,18 +2190,18 @@ class _DriverDetailsSheetState extends State<_DriverDetailsSheet> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                
+
                 // Job ID gets special chip styling
                 if (isJobId)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF5F5F5),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.grey.shade300,
-                        width: 1,
-                      ),
+                      border: Border.all(color: Colors.grey.shade300, width: 1),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1595,7 +2234,7 @@ class _DriverDetailsSheetState extends State<_DriverDetailsSheet> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                
+
                 const SizedBox(height: 8),
                 Divider(height: 1, color: Colors.grey.shade200),
               ],
@@ -1608,7 +2247,7 @@ class _DriverDetailsSheetState extends State<_DriverDetailsSheet> {
 
   List<_FieldData> _getFieldsForTab(int tabIndex) {
     final driver = widget.driver;
-    
+
     switch (tabIndex) {
       case 0: // Contact Info - Mobile removed for privacy
         return [
@@ -1616,35 +2255,79 @@ class _DriverDetailsSheetState extends State<_DriverDetailsSheet> {
           _FieldData('City', driver.city),
           _FieldData('State', driver.state),
         ];
-      
+
       case 1: // Professional
         return [
-          _FieldData('Vehicle Type', driver.vehicleType.isNotEmpty ? driver.vehicleType : 'N/A'),
-          _FieldData('Experience', driver.drivingExperience.isNotEmpty ? driver.drivingExperience : 'N/A'),
-          _FieldData('License Type', driver.licenseType.isNotEmpty ? driver.licenseType : 'N/A'),
-          _FieldData('License Number', driver.licenseNumber.isNotEmpty ? driver.licenseNumber : 'N/A'),
-          _FieldData('Preferred Location', driver.preferredLocation.isNotEmpty ? driver.preferredLocation : 'N/A'),
+          _FieldData(
+            'Vehicle Type',
+            driver.vehicleType.isNotEmpty ? driver.vehicleType : 'N/A',
+          ),
+          _FieldData(
+            'Experience',
+            driver.drivingExperience.isNotEmpty
+                ? driver.drivingExperience
+                : 'N/A',
+          ),
+          _FieldData(
+            'License Type',
+            driver.licenseType.isNotEmpty ? driver.licenseType : 'N/A',
+          ),
+          _FieldData(
+            'License Number',
+            driver.licenseNumber.isNotEmpty ? driver.licenseNumber : 'N/A',
+          ),
+          _FieldData(
+            'Preferred Location',
+            driver.preferredLocation.isNotEmpty
+                ? driver.preferredLocation
+                : 'N/A',
+          ),
         ];
-      
+
       case 2: // Application - Full Job ID and Job Title added
         return [
-          _FieldData('Job ID', 'TMJB${driver.jobId.toString().padLeft(5, '0')}'),
-          _FieldData('Applied For', driver.jobTitle.isNotEmpty ? driver.jobTitle : 'N/A'),
+          _FieldData(
+            'Job ID',
+            'TMJB${driver.jobId.toString().padLeft(5, '0')}',
+          ),
+          _FieldData(
+            'Applied For',
+            driver.jobTitle.isNotEmpty ? driver.jobTitle : 'N/A',
+          ),
           _FieldData('Applied Date', _formatDate(driver.appliedAt)),
           _FieldData('Applied Time', _formatTime(driver.appliedAt)),
-          _FieldData('Status', driver.status.isNotEmpty ? driver.status : 'N/A'),
-          if (driver.subscriptionStartDate != null && driver.subscriptionStartDate!.isNotEmpty)
-            _FieldData('Subscription', _formatDate(driver.subscriptionStartDate!)),
+          _FieldData(
+            'Status',
+            driver.status.isNotEmpty ? driver.status : 'N/A',
+          ),
+          if (driver.subscriptionStartDate != null &&
+              driver.subscriptionStartDate!.isNotEmpty)
+            _FieldData(
+              'Subscription',
+              _formatDate(driver.subscriptionStartDate!),
+            ),
         ];
-      
+
       case 3: // Documents
         return [
-          _FieldData('Aadhar', driver.aadharNumber.isNotEmpty ? driver.aadharNumber : 'N/A'),
-          _FieldData('PAN', driver.panNumber.isNotEmpty ? driver.panNumber : 'N/A'),
-          _FieldData('GST', driver.gstNumber.isNotEmpty ? driver.gstNumber : 'N/A'),
-          _FieldData('Driving License', driver.licenseNumber.isNotEmpty ? driver.licenseNumber : 'N/A'),
+          _FieldData(
+            'Aadhar',
+            driver.aadharNumber.isNotEmpty ? driver.aadharNumber : 'N/A',
+          ),
+          _FieldData(
+            'PAN',
+            driver.panNumber.isNotEmpty ? driver.panNumber : 'N/A',
+          ),
+          _FieldData(
+            'GST',
+            driver.gstNumber.isNotEmpty ? driver.gstNumber : 'N/A',
+          ),
+          _FieldData(
+            'Driving License',
+            driver.licenseNumber.isNotEmpty ? driver.licenseNumber : 'N/A',
+          ),
         ];
-      
+
       default:
         return [];
     }
@@ -1747,11 +2430,7 @@ class _TabData {
   final IconData icon;
   final Color color;
 
-  _TabData({
-    required this.label,
-    required this.icon,
-    required this.color,
-  });
+  _TabData({required this.label, required this.icon, required this.color});
 }
 
 class _FieldData {

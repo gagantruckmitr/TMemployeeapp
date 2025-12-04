@@ -11,6 +11,7 @@ class DriverContactCard extends StatefulWidget {
   final VoidCallback onCallPressed;
   final bool isCallInProgress;
   final VoidCallback? onTap;
+  final bool showPhoneNumber;
 
   const DriverContactCard({
     super.key,
@@ -18,6 +19,7 @@ class DriverContactCard extends StatefulWidget {
     required this.onCallPressed,
     this.isCallInProgress = false,
     this.onTap,
+    this.showPhoneNumber = false,
   });
 
   @override
@@ -171,16 +173,42 @@ class _DriverContactCardState extends State<DriverContactCard>
                             );
                             HapticFeedback.mediumImpact();
                           },
-                          child: Text(
-                            widget.contact.name,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1A1A1A),
-                              letterSpacing: -0.3,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.contact.name,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1A1A1A),
+                                  letterSpacing: -0.3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (widget.showPhoneNumber && widget.contact.phoneNumber.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.phone_android,
+                                      size: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      widget.contact.phoneNumber,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ),

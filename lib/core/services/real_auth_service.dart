@@ -59,6 +59,9 @@ class RealAuthService {
           _currentUser = user;
           await _saveUserSession(user, token);
           
+          // CRITICAL: Set caller ID for API calls immediately after login
+          ApiService.setCallerId(user.id);
+          
           // Sync user data to Phase2AuthService format for IVR compatibility
           await _syncToPhase2Auth(user);
           
@@ -168,7 +171,8 @@ class RealAuthService {
       await _restoreUserSession();
     }
     
-    // Check session validity (20-minute inactivity timeout)
+    // Check session validity (DISABLED)
+    /*
     if (isLoggedIn && _currentUser != null) {
       final isSessionValid = await SessionManager.instance.isSessionValid();
       if (!isSessionValid) {
@@ -177,6 +181,7 @@ class RealAuthService {
         return false;
       }
     }
+    */
     
     return isLoggedIn && _currentUser != null;
   }

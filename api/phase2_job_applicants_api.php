@@ -74,10 +74,12 @@ function getJobApplicants() {
             p.payment_status as payment_status,
             p.payment_type as payment_type,
             cl.feedback as call_feedback,
-            cl.match_status as match_status,
+            COALESCE(gms.global_match_status, cl.match_status) as match_status,
+            gms.match_maker_name,
             cl.remark as feedback_notes,
             t.unique_id as transporter_tmid,
-            t.name as transporter_name
+            t.name as transporter_name,
+            other_jobs.applied_job_ids
         FROM applyjobs a
         INNER JOIN users u ON a.driver_id = u.id
         INNER JOIN jobs j ON a.job_id = j.id
@@ -107,6 +109,25 @@ function getJobApplicants() {
                   AND cl1.job_id = cl2.job_id 
                   AND cl1.created_at = cl2.max_created
         ) cl ON u.unique_id = cl.unique_id_driver AND cl.job_id = '$jobIdString'
+        LEFT JOIN (
+            SELECT clm.unique_id_driver, 'Matchmaking Done' as global_match_status, u_caller.name as match_maker_name
+            FROM call_logs_match_making clm
+            LEFT JOIN users u_caller ON clm.caller_id = u_caller.id
+            INNER JOIN (
+                SELECT unique_id_driver, MAX(created_at) as max_created
+                FROM call_logs_match_making
+                WHERE match_status = 'Matchmaking Done'
+                AND unique_id_driver IS NOT NULL AND unique_id_driver != ''
+                GROUP BY unique_id_driver
+            ) latest ON clm.unique_id_driver = latest.unique_id_driver AND clm.created_at = latest.max_created
+            WHERE clm.match_status = 'Matchmaking Done'
+        ) gms ON u.unique_id = gms.unique_id_driver
+        LEFT JOIN (
+            SELECT driver_id, GROUP_CONCAT(DISTINCT j2.job_id SEPARATOR ', ') as applied_job_ids
+            FROM applyjobs a2
+            JOIN jobs j2 ON a2.job_id = j2.id
+            GROUP BY driver_id
+        ) other_jobs ON a.driver_id = other_jobs.driver_id
         LEFT JOIN users t ON j.transporter_id = t.id
         WHERE a.job_id = $numericJobId
         ORDER BY a.created_at DESC";
@@ -222,7 +243,9 @@ function getJobApplicants() {
                 'subscriptionStatus' => $subscriptionStatus,
                 'callFeedback' => $row['call_feedback'] ?? null,
                 'matchStatus' => $row['match_status'] ?? null,
+                'matchMakerName' => $row['match_maker_name'] ?? null,
                 'feedbackNotes' => $row['feedback_notes'] ?? null,
+                'otherAppliedJobs' => $row['applied_job_ids'] ?? null,
             ];
         }
         

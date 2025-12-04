@@ -31,6 +31,14 @@ function searchJobs() {
         $searchQuery = isset($_GET['query']) ? $conn->real_escape_string($_GET['query']) : '';
         $filter = isset($_GET['filter']) ? $conn->real_escape_string($_GET['filter']) : 'all';
         
+        // Safe-guard: Ensure job_brief_table exists for closed jobs filtering
+        $jobBriefCheck = $conn->query("SHOW TABLES LIKE 'job_brief_table'");
+        $hasJobBriefTable = $jobBriefCheck && $jobBriefCheck->num_rows > 0;
+        
+        $isClosedColumn = $hasJobBriefTable 
+            ? "(SELECT closed_job FROM job_brief_table WHERE job_id = j.job_id ORDER BY updated_at DESC LIMIT 1) as is_closed" 
+            : "0 as is_closed";
+
         // Build search query with JOINs - SHOW ALL JOBS with assignment info
         $query = "SELECT 
             j.*,
@@ -40,21 +48,16 @@ function searchJobs() {
             u.mobile as transporter_phone,
             u.city as transporter_city,
             u.states as transporter_state_id,
-            a.name as assigned_to_name
+            a.name as assigned_to_name,
+            $isClosedColumn
         FROM jobs j
         LEFT JOIN vehicle_type vt ON j.vehicle_type = vt.id
         LEFT JOIN users u ON j.transporter_id = u.id
         LEFT JOIN admins a ON j.assigned_to = a.id
-        WHERE 1=1";
-        
-        // Check if job_brief_table exists for closed jobs filtering
-        $jobBriefCheck = $conn->query("SHOW TABLES LIKE 'job_brief_table'");
-        $hasJobBriefTable = $jobBriefCheck && $jobBriefCheck->num_rows > 0;
+        WHERE j.assigned_to = $userId";
         
         // Exclude closed jobs from search (unless searching for closed jobs specifically)
-        if ($hasJobBriefTable && $filter !== 'closed') {
-            $query .= " AND j.job_id NOT IN (SELECT job_id FROM job_brief_table WHERE closed_job = 1)";
-        } elseif ($hasJobBriefTable && $filter === 'closed') {
+        if ($hasJobBriefTable && $filter === 'closed') {
             $query .= " AND j.job_id IN (SELECT job_id FROM job_brief_table WHERE closed_job = 1)";
         }
         
@@ -181,7 +184,8 @@ function searchJobs() {
                 'isApproved' => $row['status'] === '1',
                 'isActive' => (int)($row['active_inactive'] ?? 1) === 1,
                 'isExpired' => false,
-                'assignedTo' => !empty($row['assigned_to']) ? (int)$row['assigned_to'] : null,
+                'isClosed' => (int)($row['is_closed'] ?? 0) === 1,
+                'assignedTo' => (isset($row['assigned_to']) && $row['assigned_to'] !== '') ? (int)$row['assigned_to'] : null,
                 'assignedToName' => $row['assigned_to_name'] ?? null,
             ];
         }

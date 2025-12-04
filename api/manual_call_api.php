@@ -154,11 +154,11 @@ function initiateManualCall($pdo) {
         
         error_log('📞 Manual Call Setup: Driver=' . $driverNumber . ', Telecaller=' . $telecallerNumber);
         
-        // Save to call_logs (same structure as IVR) with IST timezone
+        // Save to call_logs (same structure as IVR) with IST timezone (NOW() already returns IST)
         $sql = "INSERT INTO call_logs 
                 (caller_id, user_id, caller_number, user_number, driver_name, call_status, 
                  reference_id, api_response, call_time, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(NOW(), '+00:00', '+05:30'), CONVERT_TZ(NOW(), '+00:00', '+05:30'), CONVERT_TZ(NOW(), '+00:00', '+05:30'))";
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())";
         
         $apiResponse = json_encode([
             'type' => 'manual',
@@ -273,13 +273,13 @@ function updateCallFeedback($pdo) {
         
         error_log("📋 Existing record: ID={$existingRecord['id']}, Status={$existingRecord['call_status']}, Feedback={$existingRecord['feedback']}");
         
-        // Update call log with IST timezone
+        // Update call log with IST timezone (NOW() already returns IST)
         $sql = "UPDATE call_logs 
                 SET call_status = ?, 
                     feedback = ?, 
                     remarks = ?,
                     call_duration = ?,
-                    updated_at = CONVERT_TZ(NOW(), '+00:00', '+05:30')
+                    updated_at = NOW()
                 WHERE reference_id = ?";
         
         $stmt = $pdo->prepare($sql);

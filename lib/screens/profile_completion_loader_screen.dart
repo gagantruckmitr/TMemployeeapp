@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../core/config/api_config.dart';
 import 'profile_completion_details_screen.dart';
 
 class ProfileCompletionLoaderScreen extends StatefulWidget {
@@ -37,7 +38,7 @@ class _ProfileCompletionLoaderScreenState
     try {
       final response = await http.get(
         Uri.parse(
-          'https://truckmitr.com/truckmitr-app/api/profile_completion_api.php?action=get_profile_details&user_id=${widget.userId}',
+          '${ApiConfig.baseUrl}/profile_completion_api.php?action=get_profile_details&user_id=${widget.userId}',
         ),
       );
 
@@ -140,7 +141,7 @@ class _ProfileCompletionLoaderScreenState
       if (imageStr.startsWith('/')) {
         imageStr = imageStr.substring(1);
       }
-      return 'https://truckmitr.com/public/$imageStr';
+      return '${ApiConfig.publicUrl}/$imageStr';
     }
     
     return null;
@@ -163,7 +164,7 @@ class _ProfileCompletionLoaderScreenState
       if (docStr.startsWith('/')) {
         docStr = docStr.substring(1);
       }
-      return 'https://truckmitr.com/public/$docStr';
+      return '${ApiConfig.publicUrl}/$docStr';
     }
     
     return null;

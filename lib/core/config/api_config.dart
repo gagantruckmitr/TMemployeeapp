@@ -2,13 +2,15 @@
 /// Update the IP address here and it will reflect across all services
 class ApiConfig {
   // ⚠️ DEPLOYMENT MODE: Switch between LOCAL and ONLINE
-  // LOCAL DEVELOPMENT: (Commented out - XAMPP)
-  // static const String serverIp = '192.168.1.13';
+  // LOCAL DEVELOPMENT: (Removed)
+  // static const String serverIp = '192.168.1.10';
   // static const String baseUrl = 'http://$serverIp/TMemployeeApp/api';
+  // static const String publicUrl = 'http://$serverIp/TMemployeeApp/public';
 
-  // PRODUCTION: Plesk Server (Active - has real data)
+  // PRODUCTION: Plesk Server (Active)
   static const String baseUrl = 'https://truckmitr.com/truckmitr-app/api';
   static const String serverIp = 'truckmitr.com';
+  static const String publicUrl = 'https://truckmitr.com/public';
 
   // ONLINE PRODUCTION: InfinityFree hosting (Commented out)
   // static const String baseUrl = 'https://truckmitr.gt.tc/api';

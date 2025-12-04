@@ -18,7 +18,7 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
-  String _selectedPeriod = 'week';
+  String _selectedPeriod = 'today';
   Map<String, dynamic> analyticsData = {};
   List<Map<String, dynamic>> callHistory = [];
   Map<String, dynamic> performanceMetrics = {};
@@ -401,20 +401,22 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
         Row(
           children: [
             Expanded(
-              child: _buildStatCard(
-                'Success Rate',
-                '${overview['success_rate'] ?? 0}%',
-                Icons.trending_up,
-                Colors.purple,
+              child: _buildClickableStatCard(
+                'Interested',
+                '${overview['interested_count'] ?? 0}',
+                Icons.favorite,
+                Colors.green,
+                () => _navigateToInterestedScreen(),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: _buildStatCard(
-                'Interested',
-                '${overview['interested_count'] ?? 0}',
-                Icons.favorite,
+              child: _buildClickableStatCard(
+                'Not Interested',
+                '${overview['not_interested'] ?? 0}',
+                Icons.cancel,
                 Colors.red,
+                () => _showNotInterestedCallsDialog(),
               ),
             ),
           ],
@@ -468,6 +470,272 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
               color: Colors.grey.shade600,
               fontWeight: FontWeight.w500,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClickableStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 20),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 14,
+                  color: Colors.grey.shade400,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: AppTheme.headingMedium.copyWith(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              style: AppTheme.bodySmall.copyWith(
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateToInterestedScreen() {
+    // Navigate to the Interested Screen
+    context.go('/smart-calling/interested');
+  }
+
+  void _showNotInterestedCallsDialog() {
+    final notInterestedCalls = List<Map<String, dynamic>>.from(
+      analyticsData['not_interested_calls'] ?? [],
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          constraints: const BoxConstraints(maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.red, Colors.red.shade700],
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cancel, color: Colors.white, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Not Interested Calls (${notInterestedCalls.length})',
+                        style: AppTheme.headingMedium.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: notInterestedCalls.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(40),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.cancel_outlined,
+                                size: 64, color: Colors.grey.shade400),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No not interested calls',
+                              style: AppTheme.bodyMedium.copyWith(
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: notInterestedCalls.length,
+                        itemBuilder: (context, index) {
+                          final call = notInterestedCalls[index];
+                          return _buildCallListItem(call, Colors.red);
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCallListItem(Map<String, dynamic> call, Color accentColor) {
+    final driverName = call['driver_name'] ?? 'Unknown';
+    final driverMobile = call['driver_mobile'] ?? 'N/A';
+    final timeAgo = call['time_ago'] ?? '';
+    final feedback = call['feedback'] ?? '';
+    final duration = call['duration_formatted'] ?? '0:00';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accentColor.withValues(alpha: 0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.person, color: accentColor, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      driverName,
+                      style: AppTheme.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      driverMobile,
+                      style: AppTheme.bodySmall.copyWith(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                timeAgo,
+                style: AppTheme.bodySmall.copyWith(
+                  color: Colors.grey.shade500,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          if (feedback.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.comment, size: 14, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      feedback,
+                      style: AppTheme.bodySmall.copyWith(
+                        color: Colors.grey.shade700,
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.timer, size: 14, color: Colors.grey.shade500),
+              const SizedBox(width: 4),
+              Text(
+                'Duration: $duration',
+                style: AppTheme.bodySmall.copyWith(
+                  color: Colors.grey.shade600,
+                  fontSize: 11,
+                ),
+              ),
+            ],
           ),
         ],
       ),

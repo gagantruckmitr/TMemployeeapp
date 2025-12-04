@@ -107,23 +107,20 @@ if ($action === 'get_social_media_leads') {
         http_response_code(401);
         echo json_encode([
             'success' => false,
-            'message' => 'User not found in social media system.'
+            'message' => 'User not found in system.'
         ]);
         exit;
     }
     
-    // Check if user has social-media access
-    if (strtolower($user['tc_for']) !== 'social-media') {
-        http_response_code(403);
-        echo json_encode([
-            'success' => false,
-            'message' => 'Access denied. This feature is only available to users assigned to Social Media leads.',
-            'user_tc_for' => $user['tc_for'],
-            'user_mobile' => $user['mobile']
-        ]);
-        exit;
-    }
-    // Get only leads that don't have call logs (not in history)
+    // All telecallers can access social media leads
+    // No tc_for restriction - access is controlled by assigned_id
+    
+    // Get the admin ID for filtering assigned leads
+    $adminId = $user['id'];
+    
+    // Get only leads that:
+    // 1. Are assigned to this telecaller (assigned_id matches admin id)
+    // 2. Don't have call logs (not in history)
     // Exclude leads where a call log exists with matching mobile number and tc_for = 'social-media'
     // Use COLLATE to fix collation mismatch
     $sql = "SELECT sml.* 
@@ -131,10 +128,14 @@ if ($action === 'get_social_media_leads') {
             LEFT JOIN call_logs cl ON sml.mobile COLLATE utf8mb4_unicode_ci = cl.user_number COLLATE utf8mb4_unicode_ci
                 AND cl.tc_for = 'social-media'
             WHERE cl.id IS NULL
+                AND sml.assigned_id = ?
             ORDER BY sml.created_at DESC 
             LIMIT 100";
     
-    $result = $conn->query($sql);
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('i', $adminId);
+    $stmt->execute();
+    $result = $stmt->get_result();
     
     if ($result) {
         $leads = [];
@@ -147,11 +148,13 @@ if ($action === 'get_social_media_leads') {
             'message' => 'Social media leads fetched successfully.',
             'data' => $leads,
             'debug' => [
-                'query_used' => 'LEFT JOIN with COLLATE',
+                'query_used' => 'LEFT JOIN with COLLATE and assigned_id filter',
                 'total_leads' => count($leads),
+                'admin_id' => $adminId,
                 'file_modified' => date('Y-m-d H:i:s', filemtime(__FILE__))
             ]
         ]);
+        $stmt->close();
     } else {
         http_response_code(500);
         echo json_encode([

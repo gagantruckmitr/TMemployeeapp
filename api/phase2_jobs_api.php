@@ -34,17 +34,26 @@ function getJobs() {
         $columnCheck = $conn->query("SHOW COLUMNS FROM jobs LIKE 'Application_Deadline'");
         $hasDeadlineColumn = $columnCheck && $columnCheck->num_rows > 0;
         
-        // Get jobs with vehicle type name - FILTER BY ASSIGNED USER
-        $query = "SELECT 
-            j.*,
-            COALESCE(vt.vehicle_name, j.vehicle_type) as vehicle_type_name
-        FROM jobs j
-        LEFT JOIN vehicle_type vt ON j.vehicle_type = vt.id
-        WHERE j.assigned_to = $userId";
-        
         // Check if job_brief_table exists and has closed_job column
         $jobBriefCheck = $conn->query("SHOW TABLES LIKE 'job_brief_table'");
         $hasJobBriefTable = $jobBriefCheck && $jobBriefCheck->num_rows > 0;
+        
+        $isClosedColumn = $hasJobBriefTable 
+            ? "(SELECT closed_job FROM job_brief_table WHERE job_id = j.job_id ORDER BY updated_at DESC LIMIT 1) as is_closed" 
+            : "0 as is_closed";
+        
+        // Get jobs with vehicle type name - FILTER BY ASSIGNED USER
+        // Only include jobs where transporter_id exists in users table
+        $query = "SELECT 
+            j.*,
+            COALESCE(vt.vehicle_name, j.vehicle_type) as vehicle_type_name,
+            $isClosedColumn
+        FROM jobs j
+        LEFT JOIN vehicle_type vt ON j.vehicle_type = vt.id
+        LEFT JOIN users u ON j.transporter_id = u.id
+        WHERE j.assigned_to = $userId 
+        AND (j.transporter_id IS NULL OR j.transporter_id = '' OR u.id IS NOT NULL)";
+        
         
         // Apply filters
         if ($filter === 'closed') {
@@ -55,13 +64,16 @@ function getJobs() {
                     COALESCE(vt.vehicle_name, j.vehicle_type) as vehicle_type_name
                 FROM jobs j
                 LEFT JOIN vehicle_type vt ON j.vehicle_type = vt.id
+                LEFT JOIN users u ON j.transporter_id = u.id
                 INNER JOIN job_brief_table jb ON j.job_id = jb.job_id
-                WHERE j.assigned_to = $userId AND jb.closed_job = 1";
+                WHERE j.assigned_to = $userId 
+                AND jb.closed_job = 1
+                AND (j.transporter_id IS NULL OR j.transporter_id = '' OR u.id IS NOT NULL)";
                 // Skip the ORDER BY at the end, add it here
                 $query .= " ORDER BY jb.updated_at DESC LIMIT 50";
             } else {
                 // No job_brief_table, return empty
-                $query .= " AND 1 = 0 ORDER BY j.Created_at DESC LIMIT 50";
+                $query .= " AND 1 = 0";
             }
         } else {
             // For all other filters, DO NOT exclude closed jobs - show all jobs
@@ -203,6 +215,7 @@ function getJobs() {
                 'isApproved' => $row['status'] === '1',
                 'isActive' => (int)($row['active_inactive'] ?? 1) === 1,
                 'isExpired' => $hasDeadlineColumn && !empty($row['Application_Deadline']) && strtotime($row['Application_Deadline']) < time(),
+                'isClosed' => (int)($row['is_closed'] ?? 0) === 1,
                 'assignedTo' => $userId, // Since we filtered by assigned_to, all jobs are assigned to this user
                 'assignedToName' => null, // Current user's own jobs
             ];

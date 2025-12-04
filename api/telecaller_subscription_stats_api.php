@@ -43,7 +43,7 @@ try {
             SELECT 1 FROM call_logs cl
             WHERE cl.user_id = p.user_id
             AND cl.caller_id = " . intval($telecaller_id) . "
-            AND cl.call_time < p.created_at
+            AND cl.created_at < p.created_at
         )
     ";
     
@@ -70,7 +70,7 @@ try {
             SELECT 1 FROM call_logs cl
             WHERE cl.user_id = p.user_id
             AND cl.caller_id = " . intval($telecaller_id) . "
-            AND cl.call_time < p.created_at
+            AND cl.created_at < p.created_at
         )
         ORDER BY p.created_at DESC
         LIMIT 5

@@ -53,9 +53,38 @@ function getFreshLeads($pdo) {
             return getDriversByStatus($pdo, $callerId, $status, $limit);
         }
         
-        // ALL telecallers see only their assigned leads (based on assigned_to column)
-        // tc_for is used for other purposes (match-making, callback, etc.)
-        // IMPORTANT: Filter out NULL and 0 user_ids from call_logs to avoid excluding all users
+        // Check telecaller's tc_for to determine what leads to show
+        // tc_for = 'match-making' → Show transporters (use transporter_leads_api.php instead)
+        // tc_for = 'welcome-call' → Show ONLY drivers (NOT transporters)
+        // tc_for = other → Show assigned leads based on assigned_to column
+        
+        // Get telecaller's tc_for value
+        $tcForStmt = $pdo->prepare("SELECT tc_for FROM admins WHERE id = ? AND role = 'telecaller'");
+        $tcForStmt->execute([$callerId]);
+        $tcForRow = $tcForStmt->fetch();
+        $tcFor = $tcForRow['tc_for'] ?? null;
+        
+        error_log("🔍 Telecaller $callerId has tc_for = '$tcFor'");
+        
+        // Determine which role to show based on tc_for
+        $roleFilter = "u.role = 'driver'"; // Default: only drivers
+        $distributionNote = 'showing assigned DRIVER leads only (assigned_to column)';
+        
+        if ($tcFor === 'match-making') {
+            // Match-making users should use transporter_leads_api.php instead
+            // But if they use this API, show them nothing
+            error_log("⚠️ Match-making user $callerId should use transporter_leads_api.php");
+            echo json_encode([
+                'success' => false,
+                'error' => 'Match-making telecallers should use transporter_leads_api.php for transporter leads',
+                'caller_id' => $callerId,
+                'tc_for' => $tcFor,
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+            return;
+        }
+        
+        // For welcome-call and others: ONLY show drivers, NEVER transporters
         $sql = "SELECT 
                     u.id,
                     u.unique_id,
@@ -71,7 +100,7 @@ function getFreshLeads($pdo) {
                     u.Created_at,
                     u.Updated_at
                 FROM users u
-                WHERE u.role IN ('driver', 'transporter')
+                WHERE $roleFilter
                 AND u.assigned_to = :caller_id
                 AND u.id NOT IN (
                     SELECT DISTINCT user_id 
@@ -83,8 +112,6 @@ function getFreshLeads($pdo) {
                 )
                 ORDER BY u.Created_at DESC
                 LIMIT :limit";
-        
-        $distributionNote = 'showing assigned leads only (assigned_to column)';
         
         error_log("🔍 Telecaller $callerId fetching assigned leads");
         
@@ -195,8 +222,8 @@ function markAsCalled($pdo) {
     }
     
     try {
-        // Get user info (driver or transporter)
-        $stmt = $pdo->prepare("SELECT mobile FROM users WHERE id = ? AND role IN ('driver', 'transporter')");
+        // Get user info (driver only - transporters use transporter_leads_api.php)
+        $stmt = $pdo->prepare("SELECT mobile FROM users WHERE id = ? AND role = 'driver'");
         $stmt->execute([$driverId]);
         $driver = $stmt->fetch();
         
@@ -251,7 +278,7 @@ function getDriversByStatus($pdo, $callerId, $status, $limit) {
         $callStatus = $statusMap[$status] ?? $status;
         
         // Get drivers that have been called with this status by this telecaller
-        // For welcome-call users, show all their calls regardless of assignment
+        // ONLY show drivers, NEVER transporters (transporters use transporter_leads_api.php)
         $sql = "SELECT 
                     u.id,
                     u.unique_id,
@@ -272,7 +299,7 @@ function getDriversByStatus($pdo, $callerId, $status, $limit) {
                 INNER JOIN users u ON cl.user_id = u.id
                 WHERE cl.caller_id = :caller_id
                 AND cl.call_status = :call_status
-                AND u.role IN ('driver', 'transporter')
+                AND u.role = 'driver'
                 ORDER BY cl.call_time DESC
                 LIMIT :limit";
         

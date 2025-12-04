@@ -1,3 +1,5 @@
+import '../core/config/api_config.dart';
+
 class TollFreeUser {
   final int id;
   final String uniqueId;
@@ -11,6 +13,7 @@ class TollFreeUser {
   final bool hasSubscription;
   final Map<String, dynamic>? latestPayment;
   final List<Map<String, dynamic>> appliedJobs;
+  final List<Map<String, dynamic>> postedJobs;
   final List<Map<String, dynamic>> callLogs;
   
   // Personal Details
@@ -53,6 +56,7 @@ class TollFreeUser {
     required this.hasSubscription,
     this.latestPayment,
     required this.appliedJobs,
+    required this.postedJobs,
     required this.callLogs,
     this.fatherName,
     this.dob,
@@ -93,18 +97,18 @@ class TollFreeUser {
     // Get profile image URL
     String? imageUrl;
     if (user['images'] != null && user['images'].toString().isNotEmpty) {
-      imageUrl = 'https://truckmitr.com/public/${user['images']}';
+      imageUrl = '${ApiConfig.publicUrl}/${user['images']}';
     }
     
     // Get document URLs
     String? aadharPhotoUrl;
     if (user['Aadhar_Photo'] != null && user['Aadhar_Photo'].toString().isNotEmpty) {
-      aadharPhotoUrl = 'https://truckmitr.com/public/${user['Aadhar_Photo']}';
+      aadharPhotoUrl = '${ApiConfig.publicUrl}/${user['Aadhar_Photo']}';
     }
     
     String? drivingLicenseUrl;
     if (user['Driving_License'] != null && user['Driving_License'].toString().isNotEmpty) {
-      drivingLicenseUrl = 'https://truckmitr.com/public/${user['Driving_License']}';
+      drivingLicenseUrl = '${ApiConfig.publicUrl}/${user['Driving_License']}';
     }
     
     return TollFreeUser(
@@ -120,6 +124,7 @@ class TollFreeUser {
       hasSubscription: hasSubscription,
       latestPayment: payment,
       appliedJobs: List<Map<String, dynamic>>.from(user['applied_jobs'] ?? []),
+      postedJobs: List<Map<String, dynamic>>.from(user['posted_jobs'] ?? []),
       callLogs: List<Map<String, dynamic>>.from(user['call_logs'] ?? []),
       // Personal Details
       fatherName: user['Father_Name'],

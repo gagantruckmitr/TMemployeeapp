@@ -39,11 +39,14 @@ class _CallHistoryHubScreenState extends State<CallHistoryHubScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Call History',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Colors.white)),
+        title: const Text(
+          'Call History',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -64,11 +67,7 @@ class _CallHistoryHubScreenState extends State<CallHistoryHubScreen>
                 );
               }
             },
-            child: const Icon(
-              Icons.arrow_back,
-              color: Colors.white,
-              size: 24,
-            ),
+            child: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
           ),
         ),
         bottom: PreferredSize(
@@ -79,25 +78,27 @@ class _CallHistoryHubScreenState extends State<CallHistoryHubScreen>
             indicatorWeight: 2,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
-            labelStyle:
-                const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            unselectedLabelStyle:
-                const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            labelStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
             tabs: const [
               Tab(text: 'My Calls', icon: Icon(Icons.phone_callback, size: 20)),
               Tab(
-                  text: 'Transporters',
-                  icon: Icon(Icons.local_shipping, size: 20)),
+                text: 'Transporters',
+                icon: Icon(Icons.local_shipping, size: 20),
+              ),
             ],
           ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [
-          CallHistoryScreen(),
-          TransporterListScreen(),
-        ],
+        children: const [CallHistoryScreen(), TransporterListScreen()],
       ),
     );
   }
@@ -205,21 +206,23 @@ class _TransporterListScreenState extends State<TransporterListScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide:
-                    const BorderSide(color: AppColors.primary, width: 2),
+                borderSide: const BorderSide(
+                  color: AppColors.primary,
+                  width: 2,
+                ),
               ),
               filled: true,
               fillColor: Colors.grey[50],
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
             ),
           ),
         ),
 
         // Transporter list
-        Expanded(
-          child: _buildBody(),
-        ),
+        Expanded(child: _buildBody()),
       ],
     );
   }
@@ -308,167 +311,176 @@ class _TransporterCard extends StatelessWidget {
     required this.onTap,
   }) : super(key: key);
 
-  Future<void> _makeCall(BuildContext context, Map<String, dynamic> transporter) async {
+  Future<void> _makeCall(
+    BuildContext context,
+    Map<String, dynamic> transporter,
+  ) async {
     final transporterName = _getDisplayName(transporter);
     final transporterTmid = transporter['tmid'] ?? '';
-    final phoneNumber = transporter['phone']?.toString() ?? '';
-    
-    // Check if phone number is available
-    if (phoneNumber.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Icon(Icons.info_outline, color: AppColors.primary),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Phone Number Required',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            'Phone number not available for $transporterName. Please update the contact details in the Jobs section.',
-            style: const TextStyle(fontSize: 14),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
+    final transporterPhone = transporter['phone']?.toString() ?? '';
+
+    if (transporterPhone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number not available'),
+          backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    // Show call type selection dialog
-    final callType = await showDialog<String>(
-      context: context,
-      builder: (context) => CallTypeSelectionDialog(
-        driverName: transporterName,
-      ),
-    );
-
-    if (callType == null) return;
-
     try {
-      final callerId = await Phase2AuthService.getUserId();
-      final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+      // Show call type selection dialog
+      final callType = await showDialog<String>(
+        context: context,
+        builder: (context) => CallTypeSelectionDialog(driverName: transporterName),
+      );
+
+      if (callType == null) return; // User cancelled
+
+      // Generate a placeholder job ID for direct transporter calls
+      final placeholderJobId =
+          'DIRECT_CALL_${transporterTmid}_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Create a minimal job object for the feedback modal
+      final dummyJob = JobModel(
+        id: 0,
+        jobId: placeholderJobId,
+        jobTitle: 'Call to $transporterName',
+        transporterId: transporter['id']?.toString() ?? '0',
+        transporterName: transporterName,
+        transporterTmid: transporterTmid,
+        transporterPhone: transporterPhone,
+        transporterCity: transporter['city']?.toString() ?? '',
+        transporterState: transporter['state']?.toString() ?? '',
+        transporterProfileCompletion: 0,
+        jobLocation: transporter['location']?.toString() ?? '',
+        jobDescription: '',
+        salaryRange: '',
+        requiredExperience: '',
+        preferredStatus: '',
+        typeOfLicense: '',
+        vehicleType: '',
+        vehicleTypeDetail: '',
+        applicationDeadline: '',
+        jobManagementDate: '',
+        jobManagementId: '',
+        jobDescriptionId: '',
+        numberOfDriverRequired: 1,
+        activePosition: 0,
+        createdVehicleDetail: '',
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
+        status: 1,
+        applicantsCount: 0,
+        isApproved: true,
+        isActive: true,
+        isExpired: false,
+        assignedTo: null,
+        assignedToName: null,
+        isClosed: false,
+      );
 
       if (callType == 'manual') {
-        // Manual call
-        final result = await SmartCallingService.instance.initiateManualCall(
-          driverMobile: cleanMobile,
-          callerId: callerId,
-          driverId: transporterTmid,
+        await _handleManualCall(context, dummyJob);
+      } else if (callType == 'easygo_ivr') {
+        await _handleEasyGoIVR(context, dummyJob);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error initiating call: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
+      }
+    }
+  }
 
-        if (result['success'] == true) {
-          final driverMobileRaw = result['data']?['driver_mobile_raw'];
+  Future<void> _handleManualCall(BuildContext context, JobModel job) async {
+    try {
+      final callerId = await Phase2AuthService.getUserId();
+      final cleanMobile = job.transporterPhone.replaceAll(RegExp(r'[^\d]'), '');
 
+      // Log manual call
+      final result = await SmartCallingService.instance.initiateManualCall(
+        driverMobile: cleanMobile,
+        callerId: callerId,
+        driverId: job.transporterId,
+      );
+
+      if (result['success'] == true) {
+        final transporterMobileRaw = result['data']?['driver_mobile_raw'];
+
+        if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('📱 Calling $transporterName...'),
+              content: Text('📱 Calling ${job.transporterName}...'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 2),
             ),
           );
-
-          await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
-          await Future.delayed(const Duration(milliseconds: 500));
-
-          if (context.mounted) {
-            _showFeedbackModal(context, transporter);
-          }
         }
-      } else if (callType == 'easygo_ivr') {
-        // IVR call using EasyGo
-        await EasyGoIVRCallHelper.initiateCall(
-          context: context,
-          clientName: transporterName,
-          clientPhone: phoneNumber,
-          clientId: transporterTmid,
-          contactType: 'transporter',
-          callSource: null, // Regular call, not from job screens
-          onCallEnded: () {
-            if (context.mounted) {
-              _showFeedbackModal(context, transporter);
-            }
-          },
-        );
+
+        // Make direct call
+        await FlutterPhoneDirectCaller.callNumber(transporterMobileRaw);
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Show feedback modal after call
+        if (context.mounted) {
+          showJobBriefFeedbackModal(
+            context: context,
+            job: job,
+            onSubmit: () {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Call feedback saved successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Manual call error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  void _showFeedbackModal(BuildContext context, Map<String, dynamic> transporter) {
-    final transporterName = _getDisplayName(transporter);
-    final transporterTmid = transporter['tmid'] ?? '';
-    
-    // Generate a placeholder job ID for direct transporter calls
-    final placeholderJobId = 'DIRECT_CALL_${transporterTmid}_${DateTime.now().millisecondsSinceEpoch}';
-    
-    // Create a minimal job object for the feedback modal
-    final dummyJob = JobModel(
-      id: 0,
-      jobId: placeholderJobId,
-      jobTitle: 'Call to $transporterName',
-      transporterId: transporter['id']?.toString() ?? '0',
-      transporterName: transporterName,
-      transporterTmid: transporterTmid,
-      transporterPhone: transporter['phone']?.toString() ?? '',
-      transporterCity: transporter['city']?.toString() ?? '',
-      transporterState: transporter['state']?.toString() ?? '',
-      transporterProfileCompletion: 0,
-      jobLocation: transporter['location']?.toString() ?? '',
-      jobDescription: '',
-      salaryRange: '',
-      requiredExperience: '',
-      preferredStatus: '',
-      typeOfLicense: '',
-      vehicleType: '',
-      vehicleTypeDetail: '',
-      applicationDeadline: '',
-      jobManagementDate: '',
-      jobManagementId: '',
-      jobDescriptionId: '',
-      numberOfDriverRequired: 1,
-      activePosition: 0,
-      createdVehicleDetail: '',
-      createdAt: DateTime.now().toIso8601String(),
-      updatedAt: DateTime.now().toIso8601String(),
-      status: 1,
-      applicantsCount: 0,
-      isApproved: true,
-      isActive: true,
-      isExpired: false,
-      assignedTo: null,
-      assignedToName: null,
-    );
-    
-    // Show feedback modal
-    showJobBriefFeedbackModal(
+  Future<void> _handleEasyGoIVR(BuildContext context, JobModel job) async {
+    await EasyGoIVRCallHelper.initiateCall(
       context: context,
-      job: dummyJob,
-      onSubmit: () {
-        // Refresh the list after feedback is submitted
+      clientName: job.transporterName,
+      clientPhone: job.transporterPhone,
+      clientId: job.transporterId,
+      contactType: 'transporter',
+      callSource: 'transporter_call_history',
+      onCallEnded: () {
+        // Show feedback modal after IVR call ends
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Call feedback saved successfully'),
-              backgroundColor: Colors.green,
-            ),
+          showJobBriefFeedbackModal(
+            context: context,
+            job: job,
+            onSubmit: () {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Call feedback saved successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
           );
         }
       },
@@ -483,7 +495,9 @@ class _TransporterCard extends StatelessWidget {
     if (name != null && name.isNotEmpty && name.toLowerCase() != 'null') {
       return name;
     }
-    if (company != null && company.isNotEmpty && company.toLowerCase() != 'null') {
+    if (company != null &&
+        company.isNotEmpty &&
+        company.toLowerCase() != 'null') {
       return company;
     }
     if (tmid != null && tmid.isNotEmpty && tmid.toLowerCase() != 'null') {
@@ -498,7 +512,7 @@ class _TransporterCard extends StatelessWidget {
       final date = DateTime.parse(dateStr);
       final now = DateTime.now();
       final diff = now.difference(date);
-      
+
       if (diff.inDays == 0) {
         return 'Today ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
       } else if (diff.inDays == 1) {
@@ -572,7 +586,10 @@ class _TransporterCard extends StatelessWidget {
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [Colors.red.shade400, Colors.red.shade600],
+                                colors: [
+                                  Colors.red.shade400,
+                                  Colors.red.shade600,
+                                ],
                               ),
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 2),
@@ -618,7 +635,10 @@ class _TransporterCard extends StatelessWidget {
                         const SizedBox(height: 5),
                         // TMID Badge
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.blue.shade50,
                             borderRadius: BorderRadius.circular(6),
@@ -626,7 +646,11 @@ class _TransporterCard extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.badge_outlined, size: 11, color: Colors.blue.shade700),
+                              Icon(
+                                Icons.badge_outlined,
+                                size: 11,
+                                color: Colors.blue.shade700,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 transporter['tmid'] ?? '',
@@ -643,7 +667,11 @@ class _TransporterCard extends StatelessWidget {
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              Icon(Icons.location_on_outlined, size: 12, color: Colors.grey.shade500),
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 12,
+                                color: Colors.grey.shade500,
+                              ),
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
@@ -670,7 +698,10 @@ class _TransporterCard extends StatelessWidget {
                       Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Colors.green.shade400, Colors.green.shade600],
+                            colors: [
+                              Colors.green.shade400,
+                              Colors.green.shade600,
+                            ],
                           ),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
@@ -682,7 +713,11 @@ class _TransporterCard extends StatelessWidget {
                           ],
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.phone, color: Colors.white, size: 20),
+                          icon: const Icon(
+                            Icons.phone,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                           onPressed: () => _makeCall(context, transporter),
                           tooltip: 'Call',
                           padding: const EdgeInsets.all(10),
@@ -700,7 +735,7 @@ class _TransporterCard extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               // Stats row
               const SizedBox(height: 12),
               Container(
@@ -722,7 +757,11 @@ class _TransporterCard extends StatelessWidget {
                               color: Colors.green.shade50,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Icon(Icons.phone_in_talk, size: 14, color: Colors.green.shade700),
+                            child: Icon(
+                              Icons.phone_in_talk,
+                              size: 14,
+                              color: Colors.green.shade700,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Column(
@@ -750,14 +789,14 @@ class _TransporterCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    
+
                     // Divider
                     Container(
                       width: 1,
                       height: 40,
                       color: Colors.grey.shade300,
                     ),
-                    
+
                     // Last call
                     Expanded(
                       child: Padding(
@@ -771,7 +810,11 @@ class _TransporterCard extends StatelessWidget {
                                 color: Colors.blue.shade50,
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Icon(Icons.access_time_rounded, size: 14, color: Colors.blue.shade700),
+                              child: Icon(
+                                Icons.access_time_rounded,
+                                size: 14,
+                                color: Colors.blue.shade700,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(

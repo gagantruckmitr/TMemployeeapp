@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import '../../../core/config/api_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/phase2_auth_service.dart';
 
@@ -30,6 +31,7 @@ class CallFeedbackModal extends StatefulWidget {
 
 class _CallFeedbackModalState extends State<CallFeedbackModal> {
   String? _selectedFeedback;
+  String? _selectedFeedbackCategory; // Track which category (Connected, Not Connected, Call Back Later)
   String? _selectedMatchStatus;
   final TextEditingController _notesController = TextEditingController();
   File? _selectedRecordingFile;
@@ -85,9 +87,15 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
     setState(() => _isSubmitting = true);
 
     try {
+      // Build proper feedback format with category prefix
+      String properFeedback = _selectedFeedback!;
+      if (_selectedFeedbackCategory != null) {
+        properFeedback = '$_selectedFeedbackCategory: $_selectedFeedback';
+      }
+      
       // First submit feedback to create/update the call log entry
       widget.onSubmit(
-        _selectedFeedback!,
+        properFeedback,
         _selectedMatchStatus ?? '',
         _notesController.text,
       );
@@ -103,7 +111,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
           var request = http.MultipartRequest(
             'POST',
             Uri.parse(
-                'https://truckmitr.com/truckmitr-app/api/phase2_upload_driver_recording_api.php'),
+                '${ApiConfig.baseUrl}/phase2_upload_driver_recording_api.php'),
           );
 
           request.files.add(await http.MultipartFile.fromPath(
@@ -456,6 +464,9 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
 
   Widget _buildSection(
       String title, IconData icon, Color color, List<String> options) {
+    // Extract category name from title (e.g., "1. Connected" -> "Connected")
+    final category = title.split('. ').last;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -478,19 +489,20 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
           spacing: 8,
           runSpacing: 8,
           children: options
-              .map((option) => _buildFeedbackChip(option, color))
+              .map((option) => _buildFeedbackChip(option, color, category))
               .toList(),
         ),
       ],
     );
   }
 
-  Widget _buildFeedbackChip(String label, Color color) {
+  Widget _buildFeedbackChip(String label, Color color, String category) {
     final isSelected = _selectedFeedback == label;
     return GestureDetector(
       onTap: () {
         setState(() {
           _selectedFeedback = label;
+          _selectedFeedbackCategory = category;
         });
       },
       child: Container(

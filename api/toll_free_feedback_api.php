@@ -1,16 +1,12 @@
 <?php
 /**
- * Toll-Free Call Feedback API
- * Saves feedback to call_logs table with tc_for = 'toll-free'
+ * Toll-Free Feedback API
+ * Saves call feedback for toll-free calls with tc_for='toll-free'
  */
-
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -18,188 +14,189 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Database connection
-$host = '127.0.0.1';
-$port = 3306;
-$dbname = 'truckmitr';
-$username = 'truckmitr';
-$password = '825Redp&4';
+require_once 'config.php';
 
 try {
-    $conn = new mysqli($host, $username, $password, $dbname, $port);
-    
-    if ($conn->connect_error) {
-        throw new Exception('Database connection failed: ' . $conn->connect_error);
-    }
-    
-    $conn->set_charset('utf8mb4');
-    $conn->query("SET time_zone = '+05:30'");
-    
-} catch (Exception $e) {
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $pdo->exec("SET time_zone = '+05:30'");
+} catch(PDOException $e) {
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'Database connection failed']);
     exit;
 }
 
-// Handle GET request for history
-if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    $action = isset($_GET['action']) ? $_GET['action'] : '';
-    
-    if ($action === 'get_history') {
-        $callerId = isset($_GET['caller_id']) ? (int)$_GET['caller_id'] : 0;
-        
-        if ($callerId === 0) {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'message' => 'Caller ID required']);
-            exit;
-        }
-        
-        $sql = "SELECT * FROM call_logs 
-                WHERE caller_id = $callerId 
-                AND tc_for = 'toll-free'
-                ORDER BY created_at DESC 
-                LIMIT 100";
-        
-        $result = $conn->query($sql);
-        
-        if ($result) {
-            $history = [];
-            while ($row = $result->fetch_assoc()) {
-                $history[] = $row;
-            }
-            
-            echo json_encode([
-                'success' => true,
-                'message' => 'History fetched successfully',
-                'data' => $history
-            ]);
-        } else {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Database error: ' . $conn->error]);
-        }
-        
-        $conn->close();
-        exit;
-    }
-}
+$action = $_GET['action'] ?? 'submit_feedback';
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'submit_feedback') {
+    submitFeedback($pdo);
+} elseif ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'get_history') {
+    getCallHistory($pdo);
+} else {
     http_response_code(405);
     echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-    exit;
 }
 
-$rawData = file_get_contents('php://input');
-$data = json_decode($rawData, true);
-
-if (!$data) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Invalid JSON']);
-    exit;
-}
-
-// Extract required fields
-$callerId = isset($data['caller_id']) ? (int)$data['caller_id'] : 0;
-$leadId = isset($data['lead_id']) ? (int)$data['lead_id'] : 0;
-$name = isset($data['name']) ? $conn->real_escape_string(trim($data['name'])) : '';
-$mobile = isset($data['mobile']) ? $conn->real_escape_string(trim($data['mobile'])) : '';
-$feedback = isset($data['feedback']) ? $conn->real_escape_string(trim($data['feedback'])) : '';
-$remarks = isset($data['remarks']) ? $conn->real_escape_string(trim($data['remarks'])) : '';
-
-// Validate required fields
-if ($callerId === 0) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Caller ID required']);
-    exit;
-}
-
-if (empty($mobile)) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Mobile number required']);
-    exit;
-}
-
-if (empty($feedback)) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Feedback required']);
-    exit;
-}
-
-// Set tc_for as 'toll-free' for all toll-free leads
-$tcFor = 'toll-free';
-
-// Fetch telecaller info from admins table
-$callerNumber = null;
-$adminQuery = "SELECT mobile FROM admins WHERE id = $callerId LIMIT 1";
-$adminResult = $conn->query($adminQuery);
-
-if ($adminResult && $adminResult->num_rows > 0) {
-    $adminRow = $adminResult->fetch_assoc();
-    $callerNumber = $adminRow['mobile'];
-}
-
-// Combine remarks into notes field for reference
-$notes = "Source: Toll-Free";
-if (!empty($remarks)) {
-    $notes .= " | Remarks: $remarks";
-}
-
-// Insert into call_logs table using correct column names
-$sql = "INSERT INTO call_logs 
-        (caller_id, tc_for, caller_number, driver_name, user_number, feedback, remarks, notes, call_status, created_at, updated_at) 
-        VALUES 
-        ($callerId, 
-         '$tcFor', 
-         " . ($callerNumber ? "'$callerNumber'" : "NULL") . ",
-         '$name', 
-         '$mobile', 
-         '$feedback', 
-         " . (!empty($remarks) ? "'$remarks'" : "NULL") . ", 
-         '$notes',
-         'completed',
-         NOW(), 
-         NOW())";
-
-if ($conn->query($sql)) {
-    $insertId = $conn->insert_id;
-    
-    // Update toll-free lead with feedback (only if not already added)
-    if ($leadId > 0) {
-        $checkSql = "SELECT remarks FROM toll_free_leads WHERE id = $leadId";
-        $checkResult = $conn->query($checkSql);
+function submitFeedback($pdo) {
+    try {
+        $input = json_decode(file_get_contents('php://input'), true);
         
-        if ($checkResult && $checkResult->num_rows > 0) {
-            $row = $checkResult->fetch_assoc();
-            $existingRemarks = $row['remarks'] ?? '';
-            
-            // Only add feedback if it's not already there
-            if (strpos($existingRemarks, "[Feedback: $feedback]") === false) {
-                $updateLeadSql = "UPDATE toll_free_leads 
-                                 SET remarks = CONCAT(COALESCE(remarks, ''), '\n[Feedback: $feedback]'),
-                                     updated_at = NOW()
-                                 WHERE id = $leadId";
-                $conn->query($updateLeadSql);
-            }
+        // NO RESTRICTIONS - Any telecaller can submit feedback
+        $callerId = $input['caller_id'] ?? null;
+        $leadId = $input['lead_id'] ?? null;
+        $name = $input['name'] ?? '';
+        $mobile = $input['mobile'] ?? '';
+        $feedback = $input['feedback'] ?? '';
+        $remarks = $input['remarks'] ?? '';
+        
+        if (!$callerId || !$leadId) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'caller_id and lead_id are required'
+            ]);
+            return;
         }
-    }
-    
-    echo json_encode([
-        'success' => true,
-        'message' => 'Feedback saved successfully',
-        'data' => [
-            'id' => $insertId,
-            'tc_for' => $tcFor,
+        
+        // Get user's TMID and role
+        $userSql = "SELECT unique_id, role FROM users WHERE id = :lead_id LIMIT 1";
+        $userStmt = $pdo->prepare($userSql);
+        $userStmt->execute(['lead_id' => $leadId]);
+        $user = $userStmt->fetch();
+        
+        $tmid = $user['unique_id'] ?? '';
+        $role = $user['role'] ?? 'driver';
+        
+        // Insert into call_logs table with tc_for='toll-free'
+        // This ensures it appears in call history with toll-free filter
+        $sql = "INSERT INTO call_logs (
+                    caller_id,
+                    user_id,
+                    user_number,
+                    driver_name,
+                    feedback,
+                    remarks,
+                    call_status,
+                    call_time,
+                    tc_for,
+                    unique_id_driver,
+                    call_source
+                ) VALUES (
+                    :caller_id,
+                    :user_id,
+                    :user_number,
+                    :driver_name,
+                    :feedback,
+                    :remarks,
+                    :call_status,
+                    NOW(),
+                    'toll-free',
+                    :tmid,
+                    'toll-free'
+                )";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
             'caller_id' => $callerId,
-            'table' => 'call_logs'
-        ]
-    ]);
-} else {
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Database error: ' . $conn->error
-    ]);
+            'user_id' => $leadId,
+            'user_number' => $mobile,
+            'driver_name' => $name,
+            'feedback' => $feedback,
+            'remarks' => $remarks,
+            'call_status' => mapFeedbackToStatus($feedback),
+            'tmid' => $tmid
+        ]);
+        
+        $callLogId = $pdo->lastInsertId();
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Feedback saved successfully - No restrictions applied',
+            'data' => [
+                'id' => $callLogId,
+                'caller_id' => $callerId,
+                'user_id' => $leadId,
+                'tmid' => $tmid,
+                'role' => $role,
+                'feedback' => $feedback,
+                'tc_for' => 'toll-free',
+                'call_source' => 'toll-free',
+                'message' => 'Any telecaller can submit toll-free feedback'
+            ]
+        ]);
+        
+    } catch(Exception $e) {
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Failed to save feedback: ' . $e->getMessage()
+        ]);
+    }
 }
 
-$conn->close();
+function getCallHistory($pdo) {
+    try {
+        $callerId = $_GET['caller_id'] ?? null;
+        $limit = (int)($_GET['limit'] ?? 50);
+        
+        if (!$callerId) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'caller_id is required'
+            ]);
+            return;
+        }
+        
+        $sql = "SELECT 
+                    cl.*,
+                    u.unique_id as tmid,
+                    u.name as user_name,
+                    u.mobile as user_mobile,
+                    u.role as user_role
+                FROM call_logs cl
+                LEFT JOIN users u ON cl.user_id = u.id
+                WHERE cl.caller_id = :caller_id 
+                AND cl.tc_for = 'toll-free'
+                ORDER BY cl.call_time DESC
+                LIMIT :limit";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindValue(':caller_id', $callerId, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        
+        $history = $stmt->fetchAll();
+        
+        echo json_encode([
+            'success' => true,
+            'data' => $history,
+            'count' => count($history)
+        ]);
+        
+    } catch(Exception $e) {
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Failed to fetch history: ' . $e->getMessage()
+        ]);
+    }
+}
+
+function mapFeedbackToStatus($feedback) {
+    $feedback = strtolower($feedback);
+    
+    if (strpos($feedback, 'connected') !== false || strpos($feedback, 'interested') !== false) {
+        return 'connected';
+    } elseif (strpos($feedback, 'call back') !== false || strpos($feedback, 'callback') !== false) {
+        return 'callback';
+    } elseif (strpos($feedback, 'not interested') !== false) {
+        return 'not_interested';
+    } elseif (strpos($feedback, 'not reachable') !== false || strpos($feedback, 'no answer') !== false) {
+        return 'not_reachable';
+    } elseif (strpos($feedback, 'invalid') !== false || strpos($feedback, 'wrong number') !== false) {
+        return 'invalid';
+    } else {
+        return 'pending';
+    }
+}
 ?>

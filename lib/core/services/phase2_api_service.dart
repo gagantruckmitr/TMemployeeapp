@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../../models/job_model.dart';
 import '../../models/driver_applicant_model.dart';
 import 'phase2_auth_service.dart';
@@ -8,8 +9,7 @@ class Phase2ApiService {
   // Update this to your actual API URL
   // For local development, use your machine's IP address
   // For production, use the domain
-  static const String baseUrl = 'https://truckmitr.com/truckmitr-app/api';
-  // static const String baseUrl = 'http://192.168.1.X/TMemployeeApp/api'; // For local testing
+  static const String baseUrl = ApiConfig.baseUrl;
 
   // Fetch jobs with optional filter
   static Future<List<JobModel>> fetchJobs({String filter = 'all'}) async {
@@ -133,6 +133,27 @@ class Phase2ApiService {
   }
 
   // Fetch job applicants
+  static Future<Map<String, dynamic>> fetchDriverDetailedInfo(int driverId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/driver_detailed_info_api.php?driver_id=$driverId'),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        if (jsonResponse['success'] == true) {
+          return jsonResponse['data'];
+        } else {
+          throw Exception(jsonResponse['message'] ?? 'Failed to fetch driver details');
+        }
+      } else {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Failed to fetch driver details: $e');
+    }
+  }
+
   static Future<List<DriverApplicant>> fetchJobApplicants(String jobId) async {
     try {
       final uri = Uri.parse('$baseUrl/phase2_job_applicants_api.php')
@@ -189,6 +210,7 @@ class Phase2ApiService {
     String? matchStatus,
     String? notes,
     String? jobId,
+    String? callRecording,
   }) async {
     try {
       // Always send all fields - let API handle empty values
@@ -203,6 +225,7 @@ class Phase2ApiService {
         'matchStatus': matchStatus ?? '',
         'additionalNotes': notes ?? '',
         'jobId': jobId ?? '',
+        if (callRecording != null) 'callRecording': callRecording,
       };
 
       print('SENDING TO API: $requestBody');
@@ -422,12 +445,19 @@ class Phase2ApiService {
     String? fastTagRoadKharcha,
     String? callStatusFeedback,
     String? callRecording,
+    String? requiredDrivers,
   }) async {
     try {
+      print('=== SAVE JOB BRIEF API CALL ===');
+      print('uniqueId: $uniqueId');
+      print('jobId: $jobId');
+      print('callerId (input): $callerId');
+      
       // Get caller ID from current user if not provided
       if (callerId == null) {
         final user = await Phase2AuthService.getCurrentUser();
         callerId = user?.id;
+        print('callerId (from user): $callerId');
       }
 
       final requestBody = {
@@ -452,7 +482,11 @@ class Phase2ApiService {
         if (callStatusFeedback != null)
           'callStatusFeedback': callStatusFeedback,
         if (callRecording != null) 'callRecording': callRecording,
+        if (requiredDrivers != null) 'requiredDrivers': requiredDrivers,
       };
+
+      print('Request Body: ${json.encode(requestBody)}');
+      print('API URL: $baseUrl/phase2_job_brief_api.php');
 
       final response = await http.post(
         Uri.parse('$baseUrl/phase2_job_brief_api.php'),
@@ -460,15 +494,23 @@ class Phase2ApiService {
         body: json.encode(requestBody),
       );
 
+      print('Response Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        print('Response Data: $data');
         if (data['success'] != true) {
+          print('API returned success=false: ${data['message']}');
           throw Exception(data['message'] ?? 'Failed to save job brief');
         }
+        print('✓ Job brief saved successfully');
       } else {
+        print('✗ Server error: ${response.statusCode}');
         throw Exception('Server error: ${response.statusCode}');
       }
     } catch (e) {
+      print('✗ Exception in saveJobBrief: $e');
       throw Exception('Failed to save job brief: $e');
     }
   }

@@ -35,6 +35,7 @@ class JobModel {
   final bool isExpired;
   final int? assignedTo;
   final String? assignedToName;
+  final bool isClosed;
 
   JobModel({
     required this.id,
@@ -73,6 +74,7 @@ class JobModel {
     required this.isExpired,
     this.assignedTo,
     this.assignedToName,
+    required this.isClosed,
   });
 
   factory JobModel.fromJson(Map<String, dynamic> json) {
@@ -117,6 +119,7 @@ class JobModel {
               ? int.tryParse(json['assigned_to'].toString())
               : null,
       assignedToName: json['assignedToName'] ?? json['assigned_to_name'],
+      isClosed: json['isClosed'] ?? false,
     );
   }
 
@@ -156,6 +159,7 @@ class JobModel {
       'isApproved': isApproved,
       'isActive': isActive,
       'isExpired': isExpired,
+      'isClosed': isClosed,
     };
   }
 

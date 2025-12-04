@@ -1,8 +1,5 @@
 <?php
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -38,7 +35,10 @@ try {
 function getCallHistory($conn) {
     $callerId = $_GET['caller_id'] ?? null;
     $status = $_GET['status'] ?? null;
-    $limit = $_GET['limit'] ?? 100;
+    $feedback = $_GET['feedback'] ?? null;
+    $remarks = $_GET['remarks'] ?? null;
+    $search = $_GET['search'] ?? null;
+    $limit = $_GET['limit'] ?? 1000;
     $offset = $_GET['offset'] ?? 0;
     
     if (!$callerId) {
@@ -50,23 +50,19 @@ function getCallHistory($conn) {
     }
     
     // Build query - using users table instead of drivers with proper timing
-    // Hide phone numbers for IVR calls (privacy protection)
     $query = "
         SELECT 
             cl.id,
             cl.user_id as driver_id,
+            u.unique_id as tmid,
             u.name as driver_name,
-            CASE 
-                WHEN cl.tc_for LIKE '%ivr%' THEN ''
-                ELSE u.mobile
-            END as phone_number,
+            u.mobile as phone_number,
             cl.call_status as status,
             cl.feedback,
             cl.remarks,
             cl.call_duration as duration,
             cl.recording_url,
             cl.manual_call_recording_url,
-            cl.tc_for,
             COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at) as call_time,
             cl.call_initiated_at,
             cl.call_completed_at,
@@ -81,16 +77,6 @@ function getCallHistory($conn) {
         FROM call_logs cl
         INNER JOIN users u ON cl.user_id = u.id
         WHERE cl.caller_id = ?
-        AND u.role != 'transporter'
-        AND cl.tc_for NOT LIKE '%job%'
-        AND cl.tc_for NOT LIKE '%match%'
-        AND (cl.call_source IS NULL OR cl.call_source NOT LIKE '%job%')
-        AND NOT EXISTS (
-            SELECT 1 FROM call_logs_match_making clm 
-            WHERE clm.caller_id = cl.caller_id 
-            AND (clm.unique_id_driver = u.unique_id OR clm.unique_id_transporter = u.unique_id)
-            AND DATE(clm.created_at) = DATE(COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at))
-        )
     ";
     
     $params = [$callerId];
@@ -101,6 +87,32 @@ function getCallHistory($conn) {
         $query .= " AND cl.call_status = ?";
         $params[] = $status;
         $types .= 's';
+    }
+
+    // Add feedback filter if provided
+    if ($feedback && $feedback !== 'all') {
+        $query .= " AND cl.feedback = ?";
+        $params[] = $feedback;
+        $types .= 's';
+    }
+
+    // Add remarks filter if provided
+    if ($remarks && $remarks !== 'all') {
+        if ($remarks === 'has_remarks') {
+            $query .= " AND cl.remarks IS NOT NULL AND cl.remarks != ''";
+        } elseif ($remarks === 'no_remarks') {
+            $query .= " AND (cl.remarks IS NULL OR cl.remarks = '')";
+        }
+    }
+
+    // Add search filter if provided
+    if ($search) {
+        $query .= " AND (u.name LIKE ? OR u.mobile LIKE ? OR u.unique_id LIKE ?)";
+        $searchTerm = "%$search%";
+        $params[] = $searchTerm;
+        $params[] = $searchTerm;
+        $params[] = $searchTerm;
+        $types .= 'sss';
     }
     
     // Order by most recent first using actual call time
@@ -127,6 +139,7 @@ function getCallHistory($conn) {
         $history[] = [
             'id' => $row['id'],
             'driver_id' => $row['driver_id'],
+            'tmid' => $row['tmid'] ?? '',
             'driver_name' => $row['driver_name'] ?? 'Unknown',
             'phone_number' => $row['phone_number'] ?? '',
             'status' => $row['status'],
@@ -143,11 +156,57 @@ function getCallHistory($conn) {
             'manual_call_recording_url' => $row['manual_call_recording_url']
         ];
     }
+
+    // Get total count for pagination/display
+    $countQuery = "
+        SELECT COUNT(*) as total
+        FROM call_logs cl
+        INNER JOIN users u ON cl.user_id = u.id
+        WHERE cl.caller_id = ?
+    ";
+    
+    $countParams = [$callerId];
+    $countTypes = 'i';
+    
+    if ($status && $status !== 'all') {
+        $countQuery .= " AND cl.call_status = ?";
+        $countParams[] = $status;
+        $countTypes .= 's';
+    }
+
+    if ($feedback && $feedback !== 'all') {
+        $countQuery .= " AND cl.feedback = ?";
+        $countParams[] = $feedback;
+        $countTypes .= 's';
+    }
+
+    if ($remarks && $remarks !== 'all') {
+        if ($remarks === 'has_remarks') {
+            $countQuery .= " AND cl.remarks IS NOT NULL AND cl.remarks != ''";
+        } elseif ($remarks === 'no_remarks') {
+            $countQuery .= " AND (cl.remarks IS NULL OR cl.remarks = '')";
+        }
+    }
+
+    if ($search) {
+        $countQuery .= " AND (u.name LIKE ? OR u.mobile LIKE ? OR u.unique_id LIKE ?)";
+        $searchTerm = "%$search%";
+        $countParams[] = $searchTerm;
+        $countParams[] = $searchTerm;
+        $countParams[] = $searchTerm;
+        $countTypes .= 'sss';
+    }
+    
+    $stmtCount = $conn->prepare($countQuery);
+    $stmtCount->bind_param($countTypes, ...$countParams);
+    $stmtCount->execute();
+    $totalRecords = $stmtCount->get_result()->fetch_assoc()['total'];
     
     echo json_encode([
         'success' => true,
         'data' => $history,
-        'count' => count($history)
+        'count' => count($history),
+        'total_records' => $totalRecords
     ]);
 }
 
@@ -234,3 +293,5 @@ function updateCallFeedback($conn) {
 
 $conn->close();
 ?>
+
+

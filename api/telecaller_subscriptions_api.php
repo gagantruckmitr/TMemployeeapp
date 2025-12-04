@@ -70,7 +70,7 @@ try {
             SELECT 1 FROM call_logs cl
             WHERE cl.user_id = p.user_id
             AND cl.caller_id = " . intval($telecaller_id) . "
-            AND cl.call_time < p.created_at
+            AND cl.created_at < p.created_at
         )
         $dateFilter
         ORDER BY p.created_at DESC
@@ -86,13 +86,13 @@ try {
     while ($row = $result->fetch_assoc()) {
         // Get call details for this payment
         $call_query = "
-            SELECT id, call_time, call_status, call_duration,
-                   TIMESTAMPDIFF(MINUTE, call_time, '" . $row['payment_created_at'] . "') as minutes_after_call
+            SELECT id, created_at as call_time, call_status, call_duration,
+                   TIMESTAMPDIFF(MINUTE, created_at, '" . $row['payment_created_at'] . "') as minutes_after_call
             FROM call_logs
             WHERE user_id = " . intval($row['driver_id']) . "
             AND caller_id = " . intval($telecaller_id) . "
-            AND call_time < '" . $row['payment_created_at'] . "'
-            ORDER BY call_time DESC
+            AND created_at < '" . $row['payment_created_at'] . "'
+            ORDER BY created_at DESC
             LIMIT 1
         ";
         
@@ -133,7 +133,7 @@ try {
             SELECT 1 FROM call_logs cl
             WHERE cl.user_id = p.user_id
             AND cl.caller_id = " . intval($telecaller_id) . "
-            AND cl.call_time < p.created_at
+            AND cl.created_at < p.created_at
         )
         $dateFilter
     ";
@@ -158,7 +158,7 @@ try {
             SELECT 1 FROM call_logs cl
             WHERE cl.user_id = p.user_id
             AND cl.caller_id = " . intval($telecaller_id) . "
-            AND cl.call_time < p.created_at
+            AND cl.created_at < p.created_at
         )
         $dateFilter
         GROUP BY DATE(p.created_at)

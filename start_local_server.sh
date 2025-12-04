@@ -12,9 +12,9 @@ echo ""
 # Navigate to the project root (parent of api folder)
 cd "$(dirname "$0")"
 
-# Start PHP built-in server on port 80 (requires sudo)
+# Start PHP built-in server on port 8000
 # The -t flag sets the document root
-sudo php -S 192.168.1.13:80 -t .
+php -S 192.168.1.10:8000 -t .
 
 # Alternative: If port 80 is blocked, use port 8080
 # php -S 192.168.1.13:8080 -t .

@@ -11,11 +11,12 @@ import '../../../core/services/phase2_auth_service.dart';
 import '../../../models/social_media_lead_model.dart';
 import '../../../models/smart_calling_models.dart';
 import '../../../widgets/access_denied_screen.dart';
+import '../../../widgets/audio_player_widget.dart';
 import '../widgets/call_feedback_modal.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/ivr_call_waiting_overlay.dart';
 import '../widgets/tab_page_header.dart';
-import 'social_media_history_screen.dart';
+import '../widgets/easygo_ivr_call_helper.dart';
 
 class SocialMediaScreen extends StatefulWidget {
   const SocialMediaScreen({super.key});
@@ -25,14 +26,24 @@ class SocialMediaScreen extends StatefulWidget {
 }
 
 class _SocialMediaScreenState extends State<SocialMediaScreen>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
   final SocialMediaService _service = SocialMediaService.instance;
+  final SocialMediaFeedbackService _feedbackService = SocialMediaFeedbackService.instance;
   final DateFormat _timeFormat = DateFormat('d MMM • h:mm a');
+  final DateFormat _dateFormat = DateFormat('d MMM yyyy • h:mm a');
+
+  late TabController _tabController;
 
   List<SocialMediaLead> _leads = [];
-  bool _isLoading = true;
+  List<Map<String, dynamic>> _history = [];
+  
+  bool _isLoadingLeads = true;
+  bool _isLoadingHistory = true;
   bool _isRefreshing = false;
-  String? _error;
+  
+  String? _leadsError;
+  String? _historyError;
+  
   bool _hasAccess = false;
   bool _checkingAccess = true;
 
@@ -42,30 +53,25 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _checkAccess();
+    _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkAccess() async {
     setState(() => _checkingAccess = true);
     
     try {
-      // First try Phase2Auth
-      final phase2User = await Phase2AuthService.getCurrentUser();
-      
-      if (phase2User != null && phase2User.tcFor.toLowerCase() == 'social-media') {
-        setState(() {
-          _hasAccess = true;
-          _checkingAccess = false;
-        });
-        _loadLeads();
-        return;
-      }
-
-      // If Phase2Auth doesn't work, try to load leads anyway
-      // The API will do the proper authentication check
-      // by cross-referencing Phase1 user ID with Phase2 mobile number
+      // All telecallers have access to social media leads
+      // Access is controlled by assigned_id in the API
       setState(() {
-        _hasAccess = true; // Assume access, let API decide
+        _hasAccess = true;
         _checkingAccess = false;
       });
       
@@ -83,8 +89,8 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   Future<void> _loadLeads() async {
     if (!mounted) return;
     setState(() {
-      _isLoading = true;
-      _error = null;
+      _isLoadingLeads = true;
+      _leadsError = null;
     });
 
     try {
@@ -92,7 +98,7 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
       if (!mounted) return;
       setState(() {
         _leads = results;
-        _isLoading = false;
+        _isLoadingLeads = false;
       });
     } catch (error) {
       if (!mounted) return;
@@ -102,45 +108,57 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
       if (errorMessage.contains('Access denied') || errorMessage.contains('403')) {
         setState(() {
           _hasAccess = false;
-          _isLoading = false;
-          _error = null;
+          _isLoadingLeads = false;
+          _leadsError = null;
         });
       } else {
         setState(() {
-          _error = errorMessage;
-          _isLoading = false;
+          _leadsError = errorMessage;
+          _isLoadingLeads = false;
         });
       }
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingHistory = true;
+      _historyError = null;
+    });
+
+    try {
+      final results = await _feedbackService.fetchCallHistory();
+      if (!mounted) return;
+      setState(() {
+        _history = results;
+        _isLoadingHistory = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _historyError = error.toString();
+        _isLoadingHistory = false;
+      });
     }
   }
 
   Future<void> _refresh() async {
     if (_isRefreshing) return;
     setState(() => _isRefreshing = true);
+    
     try {
-      final results = await _service.fetchSocialMediaLeads();
-      if (!mounted) return;
-      setState(() {
-        _leads = results;
-        _isRefreshing = false;
-        _error = null;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isRefreshing = false;
-        _error = error.toString();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to refresh: $error',
-            style: const TextStyle(color: Colors.white),
-          ),
-          backgroundColor: AppTheme.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (_tabController.index == 0) {
+        await _loadLeads();
+      } else {
+        await _loadHistory();
+      }
+    } catch (e) {
+      // Errors handled in individual load methods
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
     }
   }
 
@@ -237,85 +255,19 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   ) async {
     if (!mounted) return;
 
-    try {
-      // Get current user ID
-      final callerId = await Phase2AuthService.getUserId();
-      if (callerId == 0) {
-        throw Exception('User not logged in');
-      }
-
-      // Show loading indicator
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-
-      // Initiate IVR call
-      final result = await SmartCallingService.instance.initiateClick2CallIVR(
-        driverMobile: lead.mobile,
-        callerId: callerId,
-        driverId: contact.id,
-      );
-
-      // Close loading dialog
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      if (result['success'] == true) {
-        final referenceId = result['reference_id'] as String?;
-        
-        // Show IVR waiting overlay
-        if (!mounted) return;
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => IVRCallWaitingOverlay(
-            driverName: lead.name,
-            referenceId: referenceId,
-            onCallEnded: () {
-              Navigator.pop(context);
-            },
-          ),
-        );
-
-        // Show feedback modal after call ends
-        if (!mounted) return;
-        _showFeedbackModal(contact);
-      } else {
-        // Show error message
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result['message'] ?? 'Failed to initiate IVR call',
-            ),
-            backgroundColor: AppTheme.error,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } catch (e) {
-      // Close loading dialog if open
-      if (mounted && Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to initiate IVR call: $e'),
-            backgroundColor: AppTheme.error,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    }
+    await EasyGoIVRCallHelper.initiateCall(
+      context: context,
+      clientName: lead.name,
+      clientPhone: lead.mobile,
+      clientId: lead.id.toString(),
+      contactType: lead.role.toLowerCase(),
+      callSource: 'social_media',
+      onCallEnded: () {
+        if (mounted) {
+          _showFeedbackModal(contact);
+        }
+      },
+    );
   }
 
   void _showFeedbackModal(DriverContact contact) {
@@ -357,10 +309,25 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     if (!mounted) return;
 
     // Find the original lead
-    final lead = _leads.firstWhere(
-      (l) => l.mobile == contact.phoneNumber,
-      orElse: () => _leads.first,
-    );
+    SocialMediaLead? lead;
+    try {
+      lead = _leads.firstWhere(
+        (l) => l.mobile == contact.phoneNumber,
+      );
+    } catch (e) {
+      // Lead not found in list - it may have been removed already
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('⚠️ Lead not found. It may have been already processed.'),
+            backgroundColor: AppTheme.warning,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
 
     // Submit feedback to API
     final result = await SocialMediaFeedbackService.instance.submitFeedback(
@@ -374,9 +341,13 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
 
     if (result['success'] == true) {
       // Remove the lead from the list immediately
+      final leadId = lead.id;
       setState(() {
-        _leads.removeWhere((l) => l.id == lead.id);
+        _leads.removeWhere((l) => l.id == leadId);
       });
+      
+      // Refresh history to show the new call
+      _loadHistory();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -415,13 +386,13 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     // Show access denied screen if user doesn't have permission
     if (!_hasAccess) {
       return AccessDeniedScreen(
-        title: 'Social Media Access Required',
-        message: 'This feature is only available to users assigned to Social Media leads.\n\nYour account does not have permission to access this section.',
+        title: 'Social Media Leads',
+        message: 'Unable to load social media leads.\n\nPlease contact your administrator if you believe you should have access.',
         icon: Icons.people_outline,
         onContactAdmin: () {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Please contact your administrator to request Social Media access'),
+              content: const Text('Please contact your administrator for assistance'),
               backgroundColor: AppTheme.accentPurple,
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 3),
@@ -431,13 +402,21 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
       );
     }
 
-    final subtitle = _isLoading
-        ? 'Fetching latest social media leads...'
-        : _error != null
-        ? 'Tap refresh to try again.'
-        : _leads.isEmpty
-        ? 'No social media leads available.'
-        : '${_leads.length} social media leads';
+    final subtitle = _tabController.index == 0
+        ? (_isLoadingLeads
+            ? 'Fetching latest social media leads...'
+            : _leadsError != null
+                ? 'Tap refresh to try again.'
+                : _leads.isEmpty
+                    ? 'No social media leads available.'
+                    : '${_leads.length} social media leads')
+        : (_isLoadingHistory
+            ? 'Loading call history...'
+            : _historyError != null
+                ? 'Tap refresh to try again.'
+                : _history.isEmpty
+                    ? 'No call history yet.'
+                    : '${_history.length} calls made');
 
     return Scaffold(
       backgroundColor: AppTheme.lightGray,
@@ -448,65 +427,109 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
             iconColor: AppTheme.accentPurple,
             title: 'Social Media Leads',
             subtitle: subtitle,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TelecallerHeaderActionButton(
-                  isLoading: false,
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SocialMediaHistoryScreen(),
-                      ),
-                    );
-                  },
-                  icon: Icons.history,
-                  color: AppTheme.accentPurple,
-                ),
-                const SizedBox(width: 8),
-                TelecallerHeaderActionButton(
-                  isLoading: _isRefreshing,
-                  onPressed: _refresh,
-                  icon: Icons.refresh_rounded,
-                  color: AppTheme.accentPurple,
-                ),
+            trailing: TelecallerHeaderActionButton(
+              isLoading: _isRefreshing,
+              onPressed: _refresh,
+              icon: Icons.refresh_rounded,
+              color: AppTheme.accentPurple,
+            ),
+          ),
+          Container(
+            color: Colors.white,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: AppTheme.accentPurple,
+              unselectedLabelColor: AppTheme.gray,
+              indicatorColor: AppTheme.accentPurple,
+              indicatorWeight: 3,
+              onTap: (index) {
+                setState(() {}); // Rebuild to update subtitle
+                if (index == 1 && _history.isEmpty && !_isLoadingHistory) {
+                  _loadHistory();
+                }
+              },
+              tabs: const [
+                Tab(text: 'New Leads'),
+                Tab(text: 'Call History'),
               ],
             ),
           ),
           Expanded(
-            child: SafeArea(
-              top: false,
-              child: _isLoading
-                  ? const _LoadingView()
-                  : _error != null
-                  ? _ErrorView(message: _error!, onRetry: _loadLeads)
-                  : RefreshIndicator(
-                      onRefresh: _refresh,
-                      color: AppTheme.accentPurple,
-                      child: _leads.isEmpty
-                          ? const _EmptyView()
-                          : ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(
-                                20,
-                                24,
-                                20,
-                                24,
-                              ),
-                              itemBuilder: (context, index) {
-                                final lead = _leads[index];
-                                return _SocialMediaLeadCard(
-                                  lead: lead,
-                                  formattedTime: _timeFormat.format(
-                                    lead.chatDateTime,
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // Leads Tab
+                _isLoadingLeads
+                    ? const _LoadingView()
+                    : _leadsError != null
+                        ? _ErrorView(message: _leadsError!, onRetry: _loadLeads)
+                        : RefreshIndicator(
+                            onRefresh: () async {
+                              await _loadLeads();
+                            },
+                            color: AppTheme.accentPurple,
+                            child: _leads.isEmpty
+                                ? const _EmptyView(
+                                    icon: Icons.people_outline,
+                                    title: 'No social media leads',
+                                    message: 'Great job! You have processed all available leads.',
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      20,
+                                      24,
+                                      20,
+                                      24,
+                                    ),
+                                    itemBuilder: (context, index) {
+                                      final lead = _leads[index];
+                                      return _SocialMediaLeadCard(
+                                        lead: lead,
+                                        formattedTime: _timeFormat.format(
+                                          lead.chatDateTime,
+                                        ),
+                                        onCall: () => _onCallPressed(lead),
+                                        onCopyNumber: _copyNumber,
+                                      );
+                                    },
+                                    itemCount: _leads.length,
                                   ),
-                                  onCall: () => _onCallPressed(lead),
-                                  onCopyNumber: _copyNumber,
-                                );
-                              },
-                              itemCount: _leads.length,
-                            ),
-                    ),
+                          ),
+                
+                // History Tab
+                _isLoadingHistory
+                    ? const _LoadingView()
+                    : _historyError != null
+                        ? _ErrorView(message: _historyError!, onRetry: _loadHistory)
+                        : RefreshIndicator(
+                            onRefresh: () async {
+                              await _loadHistory();
+                            },
+                            color: AppTheme.accentPurple,
+                            child: _history.isEmpty
+                                ? const _EmptyView(
+                                    icon: Icons.history,
+                                    title: 'No call history yet',
+                                    message: 'Your social media call history will appear here.',
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.all(20),
+                                    itemCount: _history.length,
+                                    itemBuilder: (context, index) {
+                                      final call = _history[index];
+                                      return Padding(
+                                        padding: EdgeInsets.only(
+                                          bottom: index < _history.length - 1 ? 16 : 0,
+                                        ),
+                                        child: _CallHistoryCard(
+                                          call: call,
+                                          dateFormat: _dateFormat,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ),
+              ],
             ),
           ),
         ],
@@ -567,25 +590,6 @@ class _SocialMediaLeadCardState extends State<_SocialMediaLeadCard>
     _scaleController.reverse();
   }
 
-  String _extractLatestFeedback(String remarks) {
-    // Extract only the latest feedback from remarks
-    if (remarks.contains('[Feedback:')) {
-      final feedbackEntries = remarks
-          .split('\n')
-          .where((line) => line.contains('[Feedback:'))
-          .toList();
-      if (feedbackEntries.isNotEmpty) {
-        final latestFeedback = feedbackEntries.last;
-        // Remove the [Feedback: ] wrapper
-        return latestFeedback
-            .replaceAll('[Feedback:', '')
-            .replaceAll(']', '')
-            .trim();
-      }
-    }
-    return remarks;
-  }
-
   Color _sourceColor() {
     switch (widget.lead.source.toLowerCase()) {
       case 'facebook':
@@ -598,21 +602,6 @@ class _SocialMediaLeadCardState extends State<_SocialMediaLeadCard>
         return const Color(0xFF1DA1F2);
       default:
         return AppTheme.accentPurple;
-    }
-  }
-
-  IconData _sourceIcon() {
-    switch (widget.lead.source.toLowerCase()) {
-      case 'facebook':
-        return Icons.facebook;
-      case 'whatsapp':
-        return Icons.chat;
-      case 'instagram':
-        return Icons.camera_alt;
-      case 'twitter':
-        return Icons.tag;
-      default:
-        return Icons.public;
     }
   }
 
@@ -637,7 +626,7 @@ class _SocialMediaLeadCardState extends State<_SocialMediaLeadCard>
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
+                    color: Colors.black.withOpacity(0.08),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -652,7 +641,7 @@ class _SocialMediaLeadCardState extends State<_SocialMediaLeadCard>
                       // Avatar
                       CircleAvatar(
                         radius: 27,
-                        backgroundColor: sourceColor.withValues(alpha: 0.12),
+                        backgroundColor: sourceColor.withOpacity(0.12),
                         child: Text(
                           widget.lead.name.isNotEmpty
                               ? widget.lead.name[0].toUpperCase()
@@ -731,9 +720,7 @@ class _SocialMediaLeadCardState extends State<_SocialMediaLeadCard>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: AppTheme.accentPurple.withValues(
-                                  alpha: 0.3,
-                                ),
+                                color: AppTheme.accentPurple.withOpacity(0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -796,8 +783,48 @@ class _SocialMediaLeadCardState extends State<_SocialMediaLeadCard>
                   // Message Section
                   if (widget.lead.remarks != null &&
                       widget.lead.remarks!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _buildMessageSection(),
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.message_outlined,
+                                size: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Message',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            widget.lead.remarks!,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade800,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -809,153 +836,373 @@ class _SocialMediaLeadCardState extends State<_SocialMediaLeadCard>
   }
 
   Widget _buildDetailItem(IconData icon, String label, String value) {
-    return GestureDetector(
-      onLongPress: () {
-        Clipboard.setData(ClipboardData(text: value));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$label copied: $value'),
-            duration: const Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(8),
-          ),
-        );
-        HapticFeedback.mediumImpact();
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: Colors.grey.shade600),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF1A1A1A),
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Icon(Icons.copy, size: 12, color: Colors.grey.shade400),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSourceItem(Color sourceColor) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(_sourceIcon(), size: 14, color: sourceColor),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                'Source',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: sourceColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: sourceColor.withValues(alpha: 0.3),
-              width: 1,
-            ),
-          ),
-          child: Text(
-            widget.lead.source,
-            style: TextStyle(
-              fontSize: 11,
-              color: sourceColor,
-              fontWeight: FontWeight.w700,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMessageSection() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppTheme.accentPurple.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppTheme.accentPurple.withValues(alpha: 0.2),
-          width: 1,
-        ),
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
-          Icon(Icons.message_outlined, size: 16, color: AppTheme.accentPurple),
+          Icon(icon, size: 16, color: Colors.grey.shade500),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Message',
+                  label,
                   style: TextStyle(
                     fontSize: 10,
-                    color: AppTheme.accentPurple,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _extractLatestFeedback(widget.lead.remarks ?? ''),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.accentPurple.withValues(alpha: 0.9),
+                    color: Colors.grey.shade500,
                     fontWeight: FontWeight.w500,
                   ),
-                  maxLines: 2,
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF1A1A1A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSourceItem(Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _sourceIcon(),
+            size: 16,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Source',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: color.withOpacity(0.8),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  widget.lead.source,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _sourceIcon() {
+    switch (widget.lead.source.toLowerCase()) {
+      case 'facebook':
+        return Icons.facebook;
+      case 'whatsapp':
+        return Icons.chat;
+      case 'instagram':
+        return Icons.camera_alt;
+      case 'twitter':
+        return Icons.tag;
+      default:
+        return Icons.public;
+    }
+  }
+}
+
+class _CallHistoryCard extends StatelessWidget {
+  const _CallHistoryCard({
+    required this.call,
+    required this.dateFormat,
+  });
+
+  final Map<String, dynamic> call;
+  final DateFormat dateFormat;
+
+  Color _sourceColor() {
+    final source = call['source']?.toString().toLowerCase() ?? '';
+    switch (source) {
+      case 'facebook':
+        return const Color(0xFF1877F2);
+      case 'whatsapp':
+        return const Color(0xFF25D366);
+      case 'instagram':
+        return const Color(0xFFE4405F);
+      case 'twitter':
+        return const Color(0xFF1DA1F2);
+      default:
+        return AppTheme.accentPurple;
+    }
+  }
+
+  IconData _sourceIcon() {
+    final source = call['source']?.toString().toLowerCase() ?? '';
+    switch (source) {
+      case 'facebook':
+        return Icons.facebook;
+      case 'whatsapp':
+        return Icons.chat;
+      case 'instagram':
+        return Icons.camera_alt;
+      case 'twitter':
+        return Icons.tag;
+      default:
+        return Icons.public;
+    }
+  }
+
+  Color _feedbackColor() {
+    final feedback = call['feedback']?.toString().toLowerCase() ?? '';
+    if (feedback.contains('interested') || feedback.contains('connected')) {
+      return AppTheme.success;
+    } else if (feedback.contains('not interested') || feedback.contains('rejected')) {
+      return AppTheme.error;
+    } else if (feedback.contains('callback') || feedback.contains('later')) {
+      return AppTheme.warning;
+    }
+    return AppTheme.gray;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = call['driver_name']?.toString() ?? 'Unknown';
+    final mobile = call['user_number']?.toString() ?? '';
+    final notesRaw = call['notes']?.toString() ?? '';
+    final feedback = call['feedback']?.toString() ?? 'No feedback';
+    final remarks = call['remarks']?.toString() ?? '';
+    final tcFor = call['tc_for']?.toString() ?? '';
+    final createdAt = call['created_at']?.toString() ?? '';
+    
+    // Extract source and role from notes field
+    String source = 'Social Media';
+    String role = '';
+    if (notesRaw.isNotEmpty) {
+      final parts = notesRaw.split('|');
+      for (var part in parts) {
+        if (part.contains('Source:')) {
+          source = part.replaceAll('Source:', '').trim();
+        }
+        if (part.contains('Role:')) {
+          role = part.replaceAll('Role:', '').trim();
+        }
+      }
+    }
+
+    DateTime? callDate;
+    try {
+      callDate = DateTime.parse(createdAt);
+    } catch (e) {
+      callDate = null;
+    }
+
+    final sourceColor = _sourceColor();
+    final feedbackColor = _feedbackColor();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: sourceColor.withOpacity(0.12),
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      color: sourceColor,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: AppTheme.headingMedium.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        mobile,
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: AppTheme.gray,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: sourceColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_sourceIcon(), size: 12, color: sourceColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        source,
+                        style: AppTheme.bodySmall.copyWith(
+                          color: sourceColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: feedbackColor.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.feedback_outlined, size: 16, color: feedbackColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      feedback,
+                      style: AppTheme.bodyLarge.copyWith(
+                        color: feedbackColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (remarks.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.lightGray,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.note_outlined, size: 16, color: AppTheme.gray),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        remarks,
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: AppTheme.darkGray,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (call['manual_call_recording_url']?.toString().isNotEmpty == true) ...[
+              AudioPlayerWidget(
+                recordingUrl: call['manual_call_recording_url'].toString(),
+                label: 'Social Media Call Recording',
+              ),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (callDate != null)
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, size: 14, color: AppTheme.gray),
+                      const SizedBox(width: 4),
+                      Text(
+                        dateFormat.format(callDate),
+                        style: AppTheme.bodySmall.copyWith(color: AppTheme.gray),
+                      ),
+                    ],
+                  ),
+                if (role.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: role.toLowerCase() == 'driver'
+                          ? AppTheme.primaryBlue.withOpacity(0.12)
+                          : AppTheme.accentOrange.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      role.toUpperCase(),
+                      style: AppTheme.bodySmall.copyWith(
+                        color: role.toLowerCase() == 'driver'
+                            ? AppTheme.primaryBlue
+                            : AppTheme.accentOrange,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (tcFor.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.person_outline, size: 14, color: AppTheme.gray),
+                  const SizedBox(width: 4),
+                  Text(
+                    'TC For: $tcFor',
+                    style: AppTheme.bodySmall.copyWith(
+                      color: AppTheme.gray,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -966,9 +1213,7 @@ class _LoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: CircularProgressIndicator(color: AppTheme.accentPurple),
-    );
+    return Center(child: CircularProgressIndicator(color: AppTheme.accentPurple));
   }
 }
 
@@ -982,48 +1227,29 @@ class _ErrorView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                color: AppTheme.error.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(45),
-              ),
-              child: Icon(Icons.error_outline, color: AppTheme.error, size: 38),
-            ),
-            const SizedBox(height: 20),
+            Icon(Icons.error_outline, size: 64, color: AppTheme.error),
+            const SizedBox(height: 16),
             Text(
-              'Unable to load leads',
-              style: AppTheme.headingMedium.copyWith(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+              'Failed to load data',
+              style: AppTheme.headingMedium,
             ),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: AppTheme.bodyLarge.copyWith(color: AppTheme.gray),
+              style: AppTheme.bodyMedium.copyWith(color: AppTheme.gray),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.accentPurple,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 14,
-                ),
               ),
             ),
           ],
@@ -1034,42 +1260,35 @@ class _ErrorView extends StatelessWidget {
 }
 
 class _EmptyView extends StatelessWidget {
-  const _EmptyView();
+  const _EmptyView({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                color: AppTheme.accentPurple.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(45),
-              ),
-              child: Icon(
-                Icons.people_outline,
-                color: AppTheme.accentPurple,
-                size: 38,
-              ),
-            ),
-            const SizedBox(height: 20),
+            Icon(icon, size: 64, color: AppTheme.gray),
+            const SizedBox(height: 16),
             Text(
-              'No leads yet',
-              style: AppTheme.headingMedium.copyWith(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+              title,
+              style: AppTheme.headingMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              'Social media leads will appear here when available.',
+              message,
               textAlign: TextAlign.center,
-              style: AppTheme.bodyLarge.copyWith(color: AppTheme.gray),
+              style: AppTheme.bodyMedium.copyWith(color: AppTheme.gray),
             ),
           ],
         ),

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:intl/intl.dart';
-
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/callback_requests_service.dart';
 import '../../../core/services/smart_calling_service.dart';
 import '../../../core/services/phase2_auth_service.dart';
+import '../../../core/services/real_auth_service.dart';
 import '../../../models/database_models.dart';
 import '../../../models/smart_calling_models.dart';
 import '../widgets/call_feedback_modal.dart';
@@ -30,9 +30,12 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
   final DateFormat _timeFormat = DateFormat('d MMM • h:mm a');
 
   List<CallbackRequest> _requests = [];
-  bool _isLoading = true;
+  List<CallbackRequest> _history = [];
+  bool _isLoadingRequests = true;
+  bool _isLoadingHistory = true;
   bool _isRefreshing = false;
-  String? _error;
+  String? _requestsError;
+  String? _historyError;
 
   @override
   bool get wantKeepAlive => true;
@@ -40,14 +43,19 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
   @override
   void initState() {
     super.initState();
+    _loadAll();
+  }
+
+  Future<void> _loadAll() async {
     _loadRequests();
+    _loadHistory();
   }
 
   Future<void> _loadRequests() async {
     if (!mounted) return;
     setState(() {
-      _isLoading = true;
-      _error = null;
+      _isLoadingRequests = true;
+      _requestsError = null;
     });
 
     try {
@@ -55,14 +63,38 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
       if (!mounted) return;
       setState(() {
         _requests = results;
-        _isLoading = false;
+        _isLoadingRequests = false;
       });
     } catch (error) {
       if (!mounted) return;
       debugPrint('Error loading callback requests: $error');
       setState(() {
-        _error = 'Unable to load callback requests';
-        _isLoading = false;
+        _requestsError = 'Unable to load callback requests';
+        _isLoadingRequests = false;
+      });
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingHistory = true;
+      _historyError = null;
+    });
+
+    try {
+      final results = await _service.fetchCallbackHistory();
+      if (!mounted) return;
+      setState(() {
+        _history = results;
+        _isLoadingHistory = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      debugPrint('Error loading callback history: $error');
+      setState(() {
+        _historyError = 'Unable to load history';
+        _isLoadingHistory = false;
       });
     }
   }
@@ -71,29 +103,33 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
     if (_isRefreshing) return;
     setState(() => _isRefreshing = true);
     try {
-      final results = await _service.fetchCallbackRequests();
+      await Future.wait([
+        _service.fetchCallbackRequests().then((r) {
+          if (mounted) setState(() => _requests = r);
+        }),
+        _service.fetchCallbackHistory().then((h) {
+          if (mounted) setState(() => _history = h);
+        }),
+      ]);
       if (!mounted) return;
       setState(() {
-        _requests = results;
         _isRefreshing = false;
-        _error = null;
+        _requestsError = null;
+        _historyError = null;
       });
     } catch (error) {
       if (!mounted) return;
-      debugPrint('Error refreshing callback requests: $error');
+      debugPrint('Error refreshing: $error');
       setState(() {
         _isRefreshing = false;
-        _error = 'Unable to refresh';
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Unable to refresh. Please try again.'),
-            backgroundColor: AppTheme.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Unable to refresh. Please try again.'),
+          backgroundColor: AppTheme.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -118,15 +154,14 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
       // Show call type selection dialog
       final callType = await showDialog<String>(
         context: context,
-        builder: (context) => CallTypeSelectionDialog(
-          driverName: request.userName,
-        ),
+        builder: (context) =>
+            CallTypeSelectionDialog(driverName: request.userName),
       );
 
       if (callType == null) return; // User cancelled
 
       // Get user info
-      final user = await Phase2AuthService.getCurrentUser();
+      final user = RealAuthService.instance.currentUser;
       if (user == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -140,22 +175,26 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
       }
 
       final callerId = user.id;
-      final cleanNumber = request.mobileNumber.replaceAll(RegExp(r'[^\d+]'), '');
+      final cleanNumber = request.mobileNumber.replaceAll(
+        RegExp(r'[^\d+]'),
+        '',
+      );
 
       if (callType == 'manual') {
         // Manual call
         HapticFeedback.mediumImpact();
-        
+
         final result = await SmartCallingService.instance.initiateManualCall(
           driverMobile: cleanNumber,
-          callerId: callerId,
+          callerId: int.tryParse(callerId) ?? 0,
           driverId: request.id.toString(),
+          callSource: 'callback_requests',
         );
 
         if (result['success'] == true) {
           final driverMobileRaw = result['data']?['driver_mobile_raw'];
           await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -269,7 +308,10 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
     }
   }
 
-  void _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback) {
+  Future<void> _handleFeedbackSubmitted(
+    DriverContact contact,
+    CallFeedback feedback,
+  ) async {
     if (!mounted) return;
 
     HapticFeedback.lightImpact();
@@ -281,73 +323,235 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
         duration: const Duration(seconds: 2),
       ),
     );
+
+    // Optimistic update: Move from requests to history immediately
+    setState(() {
+      final index = _requests.indexWhere((r) => r.id.toString() == contact.id);
+      if (index != -1) {
+        final request = _requests[index];
+        _requests.removeAt(index);
+
+        // Create updated request for history
+        final updatedRequest = CallbackRequest(
+          id: request.id,
+          uniqueId: request.uniqueId,
+          assignedTo: request.assignedTo,
+          userName: request.userName,
+          mobileNumber: request.mobileNumber,
+          requestDateTime: request.requestDateTime,
+          contactReason: request.contactReason,
+          appType: request.appType,
+          status: _mapFeedbackToCallbackStatus(feedback),
+          notes: feedback.remarks ?? request.notes,
+          createdAt: request.createdAt,
+          updatedAt: DateTime.now(),
+          profileCompletion: request.profileCompletion,
+          subscribeDate: request.subscribeDate,
+          profileImage: request.profileImage,
+        );
+
+        _history.insert(0, updatedRequest);
+      }
+    });
+
+    // Call API to update status
+    try {
+      final status = _mapFeedbackToCallbackStatus(feedback);
+      await _service.updateCallbackRequest(
+        requestId: int.parse(contact.id),
+        status: status.value,
+        notes: feedback.remarks,
+      );
+    } catch (e) {
+      debugPrint('Error updating callback request: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to sync with server: $e'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+
+    // Refresh lists to ensure data consistency with server
+    _refresh();
+  }
+
+  CallbackStatus _mapFeedbackToCallbackStatus(CallFeedback feedback) {
+    switch (feedback.status) {
+      case CallStatus.connected:
+        if (feedback.connectedFeedback != null) {
+          switch (feedback.connectedFeedback!) {
+            case ConnectedFeedback.agreeForSubscriptionToday:
+            case ConnectedFeedback.agreeForSubscriptionTomorrow:
+            case ConnectedFeedback.alreadySubscribed:
+              return CallbackStatus.interested;
+            case ConnectedFeedback.notATruckDriver:
+            case ConnectedFeedback.noMoney:
+              return CallbackStatus.notInterested;
+            case ConnectedFeedback.willSubscribeLater:
+            case ConnectedFeedback.willSubscribeWhenNeedJob:
+            case ConnectedFeedback.wantsToThink:
+              return CallbackStatus.futureProspects;
+            default:
+              return CallbackStatus.contacted;
+          }
+        }
+        return CallbackStatus.contacted;
+      case CallStatus.callBack:
+      case CallStatus.callBackLater:
+        return CallbackStatus.callback;
+      case CallStatus.notReachable:
+        return CallbackStatus.switchedOff;
+      case CallStatus.notInterested:
+        return CallbackStatus.notInterested;
+      case CallStatus.invalid:
+        return CallbackStatus.disconnected;
+      case CallStatus.pending:
+        return CallbackStatus.pending;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
 
-    final subtitle = _isLoading
+    final subtitle = _isLoadingRequests
         ? 'Fetching latest callback requests...'
-        : _error != null
+        : _requestsError != null
         ? 'Tap refresh to try again.'
         : _requests.isEmpty
         ? 'All caught up with callbacks.'
         : '${_requests.length} pending callback requests';
 
-    return Scaffold(
-      backgroundColor: AppTheme.lightGray,
-      body: Column(
-        children: [
-          TelecallerTabHeader(
-            icon: Icons.call_missed_outgoing,
-            iconColor: AppTheme.primaryBlue,
-            title: 'Callback Requests',
-            subtitle: subtitle,
-            trailing: TelecallerHeaderActionButton(
-              isLoading: _isRefreshing,
-              onPressed: _refresh,
-              icon: Icons.refresh_rounded,
-              color: AppTheme.primaryBlue,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppTheme.lightGray,
+        body: Column(
+          children: [
+            TelecallerTabHeader(
+              icon: Icons.call_missed_outgoing,
+              iconColor: AppTheme.primaryBlue,
+              title: 'Callback Requests',
+              subtitle: subtitle,
+              trailing: TelecallerHeaderActionButton(
+                isLoading: _isRefreshing,
+                onPressed: _refresh,
+                icon: Icons.refresh_rounded,
+                color: AppTheme.primaryBlue,
+              ),
             ),
-          ),
-          Expanded(
-            child: SafeArea(
-              top: false,
-              child: _isLoading
-                  ? const _LoadingView()
-                  : _error != null
-                  ? const CallbacksNotAvailable()
-                  : RefreshIndicator(
-                      onRefresh: _refresh,
-                      color: AppTheme.primaryBlue,
-                      child: _requests.isEmpty
-                          ? const _EmptyView()
-                          : ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(
-                                20,
-                                24,
-                                20,
-                                24,
-                              ),
-                              itemBuilder: (context, index) {
-                                final request = _requests[index];
-                                return _CallbackRequestCard(
-                                  request: request,
-                                  formattedTime: _timeFormat.format(
-                                    request.requestDateTime,
-                                  ),
-                                  onCall: () => _onCallPressed(request),
-                                  onCopyNumber: _copyNumber,
-                                );
-                              },
-                              itemCount: _requests.length,
-                            ),
-                    ),
+            Container(
+              color: Colors.white,
+              child: TabBar(
+                labelColor: AppTheme.primaryBlue,
+                unselectedLabelColor: Colors.grey.shade600,
+                indicatorColor: AppTheme.primaryBlue,
+                indicatorWeight: 3,
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+                tabs: const [
+                  Tab(text: 'Requests'),
+                  Tab(text: 'History'),
+                ],
+              ),
             ),
-          ),
-        ],
+            Expanded(
+              child: SafeArea(
+                top: false,
+                child: TabBarView(
+                  children: [
+                    // Requests Tab
+                    _buildRequestsList(),
+                    // History Tab
+                    _buildHistoryList(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildRequestsList() {
+    if (_isLoadingRequests) return const _LoadingView();
+    if (_requestsError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                _requestsError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: _refresh, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      color: AppTheme.primaryBlue,
+      child: _requests.isEmpty
+          ? const _EmptyView()
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              itemBuilder: (context, index) {
+                final request = _requests[index];
+                return _CallbackRequestCard(
+                  request: request,
+                  formattedTime: _timeFormat.format(request.requestDateTime),
+                  onCall: () => _onCallPressed(request),
+                  onCopyNumber: _copyNumber,
+                );
+              },
+              itemCount: _requests.length,
+            ),
+    );
+  }
+
+  Widget _buildHistoryList() {
+    if (_isLoadingHistory) return const _LoadingView();
+    if (_historyError != null) return Center(child: Text(_historyError!));
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      color: AppTheme.primaryBlue,
+      child: _history.isEmpty
+          ? Center(
+              child: Text(
+                'No history available',
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              itemBuilder: (context, index) {
+                final request = _history[index];
+                return _CallbackRequestCard(
+                  request: request,
+                  formattedTime: _timeFormat.format(request.requestDateTime),
+                  onCall: () => _onCallPressed(request),
+                  onCopyNumber: _copyNumber,
+                );
+              },
+              itemCount: _history.length,
+            ),
     );
   }
 }

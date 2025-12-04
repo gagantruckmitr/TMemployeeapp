@@ -60,10 +60,11 @@ function getProfileCompletionData($conn, $userId) {
         ];
     } elseif ($role === 'transporter') {
         // Exclude system fields: unique_id, id
+        // MUST MATCH transporter_leads_api.php calculateTransporterProfileCompletion()
         $requiredFields = [
-            'name', 'email', 'transport_name', 'year_of_establishment',
-            'fleet_size', 'operational_segment', 'average_km', 'city', 'images', 'address',
-            'pan_number', 'pan_image', 'gst_certificate'
+            'name', 'email', 'mobile', 'transport_name', 'year_of_establishment',
+            'fleet_size', 'operational_segment', 'average_km', 'city', 'states',
+            'images', 'address', 'pan_number', 'pan_image', 'gst_certificate'
         ];
     }
     

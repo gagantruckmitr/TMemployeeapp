@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import '../../core/config/api_config.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -330,6 +331,7 @@ class _CallHistoryCard extends StatelessWidget {
                 _buildDetailRow('Name', record['name']),
                 _buildDetailRow('Job Location', record['jobLocation']),
                 _buildDetailRow('Route', record['route']),
+                _buildDetailRow('Required Drivers', record['requiredDrivers']),
                 const SizedBox(height: 12),
 
                 // Vehicle & License Section
@@ -521,6 +523,7 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
   late TextEditingController _foodAllowanceController;
   late TextEditingController _tripIncentiveController;
   late TextEditingController _mileageController;
+  late TextEditingController _requiredDriversController;
 
   String _esiPf = 'No';
   String _rehneKiSuvidha = 'No';
@@ -568,11 +571,24 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
         text: widget.record['tripIncentive']?.toString() ?? '');
     _mileageController =
         TextEditingController(text: widget.record['mileage'] ?? '');
+    _requiredDriversController =
+        TextEditingController(text: widget.record['requiredDrivers'] ?? '');
 
     _esiPf = widget.record['esiPf'] ?? 'No';
     _rehneKiSuvidha = widget.record['rehneKiSuvidha'] ?? 'No';
-    _callStatusFeedback = widget.record['callStatusFeedback'] ?? 
-        'Connected: Details Received';
+    
+    // Extract base feedback status (remove any notes appended after " - Notes:")
+    String rawFeedback = widget.record['callStatusFeedback'] ?? 'Connected: Details Received';
+    if (rawFeedback.contains(' - Notes:')) {
+      _callStatusFeedback = rawFeedback.split(' - Notes:')[0].trim();
+    } else {
+      _callStatusFeedback = rawFeedback;
+    }
+    
+    // Validate that the feedback exists in options, otherwise use default
+    if (!_callStatusOptions.contains(_callStatusFeedback)) {
+      _callStatusFeedback = 'Connected: Details Received';
+    }
 
     // Handle fastTagRoadKharcha
     final fastTagValue =
@@ -599,6 +615,7 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
     _foodAllowanceController.dispose();
     _tripIncentiveController.dispose();
     _mileageController.dispose();
+    _requiredDriversController.dispose();
     super.dispose();
   }
 
@@ -661,7 +678,7 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
           var request = http.MultipartRequest(
             'POST',
             Uri.parse(
-                'https://truckmitr.com/truckmitr-app/api/phase2_upload_driver_recording_api.php'),
+                '${ApiConfig.baseUrl}/phase2_upload_driver_recording_api.php'),
           );
 
           request.files.add(await http.MultipartFile.fromPath(
@@ -673,66 +690,35 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
           request.fields['caller_id'] = callerId.toString();
           request.fields['transporter_tmid'] = widget.transporterTmid;
 
-          print('Request fields: ${request.fields}');
-
           final streamedResponse = await request.send();
           final response = await http.Response.fromStream(streamedResponse);
 
-          print('Response status: ${response.statusCode}');
-          print('Response body: ${response.body}');
-
           if (response.statusCode == 200) {
             final responseData = json.decode(response.body);
-            print('Response data: $responseData');
-
             if (responseData['success'] == true) {
               if (responseData['data'] != null &&
                   responseData['data']['url'] != null) {
                 recordingUrl = responseData['data']['url'];
-                print('Recording URL: $recordingUrl');
-              } else {
-                print('Warning: Success but no URL in response');
               }
             } else {
               print('Upload failed: ${responseData['message']}');
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                        'Recording upload failed: ${responseData['message']}'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
-              }
-            }
-          } else {
-            print('HTTP error: ${response.statusCode}');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                      'Recording upload failed: HTTP ${response.statusCode}'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
             }
           }
         } catch (e) {
           print('Recording upload exception: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Recording upload error: $e'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
         }
       }
 
-      // Then update job brief
-      await Phase2ApiService.updateJobBrief(
-        id: widget.record['id'],
+      // Determine Job ID: Generate new one if it was a direct call, otherwise keep existing
+      String jobId = widget.record['jobId'] ?? '';
+      if (jobId.startsWith('DIRECT_CALL_') || jobId.isEmpty) {
+        jobId = 'DIRECT_CALL_${widget.transporterTmid}_${DateTime.now().millisecondsSinceEpoch}';
+      }
+
+      // Create NEW job brief entry (Insert instead of Update)
+      await Phase2ApiService.saveJobBrief(
+        uniqueId: widget.transporterTmid,
+        jobId: jobId,
         name: _nameController.text.trim(),
         jobLocation: _jobLocationController.text.trim(),
         route: _routeController.text.trim(),
@@ -757,6 +743,7 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
         fastTagRoadKharcha: _fastTagRoadKharcha,
         callStatusFeedback: _callStatusFeedback,
         callRecording: recordingUrl,
+        requiredDrivers: _requiredDriversController.text.trim(),
       );
 
       if (mounted) {
@@ -764,8 +751,8 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(recordingUrl != null
-                ? 'Job brief and recording updated successfully'
-                : 'Job brief updated successfully'),
+                ? 'New feedback & recording submitted successfully'
+                : 'New feedback submitted successfully'),
             backgroundColor: Colors.green,
           ),
         );
@@ -808,6 +795,7 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
                     _buildTextField('Name', _nameController, required: true),
                     _buildTextField('Job Location', _jobLocationController),
                     _buildTextField('Route', _routeController, maxLines: 2),
+                    _buildTextField('Required Drivers', _requiredDriversController),
                   ]),
                   const SizedBox(height: 20),
                   _buildSection('Vehicle & License', [
@@ -876,7 +864,7 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -898,7 +886,7 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
+                  color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.edit, color: AppColors.primary),
@@ -909,10 +897,10 @@ class _EditJobBriefModalState extends State<_EditJobBriefModal> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Edit Job Brief',
+                      'Add New Feedback',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                         color: AppColors.darkGray,
                       ),
                     ),

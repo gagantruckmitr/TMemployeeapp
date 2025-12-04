@@ -14,7 +14,7 @@ class ActivityTrackerService {
   DateTime _lastActivity = DateTime.now();
   bool _isTracking = false;
   
-  static const Duration _inactivityTimeout = Duration(minutes: 30);
+  static const Duration _inactivityTimeout = Duration(days: 365); // Disabled auto-logout
   static const Duration _heartbeatInterval = Duration(seconds: 30);
 
   void startTracking() {
@@ -36,7 +36,7 @@ class ActivityTrackerService {
       _sendHeartbeat();
     });
     
-    debugPrint('✅ Activity tracking started');
+    debugPrint('✅ Activity tracking started (Auto-logout DISABLED)');
   }
 
   void stopTracking() {
@@ -60,8 +60,8 @@ class ActivityTrackerService {
     final inactiveDuration = DateTime.now().difference(_lastActivity);
     
     if (inactiveDuration >= _inactivityTimeout) {
-      debugPrint('🔴 User inactive for ${inactiveDuration.inMinutes} minutes - auto logout');
-      await _autoLogout();
+      debugPrint('🔴 User inactive for ${inactiveDuration.inMinutes} minutes - auto logout DISABLED');
+      // await _autoLogout(); // Disabled auto-logout
     }
   }
 

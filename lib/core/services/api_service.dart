@@ -504,6 +504,7 @@ class ApiService {
     required int callerId,
     required String driverId,
     String contactType = 'driver', // 'driver' or 'transporter'
+    String? callSource,
   }) async {
     try {
       final uri = Uri.parse(
@@ -515,6 +516,7 @@ class ApiService {
         'caller_id': callerId,
         'driver_id': driverId,
         'contact_type': contactType,
+        if (callSource != null) 'call_source': callSource,
       };
 
       print('🔵 Manual Call API Request:');
@@ -686,16 +688,34 @@ class ApiService {
   }
 
   // Get call history
-  static Future<List<dynamic>> getCallHistory({String? status}) async {
+  static Future<Map<String, dynamic>> getCallHistory({
+    String? status,
+    String? feedback,
+    String? remarks,
+    String? search,
+    int limit = 1000,
+  }) async {
     try {
       final queryParams = <String, String>{
         'action': 'call_history',
         'caller_id': _currentCallerId ?? '1',
-        'limit': '100',
+        'limit': limit.toString(),
       };
 
       if (status != null && status != 'all') {
         queryParams['status'] = status;
+      }
+
+      if (feedback != null && feedback != 'all') {
+        queryParams['feedback'] = feedback;
+      }
+
+      if (remarks != null && remarks != 'all') {
+        queryParams['remarks'] = remarks;
+      }
+
+      if (search != null && search.isNotEmpty) {
+        queryParams['search'] = search;
       }
 
       final uri = Uri.parse(
@@ -709,19 +729,22 @@ class ApiService {
         final data = json.decode(response.body);
         if (data['success'] == true) {
           final List<dynamic> historyJson = data['data'] ?? [];
-          print('✅ Fetched ${historyJson.length} call history entries');
-          return historyJson;
+          final int totalRecords = data['total_records'] ?? historyJson.length;
+          print(
+            '✅ Fetched ${historyJson.length} call history entries (Total: $totalRecords)',
+          );
+          return {'data': historyJson, 'total': totalRecords};
         } else {
           print('⚠️ API returned success=false: ${data['error']}');
-          return [];
+          return {'data': [], 'total': 0};
         }
       } else {
         print('❌ HTTP Error ${response.statusCode}: ${response.body}');
-        return [];
+        return {'data': [], 'total': 0};
       }
     } catch (e) {
       print('❌ Failed to fetch call history: $e');
-      return [];
+      return {'data': [], 'total': 0};
     }
   }
 
@@ -1043,7 +1066,9 @@ class ApiService {
         final data = json.decode(response.body);
         if (data['success'] == true) {
           final List<dynamic> transportersJson = data['data'];
-          print('✅ Fetched ${transportersJson.length} transporters with status: $status');
+          print(
+            '✅ Fetched ${transportersJson.length} transporters with status: $status',
+          );
           return transportersJson
               .map((json) => _mapJsonToTransporterContact(json))
               .toList();
@@ -1098,7 +1123,9 @@ class ApiService {
   }
 
   // Helper method to map JSON to TransporterContact
-  static TransporterContact _mapJsonToTransporterContact(Map<String, dynamic> json) {
+  static TransporterContact _mapJsonToTransporterContact(
+    Map<String, dynamic> json,
+  ) {
     DateTime? regDate;
     if (json['registrationDate'] != null) {
       regDate = DateTime.tryParse(json['registrationDate']);

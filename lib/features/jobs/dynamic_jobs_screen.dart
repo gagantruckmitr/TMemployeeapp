@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
+import '../../core/services/phase2_auth_service.dart';
 import '../../models/job_model.dart';
 import 'widgets/modern_job_card.dart';
 
@@ -9,8 +10,11 @@ class DynamicJobsScreen extends StatefulWidget {
   final String initialFilter;
   final VoidCallback? onBackToDashboard;
 
-  const DynamicJobsScreen(
-      {super.key, this.initialFilter = 'all', this.onBackToDashboard});
+  const DynamicJobsScreen({
+    super.key,
+    this.initialFilter = 'all',
+    this.onBackToDashboard,
+  });
 
   @override
   State<DynamicJobsScreen> createState() => _DynamicJobsScreenState();
@@ -23,6 +27,7 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
   bool _isLoading = true;
   bool _isSearching = false;
   String _error = '';
+  int? _currentUserId;
   String _currentFilter = 'all';
 
   final List<String> _filters = [
@@ -32,7 +37,7 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
     'pending',
     'inactive',
     'expired',
-    'closed'
+    'closed',
   ];
   final List<String> _filterLabels = [
     'All',
@@ -41,7 +46,7 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
     'Pending',
     'Inactive',
     'Expired',
-    'Closed'
+    'Closed',
   ];
 
   @override
@@ -49,7 +54,17 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
     super.initState();
     _currentFilter = widget.initialFilter;
     _searchController.addListener(_onSearchChanged);
+    _loadCurrentUser();
     _loadJobs();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final user = await Phase2AuthService.getCurrentUser();
+    if (mounted && user != null) {
+      setState(() {
+        _currentUserId = user.id;
+      });
+    }
   }
 
   @override
@@ -75,7 +90,9 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
     try {
       // Search ALL jobs (including those assigned to others)
       final results = await Phase2ApiService.searchJobs(
-          query: query, filter: _currentFilter);
+        query: query,
+        filter: _currentFilter,
+      );
       setState(() {
         _jobs = results;
         _isSearching = false;
@@ -125,9 +142,13 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
             elevation: 0,
             backgroundColor: const Color(0xFF007BFF),
             leading: IconButton(
-              onPressed: widget.onBackToDashboard ?? () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back_ios_rounded,
-                  color: Colors.white, size: 20),
+              onPressed:
+                  widget.onBackToDashboard ?? () => Navigator.pop(context),
+              icon: const Icon(
+                Icons.arrow_back_ios_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
             title: const Text(
               'Job Postings',
@@ -141,12 +162,17 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+                      color: Colors.white.withValues(alpha: 0.4),
+                      width: 1.5,
+                    ),
                   ),
                   child: Text(
                     '${_jobs.length} Jobs',
@@ -209,8 +235,6 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
     );
   }
 
-
-
   Widget _buildSearchBar() {
     return Container(
       height: 48,
@@ -231,28 +255,38 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
         decoration: InputDecoration(
           hintText: 'Search Job ID, TMID, Name, Location...',
           hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-          prefixIcon:
-              Icon(Icons.search_rounded, color: AppColors.primary, size: 22),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: AppColors.primary,
+            size: 22,
+          ),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
-                  icon: Icon(Icons.clear_rounded,
-                      color: Colors.grey.shade400, size: 18),
+                  icon: Icon(
+                    Icons.clear_rounded,
+                    color: Colors.grey.shade400,
+                    size: 18,
+                  ),
                   onPressed: () => _searchController.clear(),
                 )
               : _isSearching
-                  ? Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: AppColors.primary),
-                      ),
-                    )
-                  : null,
+              ? Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                )
+              : null,
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -277,32 +311,32 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 gradient: isSelected
-                    ? (filter == 'expired' 
-                        ? const LinearGradient(
-                            colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : const LinearGradient(
-                            colors: [Colors.white, Color(0xFFFFF5F8)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ))
+                    ? (filter == 'expired'
+                          ? const LinearGradient(
+                              colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : const LinearGradient(
+                              colors: [Colors.white, Color(0xFFFFF5F8)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ))
                     : null,
-                color: isSelected 
-                    ? null 
-                    : (filter == 'expired' 
-                        ? const Color(0xFFEF4444).withValues(alpha: 0.3)
-                        : Colors.white.withValues(alpha: 0.2)),
+                color: isSelected
+                    ? null
+                    : (filter == 'expired'
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.3)
+                          : Colors.white.withValues(alpha: 0.2)),
                 borderRadius: BorderRadius.circular(21),
                 border: Border.all(
                   color: isSelected
-                      ? (filter == 'expired' 
-                          ? const Color(0xFFEF4444)
-                          : Colors.white.withValues(alpha: 0.6))
+                      ? (filter == 'expired'
+                            ? const Color(0xFFEF4444)
+                            : Colors.white.withValues(alpha: 0.6))
                       : (filter == 'expired'
-                          ? const Color(0xFFEF4444).withValues(alpha: 0.5)
-                          : Colors.white.withValues(alpha: 0.3)),
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.5)
+                            : Colors.white.withValues(alpha: 0.3)),
                   width: isSelected ? 2 : 1,
                 ),
                 boxShadow: isSelected
@@ -321,9 +355,13 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                    color: isSelected 
-                        ? (filter == 'expired' ? Colors.white : AppColors.primary)
-                        : (filter == 'expired' ? const Color(0xFFEF4444) : Colors.white),
+                    color: isSelected
+                        ? (filter == 'expired'
+                              ? Colors.white
+                              : AppColors.primary)
+                        : (filter == 'expired'
+                              ? const Color(0xFFEF4444)
+                              : Colors.white),
                     letterSpacing: 0.2,
                   ),
                 ),
@@ -338,8 +376,9 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
   Widget _buildJobsList() {
     if (_isLoading) {
       return SliverFillRemaining(
-        child:
-            Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
       );
     }
     if (_error.isNotEmpty) {
@@ -348,14 +387,20 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline_rounded,
-                  size: 60, color: Colors.red.shade300),
+              Icon(
+                Icons.error_outline_rounded,
+                size: 60,
+                color: Colors.red.shade300,
+              ),
               const SizedBox(height: 16),
-              Text('Error loading jobs',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700)),
+              Text(
+                'Error loading jobs',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: _loadJobs,
@@ -364,10 +409,13 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
             ],
@@ -381,14 +429,20 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.work_off_outlined,
-                  size: 70, color: Colors.grey.shade300),
+              Icon(
+                Icons.work_off_outlined,
+                size: 70,
+                color: Colors.grey.shade300,
+              ),
               const SizedBox(height: 16),
-              Text('No jobs found',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600)),
+              Text(
+                'No jobs found',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade600,
+                ),
+              ),
             ],
           ),
         ),
@@ -401,6 +455,7 @@ class _DynamicJobsScreenState extends State<DynamicJobsScreen> {
           child: ModernJobCard(
             job: _jobs[index],
             isSearchResult: _searchController.text.isNotEmpty,
+            currentUserId: _currentUserId,
           ),
         ),
         childCount: _jobs.length,

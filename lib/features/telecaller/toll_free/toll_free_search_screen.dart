@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/services/toll_free_service.dart';
 import '../../../core/services/toll_free_feedback_service.dart';
 import '../../../core/services/real_auth_service.dart';
+import '../../../core/services/easygo_ivr_service.dart';
 import '../../../models/toll_free_lead_model.dart';
 import '../../../models/smart_calling_models.dart';
 import '../../../core/utils/state_code_mapper.dart';
 import '../../../widgets/profile_completion_avatar.dart';
 import '../widgets/call_feedback_modal.dart';
-import '../widgets/call_type_selection_dialog.dart';
 import 'toll_free_history_screen.dart';
 import 'toll_free_profile_details_screen.dart';
 
@@ -29,11 +28,44 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
   TollFreeUser? _searchResult;
   bool _isSearching = false;
   String? _error;
+  
+  // Call history
+  List<Map<String, dynamic>> _callHistory = [];
+  bool _isLoadingHistory = false;
+  bool _showHistory = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCallHistory();
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCallHistory() async {
+    setState(() {
+      _isLoadingHistory = true;
+    });
+
+    try {
+      final history = await TollFreeFeedbackService.instance.fetchCallHistory();
+      if (mounted) {
+        setState(() {
+          _callHistory = history;
+          _isLoadingHistory = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingHistory = false;
+        });
+      }
+    }
   }
 
   Future<void> _performSearch() async {
@@ -79,16 +111,6 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
 
   Future<void> _makeCall(TollFreeUser user) async {
     try {
-      // Show call type selection dialog
-      final callType = await showDialog<String>(
-        context: context,
-        builder: (context) => CallTypeSelectionDialog(
-          driverName: user.name,
-        ),
-      );
-
-      if (callType == null || !mounted) return;
-
       final currentUser = RealAuthService.instance.currentUser;
       if (currentUser == null) {
         if (mounted) {
@@ -102,30 +124,60 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
         return;
       }
 
-      final cleanNumber = user.mobile.replaceAll(RegExp(r'[^\d]'), '');
-
       HapticFeedback.mediumImpact();
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('📱 Calling ${user.name}...'),
-          backgroundColor: AppTheme.success,
+          content: Text('📞 Initiating IVR call to ${user.name}...'),
+          backgroundColor: AppTheme.primaryBlue,
           duration: const Duration(seconds: 2),
         ),
       );
 
-      await FlutterPhoneDirectCaller.callNumber(cleanNumber);
-      
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      if (mounted) {
-        _showFeedbackModal(user);
+      // Use IVR calling instead of direct calling
+      final result = await EasyGoIVRService.initiateCall(
+        exten: currentUser.mobile,
+        number: user.mobile,
+        callerId: currentUser.id,
+        contactId: user.uniqueId,
+        contactType: user.role,
+        driverName: user.name,
+        callSource: 'toll-free',
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        HapticFeedback.lightImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ IVR call initiated to ${user.name}'),
+            backgroundColor: AppTheme.success,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        if (mounted) {
+          _showFeedbackModal(user);
+        }
+      } else {
+        HapticFeedback.heavyImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Call failed: ${result['error'] ?? "Unknown error"}'),
+            backgroundColor: AppTheme.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } catch (error) {
       if (mounted) {
+        HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to make call: $error'),
+            content: Text('❌ Error: $error'),
             backgroundColor: AppTheme.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -194,11 +246,14 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
         ),
       );
 
-      // Clear search after feedback
+      // Clear search and refresh history after feedback
       setState(() {
         _searchResult = null;
         _searchController.clear();
       });
+      
+      // Refresh call history
+      _loadCallHistory();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -220,6 +275,7 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
           children: [
             _buildHeader(),
             _buildSearchBar(),
+            if (_showHistory && _callHistory.isNotEmpty) _buildCallHistorySection(),
             Expanded(child: _buildContent()),
           ],
         ),
@@ -718,6 +774,369 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => TollFreeProfileDetailsScreen(user: user),
+      ),
+    );
+  }
+
+  Widget _buildCallHistorySection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.history,
+                    color: AppTheme.primaryBlue,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Recent Calls',
+                        style: AppTheme.headingMedium.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        '${_callHistory.length} call${_callHistory.length != 1 ? 's' : ''}',
+                        style: AppTheme.bodySmall.copyWith(
+                          color: AppTheme.gray,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _showHistory = !_showHistory;
+                    });
+                  },
+                  icon: Icon(
+                    _showHistory ? Icons.expand_less : Icons.expand_more,
+                    color: AppTheme.gray,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _loadCallHistory,
+                  icon: Icon(
+                    Icons.refresh,
+                    color: AppTheme.primaryBlue,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Call History List
+          if (_isLoadingHistory)
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            SizedBox(
+              height: 200,
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: _callHistory.length > 5 ? 5 : _callHistory.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final call = _callHistory[index];
+                  return _buildCallHistoryItem(call);
+                },
+              ),
+            ),
+
+          // View All Button
+          if (_callHistory.length > 5)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TollFreeHistoryScreen(),
+                    ),
+                  );
+                },
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'View All (${_callHistory.length})',
+                      style: TextStyle(
+                        color: AppTheme.primaryBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: AppTheme.primaryBlue,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCallHistoryItem(Map<String, dynamic> call) {
+    final name = call['user_name'] ?? call['driver_name'] ?? 'Unknown';
+    final mobile = call['user_mobile'] ?? call['user_number'] ?? '';
+    final tmid = call['tmid'] ?? '';
+    final feedback = call['feedback'] ?? 'No feedback';
+    final callTime = call['call_time'] ?? '';
+    final remarks = call['remarks'] ?? '';
+
+    String formattedTime = 'N/A';
+    if (callTime.isNotEmpty) {
+      try {
+        final date = DateTime.parse(callTime);
+        final now = DateTime.now();
+        final difference = now.difference(date);
+
+        if (difference.inDays == 0) {
+          formattedTime = DateFormat('hh:mm a').format(date);
+        } else if (difference.inDays == 1) {
+          formattedTime = 'Yesterday';
+        } else if (difference.inDays < 7) {
+          formattedTime = '${difference.inDays} days ago';
+        } else {
+          formattedTime = DateFormat('dd MMM').format(date);
+        }
+      } catch (e) {
+        formattedTime = callTime;
+      }
+    }
+
+    Color feedbackColor = AppTheme.gray;
+    IconData feedbackIcon = Icons.phone;
+
+    if (feedback.toLowerCase().contains('connected') ||
+        feedback.toLowerCase().contains('interested')) {
+      feedbackColor = AppTheme.success;
+      feedbackIcon = Icons.check_circle;
+    } else if (feedback.toLowerCase().contains('not interested')) {
+      feedbackColor = AppTheme.error;
+      feedbackIcon = Icons.cancel;
+    } else if (feedback.toLowerCase().contains('callback') ||
+        feedback.toLowerCase().contains('call back')) {
+      feedbackColor = AppTheme.warning;
+      feedbackIcon = Icons.schedule;
+    } else if (feedback.toLowerCase().contains('not reachable')) {
+      feedbackColor = AppTheme.gray;
+      feedbackIcon = Icons.phone_missed;
+    }
+
+    return InkWell(
+      onTap: () {
+        // Show call details dialog
+        _showCallDetailsDialog(call);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            // Avatar
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: feedbackColor.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                feedbackIcon,
+                color: feedbackColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1F2937),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      if (tmid.isNotEmpty) ...[
+                        Text(
+                          tmid,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.gray,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          feedback,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: feedbackColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Time
+            Text(
+              formattedTime,
+              style: TextStyle(
+                fontSize: 11,
+                color: AppTheme.gray,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCallDetailsDialog(Map<String, dynamic> call) {
+    final name = call['user_name'] ?? call['driver_name'] ?? 'Unknown';
+    final mobile = call['user_mobile'] ?? call['user_number'] ?? '';
+    final tmid = call['tmid'] ?? '';
+    final feedback = call['feedback'] ?? 'No feedback';
+    final callTime = call['call_time'] ?? '';
+    final remarks = call['remarks'] ?? '';
+    final callStatus = call['call_status'] ?? '';
+
+    String formattedTime = 'N/A';
+    if (callTime.isNotEmpty) {
+      try {
+        final date = DateTime.parse(callTime);
+        formattedTime = DateFormat('dd MMM yyyy, hh:mm a').format(date);
+      } catch (e) {
+        formattedTime = callTime;
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.call, color: AppTheme.primaryBlue),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Call Details',
+                      style: AppTheme.headingMedium.copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _buildDetailRow('Name', name),
+              _buildDetailRow('TMID', tmid),
+              _buildDetailRow('Mobile', mobile),
+              _buildDetailRow('Feedback', feedback),
+              _buildDetailRow('Status', callStatus),
+              _buildDetailRow('Time', formattedTime),
+              if (remarks.isNotEmpty) _buildDetailRow('Remarks', remarks),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.gray,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isNotEmpty ? value : 'N/A',
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF1F2937),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

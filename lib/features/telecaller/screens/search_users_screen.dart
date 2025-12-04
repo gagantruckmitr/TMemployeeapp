@@ -156,6 +156,7 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
               json['profile_completion'].toString(),
             )
           : null,
+      profilePicture: json['profilePicture']?.toString(),
     );
   }
 
@@ -314,14 +315,9 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
                   vertical: 16,
                 ),
               ),
+              textInputAction: TextInputAction.search,
               onChanged: (value) {
                 setState(() {}); // Update UI for clear button
-                // Reduced debounce for faster response
-                Future.delayed(const Duration(milliseconds: 300), () {
-                  if (_searchController.text == value) {
-                    _performSearch(value);
-                  }
-                });
               },
               onSubmitted: _performSearch,
             ),
@@ -493,6 +489,7 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
           contact: contact,
           onCallPressed: () => _handleCall(contact),
           isCallInProgress: false,
+          showPhoneNumber: true,
         );
       },
     );

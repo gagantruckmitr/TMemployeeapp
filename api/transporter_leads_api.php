@@ -53,37 +53,37 @@ function getTransporterLeads($pdo) {
         }
         
         // ROUND ROBIN ASSIGNMENT LOGIC
-        // Get all telecallers from admins table where tc_for = 'welcome-call' ONLY
+        // Get all telecallers from admins table where tc_for = 'match-making' ONLY
         $telecallersStmt = $pdo->query("
             SELECT id FROM admins 
             WHERE role = 'telecaller'
-            AND tc_for = 'welcome-call'
+            AND tc_for = 'match-making'
             ORDER BY id ASC
         ");
         $telecallers = $telecallersStmt->fetchAll(PDO::FETCH_COLUMN);
         
-        // If no telecallers found with tc_for = 'welcome-call', return empty
+        // If no telecallers found with tc_for = 'match-making', return empty
         if (empty($telecallers)) {
-            error_log("⚠️ No telecallers found with tc_for = 'welcome-call'");
+            error_log("⚠️ No telecallers found with tc_for = 'match-making'");
             echo json_encode([
                 'success' => true,
                 'data' => [],
                 'count' => 0,
                 'caller_id' => $callerId,
                 'distribution' => 'round_robin',
-                'note' => 'No telecallers with tc_for = welcome-call found',
+                'note' => 'No telecallers with tc_for = match-making found',
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
             return;
         }
         
-        // Check if current caller is in the welcome-call telecallers list
+        // Check if current caller is in the match-making telecallers list
         $currentIndex = array_search($callerId, $telecallers);
         if ($currentIndex === false) {
-            error_log("❌ Caller ID $callerId not authorized for welcome-call (tc_for != 'welcome-call')");
+            error_log("❌ Caller ID $callerId not authorized for match-making (tc_for != 'match-making')");
             echo json_encode([
                 'success' => false,
-                'error' => 'Access denied: Only telecallers with tc_for = welcome-call can access these leads',
+                'error' => 'Access denied: Only telecallers with tc_for = match-making can access these leads',
                 'caller_id' => $callerId,
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
@@ -549,6 +549,8 @@ function calculateTransporterProfileCompletion($pdo, $userId) {
         }
         
         // Define required fields for transporter
+        // CRITICAL: MUST MATCH profile_completion_helper.php for consistency
+        // Avatar shows this %, profile details page shows helper.php %
         $requiredFields = [
             'name', 'email', 'mobile', 'transport_name', 'year_of_establishment',
             'fleet_size', 'operational_segment', 'average_km', 'city', 'states',
@@ -569,8 +571,13 @@ function calculateTransporterProfileCompletion($pdo, $userId) {
                 // Check if it's a JSON array with content
                 $decoded = json_decode($value, true);
                 if (is_array($decoded) && count($decoded) > 0) {
+                    // Non-empty array - field is present
                     $filledFields++;
-                } elseif (!is_array($decoded)) {
+                } elseif (is_array($decoded) && count($decoded) === 0) {
+                    // Empty array - field is NOT present
+                    // Do not increment $filledFields
+                } else {
+                    // Not an array and not empty - field is present
                     $filledFields++;
                 }
             }

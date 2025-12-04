@@ -40,6 +40,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
   bool _showFilters = true;
   double _lastScrollOffset = 0;
 
+  // Pagination
+  int _currentOffset = 0;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  static const int _pageSize = 20;
+
   final List<String> _periods = ['all', 'today', 'week', 'month'];
   final List<String> _feedbackTypes = [
     'All',
@@ -63,7 +69,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         setState(() {
           _selectedPeriod = _periods[_tabController.index];
         });
-        _loadData();
+        _resetAndLoadData();
       }
     });
 
@@ -86,6 +92,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     }
 
     _lastScrollOffset = currentOffset;
+
+    // Infinite scroll
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoadingMore &&
+        _hasMore) {
+      _loadMoreData();
+    }
   }
 
   Future<void> _loadCurrentUser() async {
@@ -112,20 +126,45 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
       }
       _groupedCallLogs[key]!.add(log);
     }
-    
+
     // Sort each group by date (most recent first)
     _groupedCallLogs.forEach((key, logs) {
       logs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     });
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  Future<void> _resetAndLoadData() async {
+    setState(() {
+      _callLogs = [];
+      _groupedCallLogs = {};
+      _currentOffset = 0;
+      _hasMore = true;
+      _isLoading = true;
+    });
+    await _loadData();
+  }
+
+  Future<void> _loadMoreData() async {
+    if (!_hasMore || _isLoadingMore) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+    await _loadData(isLoadMore: true);
+  }
+
+  Future<void> _loadData({bool isLoadMore = false}) async {
+    if (!isLoadMore) {
+      setState(() => _isLoading = true);
+    }
+
     try {
       final result = await Phase2ApiService.fetchCallHistory(
         period: _selectedPeriod,
         feedbackFilter: _selectedFeedback == 'All' ? null : _selectedFeedback,
         search: _searchController.text.isEmpty ? null : _searchController.text,
+        limit: _pageSize,
+        offset: _currentOffset,
       );
 
       final logs = (result['logs'] as List)
@@ -133,16 +172,32 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           .toList();
 
       setState(() {
-        _callLogs = logs;
+        if (isLoadMore) {
+          _callLogs.addAll(logs);
+        } else {
+          _callLogs = logs;
+        }
+
         _groupCallLogsByDriver();
+
+        if (logs.length < _pageSize) {
+          _hasMore = false;
+        } else {
+          _currentOffset += _pageSize;
+        }
+
         _isLoading = false;
+        _isLoadingMore = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _isLoadingMore = false;
+      });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -168,10 +223,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           Expanded(
             child: _isLoading
                 ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary))
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  )
                 : _groupedCallLogs.isEmpty
-                    ? _buildEmptyState()
-                    : _buildGroupedCallList(),
+                ? _buildEmptyState()
+                : _buildGroupedCallList(),
           ),
         ],
       ),
@@ -197,7 +253,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.darkGray, size: 18),
+                icon: const Icon(
+                  Icons.arrow_back_ios_rounded,
+                  color: AppColors.darkGray,
+                  size: 18,
+                ),
                 onPressed: () {
                   if (Navigator.of(context).canPop()) {
                     Navigator.of(context).pop();
@@ -220,7 +280,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.people_rounded, color: AppColors.primary, size: 18),
+                child: const Icon(
+                  Icons.people_rounded,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 10),
               const Text(
@@ -234,7 +298,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(8),
@@ -250,8 +317,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
               ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.refresh_rounded, color: AppColors.primary, size: 20),
-                onPressed: _loadData,
+                icon: const Icon(
+                  Icons.refresh_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+                onPressed: _resetAndLoadData,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 visualDensity: VisualDensity.compact,
@@ -284,9 +355,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           indicatorColor: AppColors.primary,
           indicatorWeight: 3,
           indicatorSize: TabBarIndicatorSize.tab,
-          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-          unselectedLabelStyle:
-              const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          labelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
           tabs: const [
             Tab(text: 'All'),
             Tab(text: 'Today'),
@@ -315,25 +391,28 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                       icon: const Icon(Icons.clear, size: 20),
                       onPressed: () {
                         _searchController.clear();
-                        _loadData();
+                        _resetAndLoadData();
                       },
                     )
                   : null,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
             ),
             style: const TextStyle(fontSize: 13),
-            onSubmitted: (_) => _loadData(),
+            onSubmitted: (_) => _resetAndLoadData(),
           ),
           const SizedBox(height: 10),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: _feedbackTypes.map((type) {
-                final isSelected = _selectedFeedback == type ||
+                final isSelected =
+                    _selectedFeedback == type ||
                     (type == 'All' && _selectedFeedback == null);
                 return Padding(
                   padding: const EdgeInsets.only(right: 6),
@@ -344,12 +423,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                       setState(() {
                         _selectedFeedback = type == 'All' ? null : type;
                       });
-                      _loadData();
+                      _resetAndLoadData();
                     },
                     selectedColor: AppColors.primary.withValues(alpha: 0.2),
                     checkmarkColor: AppColors.primary,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                   ),
                 );
               }).toList(),
@@ -362,9 +443,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
   Widget _buildGroupedCallList() {
     final driverKeys = _groupedCallLogs.keys.toList();
-    
+
     return RefreshIndicator(
-      onRefresh: _loadData,
+      onRefresh: _resetAndLoadData,
       color: AppColors.primary,
       child: ListView.builder(
         controller: _scrollController,
@@ -374,17 +455,37 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           final driverKey = driverKeys[index];
           final driverLogs = _groupedCallLogs[driverKey]!;
           final isExpanded = _expandedDrivers[driverKey] ?? false;
-          
-          return _buildDriverCard(driverKey, driverLogs, isExpanded);
+
+          return Column(
+            children: [
+              _buildDriverCard(driverKey, driverLogs, isExpanded),
+              if (index == driverKeys.length - 1 && _isLoadingMore)
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
         },
       ),
     );
   }
 
-  Widget _buildDriverCard(String driverKey, List<CallHistoryLog> logs, bool isExpanded) {
+  Widget _buildDriverCard(
+    String driverKey,
+    List<CallHistoryLog> logs,
+    bool isExpanded,
+  ) {
     final latestLog = logs.first;
     final callCount = logs.length;
-    
+
     // Calculate detailed statistics
     final feedbackCounts = <String, int>{};
     final jobs = <String>{};
@@ -392,21 +493,27 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     int connectedCalls = 0;
     int notConnectedCalls = 0;
     int callbackCalls = 0;
-    
+
     for (var log in logs) {
       if (log.feedback.isNotEmpty) {
         feedbackCounts[log.feedback] = (feedbackCounts[log.feedback] ?? 0) + 1;
-        
+
         // Categorize feedback
         final feedback = log.feedback.toLowerCase();
-        if (feedback.contains('interview') || feedback.contains('selected') || 
-            feedback.contains('interested') || feedback.contains('match making')) {
+        if (feedback.contains('interview') ||
+            feedback.contains('selected') ||
+            feedback.contains('interested') ||
+            feedback.contains('match making')) {
           connectedCalls++;
-        } else if (feedback.contains('ringing') || feedback.contains('busy') || 
-                   feedback.contains('switched off') || feedback.contains('not reachable')) {
+        } else if (feedback.contains('ringing') ||
+            feedback.contains('busy') ||
+            feedback.contains('switched off') ||
+            feedback.contains('not reachable')) {
           notConnectedCalls++;
-        } else if (feedback.contains('call') || feedback.contains('later') || 
-                   feedback.contains('tomorrow') || feedback.contains('evening')) {
+        } else if (feedback.contains('call') ||
+            feedback.contains('later') ||
+            feedback.contains('tomorrow') ||
+            feedback.contains('evening')) {
           callbackCalls++;
         }
       }
@@ -414,12 +521,15 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         jobs.add(log.jobId);
       }
       if (log.matchStatus.isNotEmpty) {
-        matchStatuses[log.matchStatus] = (matchStatuses[log.matchStatus] ?? 0) + 1;
+        matchStatuses[log.matchStatus] =
+            (matchStatuses[log.matchStatus] ?? 0) + 1;
       }
     }
-    
-    final successRate = callCount > 0 ? (connectedCalls / callCount * 100).round() : 0;
-    
+
+    final successRate = callCount > 0
+        ? (connectedCalls / callCount * 100).round()
+        : 0;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       elevation: 0,
@@ -453,7 +563,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                             height: 50,
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [AppColors.primary.withOpacity(0.15), AppColors.primary.withOpacity(0.05)],
+                                colors: [
+                                  AppColors.primary.withOpacity(0.15),
+                                  AppColors.primary.withOpacity(0.05),
+                                ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
@@ -472,10 +585,16 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
-                                  colors: [Colors.red.shade400, Colors.red.shade600],
+                                  colors: [
+                                    Colors.red.shade400,
+                                    Colors.red.shade600,
+                                  ],
                                 ),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.white, width: 2),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.red.withOpacity(0.3),
@@ -498,14 +617,16 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                         ],
                       ),
                       const SizedBox(width: 12),
-                      
+
                       // Driver info
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              latestLog.contactName.isEmpty ? 'Unknown Driver' : latestLog.contactName,
+                              latestLog.contactName.isEmpty
+                                  ? 'Unknown Driver'
+                                  : latestLog.contactName,
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
@@ -517,7 +638,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                             Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 3,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.blue.shade50,
                                     borderRadius: BorderRadius.circular(5),
@@ -525,7 +649,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.badge_outlined, size: 10, color: Colors.blue.shade700),
+                                      Icon(
+                                        Icons.badge_outlined,
+                                        size: 10,
+                                        color: Colors.blue.shade700,
+                                      ),
                                       const SizedBox(width: 3),
                                       Text(
                                         latestLog.contactId,
@@ -539,7 +667,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                Icon(Icons.access_time_rounded, size: 11, color: Colors.grey.shade500),
+                                Icon(
+                                  Icons.access_time_rounded,
+                                  size: 11,
+                                  color: Colors.grey.shade500,
+                                ),
                                 const SizedBox(width: 3),
                                 Flexible(
                                   child: Text(
@@ -564,13 +696,16 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                                 _buildStatChip(
                                   icon: Icons.trending_up,
                                   label: '$successRate% success',
-                                  color: successRate >= 50 ? Colors.green : Colors.orange,
+                                  color: successRate >= 50
+                                      ? Colors.green
+                                      : Colors.orange,
                                 ),
                                 // Jobs count
                                 if (jobs.isNotEmpty)
                                   _buildStatChip(
                                     icon: Icons.work_outline,
-                                    label: '${jobs.length} job${jobs.length > 1 ? 's' : ''}',
+                                    label:
+                                        '${jobs.length} job${jobs.length > 1 ? 's' : ''}',
                                     color: Colors.blue,
                                   ),
                                 // Connected calls
@@ -599,7 +734,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                           ],
                         ),
                       ),
-                      
+
                       // Action buttons
                       Column(
                         children: [
@@ -609,7 +744,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: IconButton(
-                              icon: Icon(Icons.phone, color: Colors.green.shade700, size: 20),
+                              icon: Icon(
+                                Icons.phone,
+                                color: Colors.green.shade700,
+                                size: 20,
+                              ),
                               onPressed: () => _makeCall(latestLog),
                               tooltip: 'Call',
                               padding: const EdgeInsets.all(8),
@@ -619,7 +758,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                           ),
                           const SizedBox(height: 4),
                           Icon(
-                            isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                            isExpanded
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
                             color: Colors.grey.shade400,
                             size: 20,
                           ),
@@ -627,22 +768,29 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                       ),
                     ],
                   ),
-                  
+
                   // Latest feedback and match status with more details
-                  if (latestLog.feedback.isNotEmpty || latestLog.matchStatus.isNotEmpty) ...[
+                  if (latestLog.feedback.isNotEmpty ||
+                      latestLog.matchStatus.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            _getFeedbackColor(latestLog.feedback).withOpacity(0.05),
-                            _getFeedbackColor(latestLog.feedback).withOpacity(0.02),
+                            _getFeedbackColor(
+                              latestLog.feedback,
+                            ).withOpacity(0.05),
+                            _getFeedbackColor(
+                              latestLog.feedback,
+                            ).withOpacity(0.02),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: _getFeedbackColor(latestLog.feedback).withOpacity(0.2),
+                          color: _getFeedbackColor(
+                            latestLog.feedback,
+                          ).withOpacity(0.2),
                           width: 1,
                         ),
                       ),
@@ -654,7 +802,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                               Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                  color: _getFeedbackColor(latestLog.feedback).withOpacity(0.15),
+                                  color: _getFeedbackColor(
+                                    latestLog.feedback,
+                                  ).withOpacity(0.15),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Icon(
@@ -682,7 +832,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
-                                        color: _getFeedbackColor(latestLog.feedback),
+                                        color: _getFeedbackColor(
+                                          latestLog.feedback,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -690,13 +842,20 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                               ),
                               if (latestLog.matchStatus.isNotEmpty) ...[
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: _getMatchStatusColor(latestLog.matchStatus),
+                                    color: _getMatchStatusColor(
+                                      latestLog.matchStatus,
+                                    ),
                                     borderRadius: BorderRadius.circular(6),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: _getMatchStatusColor(latestLog.matchStatus).withOpacity(0.3),
+                                        color: _getMatchStatusColor(
+                                          latestLog.matchStatus,
+                                        ).withOpacity(0.3),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       ),
@@ -718,7 +877,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                Icon(Icons.work_outline, size: 10, color: Colors.grey.shade500),
+                                Icon(
+                                  Icons.work_outline,
+                                  size: 10,
+                                  color: Colors.grey.shade500,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   latestLog.jobId,
@@ -743,7 +906,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                       ),
                     ),
                   ],
-                  
+
                   // Feedback breakdown (if multiple feedbacks)
                   if (feedbackCounts.length > 1 && !isExpanded) ...[
                     const SizedBox(height: 8),
@@ -752,12 +915,19 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                       runSpacing: 4,
                       children: feedbackCounts.entries.take(3).map((entry) {
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
-                            color: _getFeedbackColor(entry.key).withOpacity(0.1),
+                            color: _getFeedbackColor(
+                              entry.key,
+                            ).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
-                              color: _getFeedbackColor(entry.key).withOpacity(0.3),
+                              color: _getFeedbackColor(
+                                entry.key,
+                              ).withOpacity(0.3),
                               width: 0.5,
                             ),
                           ),
@@ -777,7 +947,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
               ),
             ),
           ),
-          
+
           // Expanded call history
           if (isExpanded) ...[
             const Divider(height: 1),
@@ -788,7 +958,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.history, size: 16, color: Colors.grey.shade600),
+                      Icon(
+                        Icons.history,
+                        size: 16,
+                        color: Colors.grey.shade600,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'Call History ($callCount calls)',
@@ -811,16 +985,17 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     );
   }
 
-  Widget _buildStatChip({required IconData icon, required String label, required Color color}) {
+  Widget _buildStatChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 0.5,
-        ),
+        border: Border.all(color: color.withOpacity(0.3), width: 0.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -869,7 +1044,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: log.feedback.isEmpty ? Colors.grey.shade500 : AppColors.darkGray,
+                          color: log.feedback.isEmpty
+                              ? Colors.grey.shade500
+                              : AppColors.darkGray,
                         ),
                       ),
                     ),
@@ -878,10 +1055,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
               ),
               Text(
                 _formatDateTime(log.createdAt),
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade500,
-                ),
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
               ),
             ],
           ),
@@ -891,9 +1065,14 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
               children: [
                 if (log.matchStatus.isNotEmpty) ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: _getMatchStatusColor(log.matchStatus).withOpacity(0.15),
+                      color: _getMatchStatusColor(
+                        log.matchStatus,
+                      ).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -910,10 +1089,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                 if (log.jobId.isNotEmpty)
                   Text(
                     log.jobId,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
                   ),
               ],
             ),
@@ -945,7 +1121,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                 label: const Text('Edit', style: TextStyle(fontSize: 12)),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                 ),
               ),
               TextButton.icon(
@@ -954,7 +1133,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                 label: const Text('Delete', style: TextStyle(fontSize: 12)),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.red.shade700,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                 ),
               ),
             ],
@@ -965,327 +1147,6 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
   }
 
   // Old _buildCallCard method removed - now using _buildDriverCard with grouped calls
-  
-  Widget _buildCallCard_UNUSED(CallHistoryLog log) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 3,
-      shadowColor: Colors.black.withOpacity(0.1),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: InkWell(
-        onTap: () => _showCallDetail(log),
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              colors: [Colors.white, Colors.grey.shade50],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header Row
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:
-                            _getFeedbackColor(log.feedback).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        _getFeedbackIcon(log.feedback),
-                        color: _getFeedbackColor(log.feedback),
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            log.contactName.isEmpty
-                                ? 'Unknown Contact'
-                                : log.contactName,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.darkGray,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: log.contactType == 'Driver'
-                                      ? Colors.blue.shade50
-                                      : Colors.purple.shade50,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  log.contactType,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: log.contactType == 'Driver'
-                                        ? Colors.blue.shade700
-                                        : Colors.purple.shade700,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                log.contactId,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Call Icon Button
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: Icon(Icons.phone,
-                            color: Colors.green.shade700, size: 22),
-                        onPressed: () => _makeCall(log),
-                        tooltip: 'Call ${log.contactName}',
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 14),
-                const Divider(height: 1),
-                const SizedBox(height: 14),
-
-                // Feedback Status
-                Row(
-                  children: [
-                    Icon(Icons.feedback_outlined,
-                        size: 16, color: Colors.grey.shade600),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Feedback:',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color:
-                              _getFeedbackColor(log.feedback).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: _getFeedbackColor(log.feedback)
-                                .withOpacity(0.3),
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          log.feedback,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _getFeedbackColor(log.feedback),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Match Status (if available)
-                if (log.matchStatus.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Icon(Icons.check_circle_outline,
-                          size: 16, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Match Status:',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _getMatchStatusColor(log.matchStatus)
-                              .withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          log.matchStatus,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _getMatchStatusColor(log.matchStatus),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-
-                // Job ID (if available)
-                if (log.jobId.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Icon(Icons.work_outline,
-                          size: 16, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Job ID:',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        log.jobId,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-
-                // Remark (if available)
-                if (log.remark.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.amber.shade200),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.note_alt_outlined,
-                                size: 14, color: Colors.amber.shade800),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Remark:',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.amber.shade800,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          log.remark,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade800,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                // Call Recording (if available)
-                if (log.callRecording.isNotEmpty)
-                  AudioPlayerWidget(recordingUrl: log.callRecording),
-
-                const SizedBox(height: 14),
-
-                // Footer Row
-                Row(
-                  children: [
-                    Icon(Icons.access_time,
-                        size: 14, color: Colors.grey.shade500),
-                    const SizedBox(width: 4),
-                    Text(
-                      _formatDateTime(log.createdAt),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                    // Action Buttons
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 20),
-                        onPressed: () => _showEditFeedbackModal(log),
-                        color: AppColors.primary,
-                        tooltip: 'Update Feedback',
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 20),
-                        onPressed: () => _confirmDelete(log),
-                        color: Colors.red.shade700,
-                        tooltip: 'Delete',
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -1305,10 +1166,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           const SizedBox(height: 8),
           Text(
             'Your call logs will appear here',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
           ),
         ],
       ),
@@ -1357,8 +1215,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color:
-                            _getFeedbackColor(log.feedback).withOpacity(0.15),
+                        color: _getFeedbackColor(
+                          log.feedback,
+                        ).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Icon(
@@ -1439,9 +1298,13 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
                     _buildDetailSection('Timestamps', [
                       _buildDetailRow(
-                          'Called At', _formatDateTime(log.createdAt)),
+                        'Called At',
+                        _formatDateTime(log.createdAt),
+                      ),
                       _buildDetailRow(
-                          'Updated At', _formatDateTime(log.updatedAt)),
+                        'Updated At',
+                        _formatDateTime(log.updatedAt),
+                      ),
                     ]),
 
                     // Call Recording
@@ -1571,7 +1434,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: Row(
               children: [
                 Icon(Icons.info_outline, color: AppTheme.primaryBlue),
@@ -1590,7 +1455,10 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
               children: [
                 Text(
                   'To call ${log.contactName}, please find them in:',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _buildInfoStep('1', 'Smart Calling section'),
@@ -1606,7 +1474,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.security, size: 16, color: Colors.blue.shade700),
+                      Icon(
+                        Icons.security,
+                        size: 16,
+                        color: Colors.blue.shade700,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1644,7 +1516,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         );
         return;
       }
-      
+
       // Use EasyGo IVR for all calls
       await EasyGoIVRCallHelper.initiateCall(
         context: context,
@@ -1658,7 +1530,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         },
       );
       return;
-      
+
       // OLD CODE - Keeping for reference but not used
       // Show call type selection dialog
       // final callType = await showDialog<String>(
@@ -1672,7 +1544,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
       // // Get phone number from the call history log
       // final phoneNumber = log.contactMobile;
-      
+
       // if (phoneNumber.isEmpty) {
       //   // Show informational dialog
       //   showDialog(
@@ -1765,7 +1637,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
       if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context);
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1799,12 +1671,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(fontSize: 13),
-          ),
-        ),
+        Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
       ],
     );
   }
@@ -1835,7 +1702,12 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
     );
   }
 
-  Future<void> _handleManualCall(CallHistoryLog log, String phoneNumber, int callerId, String contactId) async {
+  Future<void> _handleManualCall(
+    CallHistoryLog log,
+    String phoneNumber,
+    int callerId,
+    String contactId,
+  ) async {
     try {
       final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
 
@@ -1877,15 +1749,17 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     }
   }
 
-  Future<void> _handleIVRCall(CallHistoryLog log, String phoneNumber, int callerId, String contactId) async {
+  Future<void> _handleIVRCall(
+    CallHistoryLog log,
+    String phoneNumber,
+    int callerId,
+    String contactId,
+  ) async {
     try {
       final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
 
@@ -1945,10 +1819,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     }
   }
@@ -1962,8 +1833,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
         userType: log.contactType.toLowerCase(),
         userName: log.contactName,
         userTmid: log.contactId,
-        transporterTmid:
-            log.uniqueIdTransporter.isNotEmpty ? log.uniqueIdTransporter : null,
+        transporterTmid: log.uniqueIdTransporter.isNotEmpty
+            ? log.uniqueIdTransporter
+            : null,
         jobId: log.jobId.isNotEmpty ? log.jobId : null,
         onSubmit: (feedback, matchStatus, notes) async {
           try {
@@ -1972,8 +1844,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
               transporterTmid: log.uniqueIdTransporter.isNotEmpty
                   ? log.uniqueIdTransporter
                   : null,
-              driverTmid:
-                  log.uniqueIdDriver.isNotEmpty ? log.uniqueIdDriver : null,
+              driverTmid: log.uniqueIdDriver.isNotEmpty
+                  ? log.uniqueIdDriver
+                  : null,
               driverName: log.driverName,
               transporterName: log.transporterName,
               feedback: feedback,
@@ -2027,9 +1900,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
                 }
               }
             },
@@ -2116,10 +1989,7 @@ class _EditCallFeedbackModal extends StatefulWidget {
   final CallHistoryLog log;
   final VoidCallback onUpdate;
 
-  const _EditCallFeedbackModal({
-    required this.log,
-    required this.onUpdate,
-  });
+  const _EditCallFeedbackModal({required this.log, required this.onUpdate});
 
   @override
   State<_EditCallFeedbackModal> createState() => _EditCallFeedbackModalState();
@@ -2136,8 +2006,12 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
   @override
   void initState() {
     super.initState();
-    _selectedFeedback = widget.log.feedback.isNotEmpty ? widget.log.feedback : null;
-    _selectedMatchStatus = widget.log.matchStatus.isNotEmpty ? widget.log.matchStatus : null;
+    _selectedFeedback = widget.log.feedback.isNotEmpty
+        ? widget.log.feedback
+        : null;
+    _selectedMatchStatus = widget.log.matchStatus.isNotEmpty
+        ? widget.log.matchStatus
+        : null;
     _notesController = TextEditingController(text: widget.log.remark);
   }
 
@@ -2151,7 +2025,18 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'wma', 'amr', 'opus', '3gp'],
+        allowedExtensions: [
+          'mp3',
+          'wav',
+          'm4a',
+          'aac',
+          'ogg',
+          'flac',
+          'wma',
+          'amr',
+          'opus',
+          '3gp',
+        ],
         allowMultiple: false,
       );
 
@@ -2179,22 +2064,57 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
     setState(() => _isSubmitting = true);
 
     try {
-      await Phase2ApiService.updateCallLog(
-        id: widget.log.id,
-        feedback: _selectedFeedback,
+      // 1. Upload recording if selected
+      String? recordingUrl;
+      if (_selectedRecordingFile != null) {
+        try {
+          final uploadResult = await Phase2ApiService.uploadCallRecording(
+            filePath: _selectedRecordingFile!.path,
+            jobId: widget.log.jobId,
+            callerId: widget.log.callerId,
+            driverTmid: widget.log.contactType == 'Driver'
+                ? widget.log.contactId
+                : null,
+            transporterTmid: widget.log.contactType == 'Transporter'
+                ? widget.log.contactId
+                : null,
+          );
+          if (uploadResult['success'] == true) {
+            recordingUrl = uploadResult['recording_url'];
+          }
+        } catch (e) {
+          print('Error uploading recording: $e');
+          // Continue without recording if upload fails
+        }
+      }
+
+      // 2. Create NEW feedback entry (Insert instead of Update)
+      await Phase2ApiService.saveCallFeedback(
+        callerId: widget.log.callerId,
+        driverTmid: widget.log.contactType == 'Driver'
+            ? widget.log.contactId
+            : null,
+        transporterTmid: widget.log.contactType == 'Transporter'
+            ? widget.log.contactId
+            : null,
+        driverName: widget.log.contactType == 'Driver'
+            ? widget.log.contactName
+            : null,
+        transporterName: widget.log.contactType == 'Transporter'
+            ? widget.log.contactName
+            : null,
+        feedback: _selectedFeedback!,
         matchStatus: _selectedMatchStatus,
-        remark: _notesController.text,
-        recordingFilePath: _selectedRecordingFile?.path,
-        jobId: widget.log.jobId.isNotEmpty ? widget.log.jobId : null,
-        userTmid: widget.log.contactId,
-        userType: widget.log.contactType.toLowerCase(),
+        notes: _notesController.text,
+        jobId: widget.log.jobId,
+        callRecording: recordingUrl,
       );
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Feedback updated successfully'),
+            content: Text('New feedback submitted successfully'),
             backgroundColor: Colors.green,
           ),
         );
@@ -2204,7 +2124,7 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating feedback: $e'),
+            content: Text('Error submitting feedback: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -2247,7 +2167,7 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Edit Call Feedback',
+                        'Add New Feedback',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -2351,7 +2271,10 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
                     maxLines: 4,
                     decoration: InputDecoration(
                       hintText: 'Enter any remarks or follow-up details...',
-                      hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                      hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: Colors.grey.shade300),
@@ -2362,7 +2285,10 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                        borderSide: const BorderSide(
+                          color: AppColors.primary,
+                          width: 2,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.all(16),
                     ),
@@ -2390,7 +2316,11 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
                           if (_selectedRecordingName != null) ...[
                             Row(
                               children: [
-                                const Icon(Icons.audiotrack, color: AppColors.primary, size: 20),
+                                const Icon(
+                                  Icons.audiotrack,
+                                  color: AppColors.primary,
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -2414,7 +2344,10 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
                             const SizedBox(height: 8),
                             Text(
                               'Recording will be uploaded when you update feedback',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade600,
+                              ),
                               textAlign: TextAlign.center,
                             ),
                           ] else ...[
@@ -2424,8 +2357,12 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
                               label: const Text('Select Recording File'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.primary,
-                                side: const BorderSide(color: AppColors.primary),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                side: const BorderSide(
+                                  color: AppColors.primary,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
@@ -2436,7 +2373,10 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
                               widget.log.callRecording.isNotEmpty
                                   ? 'Replace existing recording or leave empty to keep current'
                                   : 'Select audio file from your device storage',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade600,
+                              ),
                               textAlign: TextAlign.center,
                             ),
                           ],
@@ -2448,7 +2388,9 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _selectedFeedback != null && !_isSubmitting ? _submitUpdate : null,
+                      onPressed: _selectedFeedback != null && !_isSubmitting
+                          ? _submitUpdate
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -2469,8 +2411,8 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
                             )
                           : Text(
                               _selectedRecordingFile != null
-                                  ? 'Update Feedback & Upload Recording'
-                                  : 'Update Feedback',
+                                  ? 'Submit Feedback & Upload Recording'
+                                  : 'Submit New Feedback',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -2487,7 +2429,12 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
     );
   }
 
-  Widget _buildSection(String title, IconData icon, Color color, List<String> options) {
+  Widget _buildSection(
+    String title,
+    IconData icon,
+    Color color,
+    List<String> options,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2509,7 +2456,9 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: options.map((option) => _buildFeedbackChip(option, color)).toList(),
+          children: options
+              .map((option) => _buildFeedbackChip(option, color))
+              .toList(),
         ),
       ],
     );
@@ -2550,8 +2499,8 @@ class _EditCallFeedbackModalState extends State<_EditCallFeedbackModal> {
     final color = label == 'Selected'
         ? Colors.green
         : label == 'Not Selected'
-            ? Colors.red
-            : Colors.orange;
+        ? Colors.red
+        : Colors.orange;
 
     return GestureDetector(
       onTap: () {

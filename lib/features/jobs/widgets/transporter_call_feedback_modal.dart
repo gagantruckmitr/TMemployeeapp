@@ -34,6 +34,7 @@ class _TransporterCallFeedbackModalState
 
   final Map<String, List<String>> _statusOptions = {
     'Connected': [
+      'Match Making Done',
       'Call Back Later',
       'Details Received',
       'Not a Transporter',
@@ -102,26 +103,36 @@ class _TransporterCallFeedbackModalState
   bool get _shouldShowCloseJobConfirmation {
     return _selectedSubStatus == 'Close Job';
   }
-  
-  bool get _shouldAutoCloseJob {
-    return _selectedSubStatus == 'Not a Transporter' ||
-        _selectedSubStatus == 'He is Driver, mistakenly registered as Transporter';
-  }
 
   void _handleSubmit() {
-    if (!_canSubmit) return;
+    print('=== MODAL _handleSubmit CALLED ===');
+    print('_canSubmit: $_canSubmit');
+    print('_selectedMainStatus: $_selectedMainStatus');
+    print('_selectedSubStatus: $_selectedSubStatus');
+    print('_closeJobConfirmation: $_closeJobConfirmation');
+    
+    if (!_canSubmit) {
+      print('✗ Cannot submit - _canSubmit is false');
+      return;
+    }
 
     // For "Close Job" option, only send it if user selected "Yes"
     String finalSubStatus = _selectedSubStatus!;
     if (_selectedSubStatus == 'Close Job' && _closeJobConfirmation == false) {
       // User selected "No" for closing job, so don't send "Close Job" feedback
       finalSubStatus = 'Call Back Later'; // Change to a non-closing status
+      print('Changed Close Job to Call Back Later (user selected No)');
     }
 
     final callStatus = '$_selectedMainStatus: $finalSubStatus';
     final notes = _notesController.text.trim().isNotEmpty 
         ? _notesController.text.trim() 
         : null;
+
+    print('Final call status: $callStatus');
+    print('Notes: $notes');
+    print('Recording file: ${_selectedRecordingFile?.path}');
+    print('Calling widget.onSubmit...');
 
     setState(() => _isSubmitting = true);
     widget.onSubmit(callStatus, notes, _selectedRecordingFile);
@@ -398,7 +409,12 @@ class _TransporterCallFeedbackModalState
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: !_isSubmitting ? _handleSubmit : null,
+                  onPressed: !_isSubmitting ? () {
+                    print('=== SUBMIT BUTTON PRESSED ===');
+                    print('_isSubmitting: $_isSubmitting');
+                    print('_canSubmit: $_canSubmit');
+                    _handleSubmit();
+                  } : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     disabledBackgroundColor: const Color(0xFFE5E7EB),

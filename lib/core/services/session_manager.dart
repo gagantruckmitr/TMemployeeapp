@@ -6,7 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Prevents automatic logout unless user is inactive for more than 20 minutes
 class SessionManager {
   static const String _lastActivityKey = 'last_activity_timestamp';
-  static const Duration _inactivityTimeout = Duration(minutes: 20);
+  // DISABLING TIMEOUT: Set to 365 days to effectively disable auto-logout
+  static const Duration _inactivityTimeout = Duration(days: 365);
   static const Duration _checkInterval = Duration(minutes: 1);
   
   static SessionManager? _instance;
@@ -28,7 +29,7 @@ class SessionManager {
     onSessionExpired = onExpired;
     await _loadLastActivity();
     _startActivityMonitoring();
-    debugPrint('✅ Session Manager initialized with 20-minute timeout');
+    debugPrint('✅ Session Manager initialized with NO timeout (365 days)');
   }
   
   /// Record user activity to reset the inactivity timer
@@ -39,6 +40,11 @@ class SessionManager {
   
   /// Check if session is still valid
   Future<bool> isSessionValid() async {
+    // ALWAYS RETURN TRUE to prevent auto-logout
+    return true;
+    
+    /* 
+    // Old logic disabled
     await _loadLastActivity();
     final now = DateTime.now();
     final difference = now.difference(_lastActivityTime);
@@ -50,6 +56,7 @@ class SessionManager {
     }
     
     return isValid;
+    */
   }
   
   /// Get remaining time before session expires
@@ -65,16 +72,17 @@ class SessionManager {
     _activityCheckTimer?.cancel();
     
     _activityCheckTimer = Timer.periodic(_checkInterval, (timer) async {
-      final isValid = await isSessionValid();
+      // Always valid now
+      // final isValid = await isSessionValid();
       
-      if (!isValid) {
-        debugPrint('⏰ Session timeout detected - logging out user');
-        timer.cancel();
-        onSessionExpired?.call();
-      } else {
-        final remaining = getRemainingTime();
-        debugPrint('✅ Session active - ${remaining.inMinutes} minutes remaining');
-      }
+      // if (!isValid) {
+      //   debugPrint('⏰ Session timeout detected - logging out user');
+      //   timer.cancel();
+      //   onSessionExpired?.call();
+      // } else {
+      //   final remaining = getRemainingTime();
+      //   debugPrint('✅ Session active - ${remaining.inMinutes} minutes remaining');
+      // }
     });
   }
   
@@ -111,7 +119,7 @@ class SessionManager {
     _lastActivityTime = DateTime.now();
     await _saveLastActivity();
     _startActivityMonitoring();
-    debugPrint('✅ Session reset - 20-minute timer started');
+    debugPrint('✅ Session reset - timer started');
   }
   
   /// Clear session (call on logout)

@@ -3,10 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/phase2_user_model.dart';
+import '../config/api_config.dart';
 import 'session_manager.dart';
 
 class Phase2AuthService {
-  static const String baseUrl = 'https://truckmitr.com/truckmitr-app/api';
+  static const String baseUrl = ApiConfig.baseUrl;
   static const String _userKey = 'phase2_user';
   static const String _isLoggedInKey = 'phase2_is_logged_in';
 
@@ -104,7 +105,8 @@ class Phase2AuthService {
     final prefs = await SharedPreferences.getInstance();
     final isLoggedIn = prefs.getBool(_isLoggedInKey) ?? false;
     
-    // Check session validity (20-minute inactivity timeout)
+    // Check session validity (DISABLED)
+    /*
     if (isLoggedIn) {
       final isSessionValid = await SessionManager.instance.isSessionValid();
       if (!isSessionValid) {
@@ -113,6 +115,7 @@ class Phase2AuthService {
         return false;
       }
     }
+    */
     
     return isLoggedIn;
   }

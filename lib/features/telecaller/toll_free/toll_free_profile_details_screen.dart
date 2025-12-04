@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../models/toll_free_lead_model.dart';
+import '../../../models/smart_calling_models.dart';
+import '../../../core/services/easygo_ivr_service.dart';
+import '../../../core/services/toll_free_feedback_service.dart';
+import '../../../core/services/real_auth_service.dart';
+import '../../../core/theme/app_theme.dart';
+import '../widgets/call_feedback_modal.dart';
 
 class TollFreeProfileDetailsScreen extends StatefulWidget {
   final TollFreeUser user;
@@ -16,11 +23,14 @@ class _TollFreeProfileDetailsScreenState
     extends State<TollFreeProfileDetailsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isCallInProgress = false;
+  String? _callLogId;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    // 6 tabs: Personal, Driving, Documents, Payment, Applied Jobs, Posted Jobs
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -130,6 +140,26 @@ class _TollFreeProfileDetailsScreenState
             color: Color(0xFF1F2937),
           ),
         ),
+        actions: [
+          // IVR Call Button
+          IconButton(
+            onPressed: _isCallInProgress ? null : _initiateIVRCall,
+            icon: _isCallInProgress
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+                    ),
+                  )
+                : const Icon(
+                    Icons.phone,
+                    color: Color(0xFF3B82F6),
+                  ),
+            tooltip: 'Call via IVR',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -262,6 +292,8 @@ class _TollFreeProfileDetailsScreenState
             ),
             child: TabBar(
               controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               indicator: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
@@ -283,12 +315,15 @@ class _TollFreeProfileDetailsScreenState
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 12),
               dividerColor: Colors.transparent,
               tabs: const [
-                Tab(text: 'Personal Detail'),
-                Tab(text: 'Driving Details'),
+                Tab(text: 'Personal'),
+                Tab(text: 'Driving'),
                 Tab(text: 'Documents'),
                 Tab(text: 'Payment'),
+                Tab(text: 'Applied Jobs'),
+                Tab(text: 'Posted Jobs'),
               ],
             ),
           ),
@@ -304,6 +339,8 @@ class _TollFreeProfileDetailsScreenState
                 _buildDrivingDetails(),
                 _buildUploadedDocuments(),
                 _buildPaymentDetails(),
+                _buildAppliedJobs(),
+                _buildPostedJobs(),
               ],
             ),
           ),
@@ -313,12 +350,45 @@ class _TollFreeProfileDetailsScreenState
   }
 
   int _getFilledFieldsCount() {
-    // Calculate based on available data
+    // Calculate based on role - EXACT same logic as profile completion calculation
+    final role = widget.user.role;
     int count = 0;
-    if (widget.user.name.isNotEmpty) count++;
-    if (widget.user.email != null && widget.user.email!.isNotEmpty) count++;
-    if (widget.user.mobile.isNotEmpty) count++;
-    // Add more fields as needed
+    
+    if (role == 'driver') {
+      // Driver fields (23 total)
+      if (widget.user.name.isNotEmpty) count++;
+      if (widget.user.email != null && widget.user.email!.isNotEmpty) count++;
+      if (widget.user.city != null && widget.user.city!.isNotEmpty) count++;
+      if (widget.user.sex != null && widget.user.sex!.isNotEmpty) count++;
+      if (widget.user.vehicleType != null && widget.user.vehicleType!.isNotEmpty) count++;
+      if (widget.user.fatherName != null && widget.user.fatherName!.isNotEmpty) count++;
+      if (widget.user.profileImage != null && widget.user.profileImage!.isNotEmpty) count++;
+      if (widget.user.address != null && widget.user.address!.isNotEmpty) count++;
+      if (widget.user.dob != null && widget.user.dob!.isNotEmpty && widget.user.dob != '0000-00-00') count++;
+      if (widget.user.typeOfLicense != null && widget.user.typeOfLicense!.isNotEmpty) count++;
+      if (widget.user.drivingExperience != null && widget.user.drivingExperience!.isNotEmpty) count++;
+      if (widget.user.highestEducation != null && widget.user.highestEducation!.isNotEmpty) count++;
+      if (widget.user.licenseNumber != null && widget.user.licenseNumber!.isNotEmpty) count++;
+      if (widget.user.expiryDateOfLicense != null && widget.user.expiryDateOfLicense!.isNotEmpty && widget.user.expiryDateOfLicense != '0000-00-00') count++;
+      if (widget.user.expectedMonthlyIncome != null && widget.user.expectedMonthlyIncome!.isNotEmpty) count++;
+      if (widget.user.currentMonthlyIncome != null && widget.user.currentMonthlyIncome!.isNotEmpty) count++;
+      if (widget.user.maritalStatus != null && widget.user.maritalStatus!.isNotEmpty) count++;
+      if (widget.user.preferredLocation != null && widget.user.preferredLocation!.isNotEmpty) count++;
+      if (widget.user.aadharNumber != null && widget.user.aadharNumber!.isNotEmpty) count++;
+      if (widget.user.aadharPhoto != null && widget.user.aadharPhoto!.isNotEmpty) count++;
+      if (widget.user.drivingLicense != null && widget.user.drivingLicense!.isNotEmpty) count++;
+      if (widget.user.previousEmployer != null && widget.user.previousEmployer!.isNotEmpty) count++;
+      if (widget.user.jobPlacement != null && widget.user.jobPlacement!.isNotEmpty) count++;
+    } else if (role == 'transporter') {
+      // Transporter fields (13 total) - would need to add these fields to model
+      if (widget.user.name.isNotEmpty) count++;
+      if (widget.user.email != null && widget.user.email!.isNotEmpty) count++;
+      if (widget.user.city != null && widget.user.city!.isNotEmpty) count++;
+      if (widget.user.address != null && widget.user.address!.isNotEmpty) count++;
+      if (widget.user.profileImage != null && widget.user.profileImage!.isNotEmpty) count++;
+      // Add more transporter-specific fields when available
+    }
+    
     return count;
   }
 
@@ -1322,5 +1392,755 @@ class _TollFreeProfileDetailsScreenState
     } catch (e) {
       return 'N/A';
     }
+  }
+
+  Future<void> _initiateIVRCall() async {
+    final currentUser = RealAuthService.instance.currentUser;
+    if (currentUser == null) {
+      _showSnackBar('❌ User not logged in', isError: true);
+      return;
+    }
+
+    setState(() {
+      _isCallInProgress = true;
+    });
+
+    try {
+      HapticFeedback.mediumImpact();
+
+      _showSnackBar('📞 Initiating IVR call to ${widget.user.name}...');
+
+      final result = await EasyGoIVRService.initiateCall(
+        exten: currentUser.mobile,
+        number: widget.user.mobile,
+        callerId: currentUser.id,
+        contactId: widget.user.uniqueId,
+        contactType: widget.user.role,
+        driverName: widget.user.name,
+        callSource: 'toll-free',
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        _callLogId = result['call_log_id']?.toString();
+        
+        HapticFeedback.lightImpact();
+        _showSnackBar('✅ IVR call initiated successfully!', isError: false);
+
+        // Wait a moment then show feedback modal
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        if (mounted) {
+          _showFeedbackModal();
+        }
+      } else {
+        HapticFeedback.heavyImpact();
+        _showSnackBar(
+          '❌ Call failed: ${result['error'] ?? "Unknown error"}',
+          isError: true,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        HapticFeedback.heavyImpact();
+        _showSnackBar('❌ Error: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCallInProgress = false;
+        });
+      }
+    }
+  }
+
+  void _showFeedbackModal() {
+    final contact = DriverContact(
+      id: widget.user.id.toString(),
+      tmid: widget.user.uniqueId,
+      name: widget.user.name,
+      company: widget.user.role,
+      phoneNumber: widget.user.mobile,
+      state: '',
+      subscriptionStatus: widget.user.hasSubscription
+          ? SubscriptionStatus.active
+          : SubscriptionStatus.inactive,
+      status: CallStatus.pending,
+      lastFeedback: null,
+      lastCallTime: DateTime.now(),
+      remarks: null,
+      paymentInfo: PaymentInfo.none(),
+      registrationDate: DateTime.now(),
+      profileCompletion: null,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (context) => CallFeedbackModal(
+        contact: contact,
+        allowDismiss: false,
+        onFeedbackSubmitted: (feedback) {
+          Navigator.of(context).pop();
+          _handleFeedbackSubmitted(feedback);
+        },
+      ),
+    );
+  }
+
+  Future<void> _handleFeedbackSubmitted(CallFeedback feedback) async {
+    if (!mounted) return;
+
+    _showSnackBar('💾 Saving feedback...');
+
+    try {
+      final result = await TollFreeFeedbackService.instance.submitFeedback(
+        user: widget.user,
+        feedback: feedback,
+      );
+
+      if (!mounted) return;
+
+      HapticFeedback.lightImpact();
+
+      if (result['success'] == true) {
+        _showSnackBar(
+          '✅ Feedback saved successfully for ${widget.user.name}',
+          isError: false,
+        );
+        
+        // Pop back to refresh the search screen
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      } else {
+        _showSnackBar(
+          '❌ Failed to save feedback: ${result['message']}',
+          isError: true,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('❌ Error saving feedback: $e', isError: true);
+      }
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppTheme.error : AppTheme.success,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: isError ? 3 : 2),
+      ),
+    );
+  }
+
+  Widget _buildAppliedJobs() {
+    final appliedJobs = widget.user.appliedJobs;
+
+    if (appliedJobs.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.work_outline,
+                size: 64,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No Applied Jobs',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'This user has not applied to any jobs yet',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      physics: const BouncingScrollPhysics(),
+      itemCount: appliedJobs.length,
+      itemBuilder: (context, index) {
+        final job = appliedJobs[index];
+        return _buildJobCard(job);
+      },
+    );
+  }
+
+  Widget _buildPostedJobs() {
+    // For transporters, show posted jobs
+    // For drivers, this will be empty
+    if (widget.user.isDriver) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 64,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Not Applicable',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Drivers cannot post jobs',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // For transporters - show posted jobs
+    final postedJobs = widget.user.postedJobs;
+
+    if (postedJobs.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.post_add,
+                size: 64,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No Posted Jobs',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'This transporter has not posted any jobs yet',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      physics: const BouncingScrollPhysics(),
+      itemCount: postedJobs.length,
+      itemBuilder: (context, index) {
+        final job = postedJobs[index];
+        return _buildPostedJobCard(job);
+      },
+    );
+  }
+
+  Widget _buildPostedJobCard(Map<String, dynamic> job) {
+    final jobId = job['job_code']?.toString() ?? job['job_id']?.toString() ?? 'N/A';
+    final jobTitle = job['job_title']?.toString() ?? 'Job Title Not Available';
+    final companyName = job['transport_name']?.toString() ?? 
+                        job['company_name']?.toString() ?? 
+                        'Company Not Available';
+    final location = job['location']?.toString() ?? 'Location Not Available';
+    final salary = job['salary']?.toString() ?? 'N/A';
+    final createdDate = job['created_at']?.toString();
+    final status = job['status']?.toString() ?? '1';
+    final applicantsCount = job['applicants_count']?.toString() ?? '0';
+
+    String formattedDate = 'N/A';
+    if (createdDate != null) {
+      try {
+        final date = DateTime.parse(createdDate);
+        formattedDate = DateFormat('dd MMM yyyy').format(date);
+      } catch (e) {
+        formattedDate = createdDate;
+      }
+    }
+
+    Color statusColor;
+    IconData statusIcon;
+    String statusText;
+    
+    // Status: '1' = approved/active, '0' = pending
+    if (status == '1') {
+      statusColor = const Color(0xFF34D399);
+      statusIcon = Icons.check_circle;
+      statusText = 'ACTIVE';
+    } else if (status == '0') {
+      statusColor = const Color(0xFFFBBF24);
+      statusIcon = Icons.pending;
+      statusText = 'PENDING';
+    } else {
+      statusColor = const Color(0xFF6B7280);
+      statusIcon = Icons.info;
+      statusText = status.toUpperCase();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Job Title and Status
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  jobTitle,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1F2937),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: statusColor.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 14, color: statusColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Company Name
+          Row(
+            children: [
+              Icon(
+                Icons.business,
+                size: 16,
+                color: Colors.grey.shade600,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  companyName,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Location
+          Row(
+            children: [
+              Icon(
+                Icons.location_on,
+                size: 16,
+                color: Colors.grey.shade600,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  location,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Salary, Applicants, and Posted Date
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.currency_rupee,
+                      size: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      salary,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF3B82F6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.people,
+                      size: 14,
+                      color: const Color(0xFF3B82F6),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      applicantsCount,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF3B82F6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Posted Date
+          Row(
+            children: [
+              Icon(
+                Icons.calendar_today,
+                size: 14,
+                color: Colors.grey.shade600,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Posted: $formattedDate',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+
+          // Job ID (if available)
+          if (jobId != 'N/A') ...[
+            const SizedBox(height: 8),
+            Text(
+              'Job ID: $jobId',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJobCard(Map<String, dynamic> job) {
+    final jobId = job['job_code']?.toString() ?? job['job_id']?.toString() ?? 'N/A';
+    final jobTitle = job['job_title']?.toString() ?? 'Job Title Not Available';
+    final companyName = job['transport_name']?.toString() ?? 
+                        job['company_name']?.toString() ?? 
+                        'Company Not Available';
+    final location = job['location']?.toString() ?? 'Location Not Available';
+    final salary = job['salary']?.toString() ?? 'N/A';
+    final appliedDate = job['applied_date']?.toString() ?? job['created_at']?.toString();
+    final status = job['status']?.toString() ?? '0';
+
+    String formattedDate = 'N/A';
+    if (appliedDate != null) {
+      try {
+        final date = DateTime.parse(appliedDate);
+        formattedDate = DateFormat('dd MMM yyyy').format(date);
+      } catch (e) {
+        formattedDate = appliedDate;
+      }
+    }
+
+    Color statusColor;
+    IconData statusIcon;
+    switch (status.toLowerCase()) {
+      case 'accepted':
+      case 'approved':
+        statusColor = const Color(0xFF34D399);
+        statusIcon = Icons.check_circle;
+        break;
+      case 'rejected':
+        statusColor = const Color(0xFFEF4444);
+        statusIcon = Icons.cancel;
+        break;
+      case 'pending':
+      default:
+        statusColor = const Color(0xFFFBBF24);
+        statusIcon = Icons.pending;
+        break;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Job Title and Status
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  jobTitle,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1F2937),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: statusColor.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 14, color: statusColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      status.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Company Name
+          Row(
+            children: [
+              Icon(
+                Icons.business,
+                size: 16,
+                color: Colors.grey.shade600,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  companyName,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Location
+          Row(
+            children: [
+              Icon(
+                Icons.location_on,
+                size: 16,
+                color: Colors.grey.shade600,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  location,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Salary and Applied Date
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.currency_rupee,
+                      size: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      salary,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF3B82F6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    size: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    formattedDate,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Job ID (if available)
+          if (jobId != 'N/A') ...[
+            const SizedBox(height: 8),
+            Text(
+              'Job ID: $jobId',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
