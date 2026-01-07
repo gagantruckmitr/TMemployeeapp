@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/services/real_auth_service.dart';
 import '../../../core/services/tasksuite_auth_service.dart';
 import '../../data/repositories/attendance_repository.dart';
 
