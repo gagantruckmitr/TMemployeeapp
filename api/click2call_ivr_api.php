@@ -329,17 +329,18 @@ function updateCallFeedback($pdo) {
     error_log("📝 Update Feedback Raw Input: " . $rawInput);
     
     $referenceId = $input['reference_id'] ?? '';
+    $callLogId = $input['call_log_id'] ?? null;
     $callStatus = $input['call_status'] ?? 'pending';
     $feedback = $input['feedback'] ?? null;
     $remarks = $input['remarks'] ?? null;
     $callDuration = $input['call_duration'] ?? 0;
     $driverName = $input['driver_name'] ?? null;
     
-    error_log("📝 Update Feedback Parsed: ref=$referenceId, status=$callStatus, feedback=$feedback, remarks=$remarks, duration=$callDuration, driver=$driverName");
+    error_log("📝 Update Feedback Parsed: ref=$referenceId, id=$callLogId, status=$callStatus, feedback=$feedback, remarks=$remarks, duration=$callDuration, driver=$driverName");
     
-    if (empty($referenceId)) {
+    if (empty($referenceId) && empty($callLogId)) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'Reference ID required']);
+        echo json_encode(['success' => false, 'error' => 'Reference ID or Call Log ID required']);
         return;
     }
     
@@ -351,25 +352,34 @@ function updateCallFeedback($pdo) {
     }
     
     try {
-        // First check if the reference_id exists
-        $checkSql = "SELECT id, call_status, feedback FROM call_logs WHERE reference_id = ?";
-        $checkStmt = $pdo->prepare($checkSql);
-        $checkStmt->execute([$referenceId]);
+        // First check if the record exists by ID or reference_id
+        $checkStmt = null;
+        if (!empty($callLogId)) {
+            $checkSql = "SELECT id, call_status, feedback FROM call_logs WHERE id = ?";
+            $checkStmt = $pdo->prepare($checkSql);
+            $checkStmt->execute([$callLogId]);
+        } else {
+            $checkSql = "SELECT id, call_status, feedback FROM call_logs WHERE reference_id = ?";
+            $checkStmt = $pdo->prepare($checkSql);
+            $checkStmt->execute([$referenceId]);
+        }
+        
         $existingRecord = $checkStmt->fetch();
         
         if (!$existingRecord) {
-            error_log("❌ No record found with reference_id: $referenceId");
+            error_log("❌ No record found with provided ID/Reference");
             http_response_code(404);
             echo json_encode([
                 'success' => false,
-                'error' => 'Call log not found with reference_id: ' . $referenceId
+                'error' => 'Call log not found'
             ]);
             return;
         }
         
+        $targetId = $existingRecord['id'];
         error_log("📋 Existing record: ID={$existingRecord['id']}, Status={$existingRecord['call_status']}, Feedback={$existingRecord['feedback']}");
         
-        // Update call log with IST timezone (NOW() already returns IST due to MySQL timezone setting)
+        // Update call log with IST timezone
         $sql = "UPDATE call_logs 
                 SET call_status = ?, 
                     feedback = ?, 
@@ -377,16 +387,17 @@ function updateCallFeedback($pdo) {
                     call_duration = ?,
                     driver_name = COALESCE(?, driver_name),
                     updated_at = NOW()
-                WHERE reference_id = ?";
+                WHERE id = ?";
         
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$callStatus, $feedback, $remarks, $callDuration, $driverName, $referenceId]);
+        $stmt->execute([$callStatus, $feedback, $remarks, $callDuration, $driverName, $targetId]);
         
         $rowsAffected = $stmt->rowCount();
-        error_log("✅ Update Feedback: $rowsAffected rows affected for ref=$referenceId");
+        error_log("✅ Update Feedback: $rowsAffected rows affected for ID=$targetId");
         
         // Fetch updated record to confirm
-        $checkStmt->execute([$referenceId]);
+        $checkStmt = $pdo->prepare("SELECT * FROM call_logs WHERE id = ?");
+        $checkStmt->execute([$targetId]);
         $updatedRecord = $checkStmt->fetch();
         error_log("📋 Updated record: Status={$updatedRecord['call_status']}, Feedback={$updatedRecord['feedback']}");
         
@@ -398,7 +409,7 @@ function updateCallFeedback($pdo) {
                 'call_log_id' => $updatedRecord['id'],
                 'call_status' => $updatedRecord['call_status'],
                 'feedback' => $updatedRecord['feedback'],
-                'reference_id' => $referenceId
+                'reference_id' => $updatedRecord['reference_id']
             ],
             'timestamp' => date('Y-m-d H:i:s')
         ]);

@@ -23,6 +23,9 @@ switch($action) {
     case 'search':
         searchUsers($pdo);
         break;
+    case 'one':
+        searchOneUser($pdo);
+        break;
     default:
         echo json_encode(['error' => 'Invalid action']);
 }
@@ -61,6 +64,7 @@ function searchUsers($pdo) {
                     u.states,
                     u.status,
                     u.role,
+                    u.assigned_to,
                     u.Created_at,
                     u.sex,
                     u.vehicle_type,
@@ -265,7 +269,7 @@ function searchUsers($pdo) {
                 }
             }
             
-            // Build payment info with created date
+            // Build payment info with created date - ONLY for captured status
             $paymentInfo = null;
             if ($paymentStatus === 'captured') {
                 // Format payment created date as DD/MM/YYYY
@@ -282,16 +286,8 @@ function searchUsers($pdo) {
                     'amount' => $user['payment_amount'],
                     'expiryDate' => $user['payment_end_date']
                 ];
-            } elseif ($paymentStatus === 'pending') {
-                // Show pending payment info
-                $paymentInfo = [
-                    'subscriptionType' => 'pending',
-                    'paymentStatus' => 'pending',
-                    'paymentDate' => $user['payment_created_date'],
-                    'amount' => $user['payment_amount'],
-                    'expiryDate' => null
-                ];
             }
+            // Don't show payment info for pending or other statuses
             
             // Calculate profile completion (fast version)
             $profileCompletion = calculateProfileCompletionFast($user);
@@ -299,34 +295,177 @@ function searchUsers($pdo) {
             // Build company name (simplified)
             $company = $user['city'] ? $user['city'] . ' Transport' : '';
 
-            // Parse profile picture
+            // Parse profile picture - same logic as fresh_leads_api.php
             $profilePicture = null;
             if (!empty($user['images'])) {
-                // Try to decode as JSON
-                $decodedImages = json_decode($user['images'], true);
-                if (is_array($decodedImages) && !empty($decodedImages)) {
-                    // Get first image
-                    $firstImage = $decodedImages[0];
-                    if (is_string($firstImage)) {
-                        $profilePicture = $firstImage;
-                    }
-                } else if (is_string($user['images']) && !empty($user['images']) && $user['images'] !== '[]') {
-                    // Maybe comma separated or single URL
-                    if (strpos($user['images'], ',') !== false) {
-                        $parts = explode(',', $user['images']);
-                        $profilePicture = trim($parts[0]);
-                    } else {
-                        $profilePicture = $user['images'];
-                    }
+                $images = json_decode($user['images'], true);
+                if (is_array($images) && count($images) > 0) {
+                    $imagePath = $images[0];
+                    // Construct full URL with base URL
+                    $profilePicture = 'https://truckmitr.com/public/' . $imagePath;
+                } elseif (!is_array($images) && is_string($user['images'])) {
+                    // Handle case where images is a plain string, not JSON
+                    $profilePicture = 'https://truckmitr.com/public/' . $user['images'];
                 }
             }
             
-            // Ensure full URL if needed (assuming relative paths might exist)
-            if ($profilePicture && !filter_var($profilePicture, FILTER_VALIDATE_URL)) {
-                // If it's a relative path, prepend base URL
-                // Assuming images are stored in public/uploads or similar
-                // Adjust this base URL as per your actual storage location
-                $profilePicture = 'https://truckmitr.com/truckmitr-app/public/' . ltrim($profilePicture, '/');
+            // Get applied jobs for drivers
+            $appliedJobs = [];
+            if ($user['role'] === 'driver') {
+                $jobsStmt = $pdo->prepare("
+                    SELECT 
+                        aj.id as application_id,
+                        aj.job_id,
+                        aj.created_at as applied_date,
+                        j.job_id as job_code,
+                        j.job_title,
+                        j.job_location as location,
+                        j.Salary_Range as salary,
+                        t.name as company_name,
+                        t.transport_name
+                    FROM applyjobs aj
+                    LEFT JOIN jobs j ON aj.job_id = j.id
+                    LEFT JOIN users t ON j.transporter_id = t.id
+                    WHERE aj.driver_id = :user_id
+                    ORDER BY aj.created_at DESC
+                    LIMIT 50
+                ");
+                $jobsStmt->execute(['user_id' => $user['id']]);
+                $appliedJobs = $jobsStmt->fetchAll();
+            }
+
+            // Get posted jobs for transporters
+            $postedJobs = [];
+            if ($user['role'] === 'transporter') {
+                $postedJobsStmt = $pdo->prepare("
+                    SELECT 
+                        j.id,
+                        j.job_id as job_code,
+                        j.job_title,
+                        j.job_location as location,
+                        j.Salary_Range as salary,
+                        j.Created_at as posted_date,
+                        j.status,
+                        j.active_inactive,
+                        (SELECT COUNT(*) FROM applyjobs WHERE job_id = j.id) as applicant_count
+                    FROM jobs j
+                    WHERE j.transporter_id = :user_id
+                    ORDER BY j.Created_at DESC
+                    LIMIT 50
+                ");
+                $postedJobsStmt->execute(['user_id' => $user['id']]);
+                $postedJobs = $postedJobsStmt->fetchAll();
+            }
+
+            // Get match making history (handshake) for transporters
+            $matchMakingHistory = [];
+            if ($user['role'] === 'transporter') {
+                $matchMakingStmt = $pdo->prepare("
+                    SELECT 
+                        clm.id,
+                        clm.created_at as match_date,
+                        clm.driver_name,
+                        clm.unique_id_driver as driver_tmid,
+                        clm.job_id,
+                        clm.match_status,
+                        clm.feedback
+                    FROM call_logs_match_making clm
+                    WHERE clm.unique_id_transporter = :tmid
+                    AND (clm.feedback LIKE '%Match Making Done%' OR clm.match_status = 'Match Making Done')
+                    ORDER BY clm.created_at DESC
+                    LIMIT 50
+                ");
+                $matchMakingStmt->execute(['tmid' => $tmid]);
+                $matchMakingHistory = $matchMakingStmt->fetchAll();
+            }
+            
+            // Get complete call history for this user from ALL telecallers
+            // Priority: match_making calls > welcome calls (no duplicates, no pending)
+            
+            // First, get all match-making calls for this user
+            $callHistoryStmt = $pdo->prepare("
+                SELECT 
+                    clm.id,
+                    clm.caller_id,
+                    a.name as telecaller_name,
+                    'connected' as call_status,
+                    clm.feedback,
+                    clm.remark as remarks,
+                    NULL as call_duration,
+                    clm.call_recording as recording_url,
+                    NULL as manual_call_recording_url,
+                    clm.created_at as call_time,
+                    clm.created_at,
+                    'match_making' as call_type,
+                    clm.match_status,
+                    clm.job_id,
+                    CASE 
+                        WHEN clm.unique_id_driver = :tmid THEN clm.transporter_name
+                        ELSE clm.driver_name
+                    END as other_party_name,
+                    CASE 
+                        WHEN clm.unique_id_driver = :tmid THEN clm.unique_id_transporter
+                        ELSE clm.unique_id_driver
+                    END as other_party_tmid
+                FROM call_logs_match_making clm
+                LEFT JOIN admins a ON clm.caller_id = a.id
+                WHERE (clm.unique_id_driver = :tmid OR clm.unique_id_transporter = :tmid)
+                AND clm.feedback IS NOT NULL 
+                AND clm.feedback != ''
+                AND clm.feedback != 'pending'
+                
+                UNION ALL
+                
+                SELECT 
+                    cl.id,
+                    cl.caller_id,
+                    a.name as telecaller_name,
+                    cl.call_status,
+                    cl.feedback,
+                    cl.remarks,
+                    cl.call_duration,
+                    cl.recording_url,
+                    cl.manual_call_recording_url,
+                    COALESCE(cl.call_initiated_at, cl.call_time, cl.created_at) as call_time,
+                    cl.created_at,
+                    'welcome_call' as call_type,
+                    NULL as match_status,
+                    NULL as job_id,
+                    NULL as other_party_name,
+                    NULL as other_party_tmid
+                FROM call_logs cl
+                LEFT JOIN admins a ON cl.caller_id = a.id
+                WHERE cl.user_id = :user_id
+                AND cl.call_status != 'pending'
+                AND (cl.feedback IS NOT NULL AND cl.feedback != '' AND cl.feedback != 'pending')
+                AND NOT EXISTS (
+                    -- Exclude if this user has a match-making call with same caller around same time
+                    SELECT 1 FROM call_logs_match_making clm2
+                    WHERE (clm2.unique_id_driver = :tmid OR clm2.unique_id_transporter = :tmid)
+                    AND clm2.caller_id = cl.caller_id
+                    AND ABS(TIMESTAMPDIFF(MINUTE, clm2.created_at, COALESCE(cl.call_initiated_at, cl.call_time, cl.created_at))) <= 5
+                )
+                
+                ORDER BY call_time DESC
+                LIMIT 100
+            ");
+            $callHistoryStmt->execute([
+                'user_id' => $user['id'],
+                'tmid' => $tmid
+            ]);
+            $callHistory = $callHistoryStmt->fetchAll();
+            
+            // Get assigned telecaller from assigned_to column in users table
+            $assignedTelecaller = null;
+            if (!empty($user['assigned_to'])) {
+                $telecallerStmt = $pdo->prepare("
+                    SELECT name FROM admins WHERE id = :telecaller_id LIMIT 1
+                ");
+                $telecallerStmt->execute(['telecaller_id' => $user['assigned_to']]);
+                $telecallerRow = $telecallerStmt->fetch();
+                if ($telecallerRow) {
+                    $assignedTelecaller = $telecallerRow['name'];
+                }
             }
             
             return [
@@ -348,7 +487,16 @@ function searchUsers($pdo) {
                 'paymentInfo' => $paymentInfo,
                 'registrationDate' => $user['Created_at'] ?? date('Y-m-d H:i:s'),
                 'profile_completion' => $profileCompletion . '%',
-                'profilePicture' => $profilePicture
+                'profilePicture' => $profilePicture,
+                'licenseType' => $user['type_of_license'] ?? null,
+                'fleetSize' => $user['fleet_size'] ?? null,
+                'appliedJobs' => $appliedJobs,
+                'postedJobs' => $postedJobs,
+                'matchMakingHistory' => $matchMakingHistory,
+                'assignedTelecaller' => $assignedTelecaller,
+                'role' => $user['role'] ?? 'driver',
+                'callHistory' => $callHistory,
+                'trainingInfo' => ($user['role'] === 'driver') ? getDriverTrainingCompletion($pdo, $user['id']) : null
             ];
         }, $users);
         
@@ -401,14 +549,404 @@ function searchUsers($pdo) {
     }
 }
 
+function searchOneUser($pdo) {
+    try {
+        $userId = $_GET['user_id'] ?? null;
+        $tmid = $_GET['tmid'] ?? null;
+        $callerId = (int)($_GET['caller_id'] ?? 0);
+        
+        if (!$userId && !$tmid) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'Either user_id or tmid parameter is required'
+            ]);
+            return;
+        }
+        
+        // Build query to find user by ID or TMID
+        $sql = "SELECT 
+                    u.id,
+                    u.unique_id,
+                    u.name,
+                    u.mobile,
+                    u.email,
+                    u.city,
+                    u.states,
+                    u.status,
+                    u.role,
+                    u.assigned_to,
+                    u.Created_at,
+                    u.sex,
+                    u.vehicle_type,
+                    u.father_name,
+                    u.images,
+                    u.address,
+                    u.dob,
+                    u.type_of_license,
+                    u.driving_experience,
+                    u.highest_education,
+                    u.license_number,
+                    u.expiry_date_of_license,
+                    u.expected_monthly_income,
+                    u.current_monthly_income,
+                    u.marital_status,
+                    u.preferred_location,
+                    u.aadhar_number,
+                    u.aadhar_photo,
+                    u.driving_license,
+                    u.previous_employer,
+                    u.job_placement,
+                    u.transport_name,
+                    u.year_of_establishment,
+                    u.fleet_size,
+                    u.operational_segment,
+                    u.average_km,
+                    u.pan_number,
+                    u.pan_image,
+                    u.gst_certificate,
+                    (SELECT amount FROM payments WHERE unique_id = u.unique_id ORDER BY CASE WHEN payment_status = 'captured' THEN 1 ELSE 2 END, created_at DESC LIMIT 1) as payment_amount,
+                    (SELECT end_at FROM payments WHERE unique_id = u.unique_id ORDER BY CASE WHEN payment_status = 'captured' THEN 1 ELSE 2 END, created_at DESC LIMIT 1) as payment_end_date,
+                    (SELECT created_at FROM payments WHERE unique_id = u.unique_id ORDER BY CASE WHEN payment_status = 'captured' THEN 1 ELSE 2 END, created_at DESC LIMIT 1) as payment_created_date,
+                    (SELECT payment_status FROM payments WHERE unique_id = u.unique_id ORDER BY CASE WHEN payment_status = 'captured' THEN 1 ELSE 2 END, created_at DESC LIMIT 1) as payment_status
+                FROM users u
+                WHERE ";
+        
+        if ($userId) {
+            $sql .= "u.id = :user_id";
+        } else {
+            $sql .= "u.unique_id = :tmid";
+        }
+        
+        $sql .= " LIMIT 1";
+        
+        $stmt = $pdo->prepare($sql);
+        
+        if ($userId) {
+            $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+        } else {
+            $stmt->bindValue(':tmid', $tmid, PDO::PARAM_STR);
+        }
+        
+        $stmt->execute();
+        $user = $stmt->fetch();
+        
+        if (!$user) {
+            echo json_encode([
+                'success' => false,
+                'error' => 'User not found'
+            ]);
+            return;
+        }
+        
+        // Get call logs for this user
+        $callLogsMap = [];
+        if ($callerId > 0) {
+            $stmt = $pdo->prepare("
+                SELECT user_id, call_status, feedback, remarks, call_time 
+                FROM call_logs 
+                WHERE user_id = ? AND caller_id = ?
+                ORDER BY call_time DESC
+                LIMIT 1
+            ");
+            $stmt->execute([$user['id'], $callerId]);
+            $callLog = $stmt->fetch();
+            
+            if ($callLog) {
+                $callLogsMap[$user['id']] = $callLog;
+            }
+        }
+        
+        // Process user data (same logic as searchUsers)
+        $tmid = $user['unique_id'] ?? 'TM' . str_pad($user['id'], 6, '0', STR_PAD_LEFT);
+        
+        // Get call status
+        $callStatus = 'pending';
+        $lastFeedback = null;
+        $lastCallTime = null;
+        $remarks = null;
+        
+        if (isset($callLogsMap[$user['id']])) {
+            $callLog = $callLogsMap[$user['id']];
+            $callStatus = $callLog['call_status'];
+            $lastFeedback = $callLog['feedback'];
+            $lastCallTime = $callLog['call_time'];
+            $remarks = $callLog['remarks'];
+        }
+        
+        // Determine subscription status
+        $subscriptionStatus = 'inactive';
+        $paymentStatus = strtolower($user['payment_status'] ?? '');
+        
+        if ($paymentStatus === 'captured') {
+            if (!empty($user['payment_end_date'])) {
+                $endDate = strtotime($user['payment_end_date']);
+                $now = time();
+                if ($endDate > $now) {
+                    $subscriptionStatus = 'active';
+                } else {
+                    $subscriptionStatus = 'expired';
+                }
+            } else {
+                $subscriptionStatus = 'active';
+            }
+        } elseif ($paymentStatus === 'pending') {
+            $subscriptionStatus = 'pending';
+        } else {
+            if (!empty($user['status'])) {
+                switch(strtolower($user['status'])) {
+                    case 'active':
+                    case 'verified':
+                    case 'approved':
+                        $subscriptionStatus = 'pending';
+                        break;
+                }
+            }
+        }
+        
+        // Build payment info - ONLY for captured status
+        $paymentInfo = null;
+        if ($paymentStatus === 'captured') {
+            $paymentDateFormatted = null;
+            if (!empty($user['payment_created_date'])) {
+                $date = new DateTime($user['payment_created_date']);
+                $paymentDateFormatted = $date->format('d/m/Y');
+            }
+            
+            $paymentInfo = [
+                'subscriptionType' => $paymentDateFormatted ?? 'subscription',
+                'paymentStatus' => 'success',
+                'paymentDate' => $user['payment_created_date'],
+                'amount' => $user['payment_amount'],
+                'expiryDate' => $user['payment_end_date']
+            ];
+        }
+        // Don't show payment info for pending or other statuses
+        
+        // Calculate profile completion
+        $profileCompletion = calculateProfileCompletionFast($user);
+        
+        // Build company name
+        $company = $user['city'] ? $user['city'] . ' Transport' : '';
+
+        // Parse profile picture
+        $profilePicture = null;
+        if (!empty($user['images'])) {
+            $images = json_decode($user['images'], true);
+            if (is_array($images) && count($images) > 0) {
+                $imagePath = $images[0];
+                $profilePicture = 'https://truckmitr.com/public/' . $imagePath;
+            } elseif (!is_array($images) && is_string($user['images'])) {
+                $profilePicture = 'https://truckmitr.com/public/' . $user['images'];
+            }
+        }
+        
+        // Get applied jobs for drivers
+        $appliedJobs = [];
+        if ($user['role'] === 'driver') {
+            $jobsStmt = $pdo->prepare("
+                SELECT 
+                    aj.id as application_id,
+                    aj.job_id,
+                    aj.created_at as applied_date,
+                    j.job_id as job_code,
+                    j.job_title,
+                    j.job_location as location,
+                    j.Salary_Range as salary,
+                    t.name as company_name,
+                    t.transport_name
+                FROM applyjobs aj
+                LEFT JOIN jobs j ON aj.job_id = j.id
+                LEFT JOIN users t ON j.transporter_id = t.id
+                WHERE aj.driver_id = :user_id
+                ORDER BY aj.created_at DESC
+                LIMIT 50
+            ");
+            $jobsStmt->execute(['user_id' => $user['id']]);
+            $appliedJobs = $jobsStmt->fetchAll();
+        }
+
+        // Get posted jobs for transporters
+        $postedJobs = [];
+        if ($user['role'] === 'transporter') {
+            $postedJobsStmt = $pdo->prepare("
+                SELECT 
+                    j.id,
+                    j.job_id as job_code,
+                    j.job_title,
+                    j.job_location as location,
+                    j.Salary_Range as salary,
+                    j.Created_at as posted_date,
+                    j.status,
+                    j.active_inactive,
+                    (SELECT COUNT(*) FROM applyjobs WHERE job_id = j.id) as applicant_count
+                FROM jobs j
+                WHERE j.transporter_id = :user_id
+                ORDER BY j.Created_at DESC
+                LIMIT 50
+            ");
+            $postedJobsStmt->execute(['user_id' => $user['id']]);
+            $postedJobs = $postedJobsStmt->fetchAll();
+        }
+
+        // Get match making history for transporters
+        $matchMakingHistory = [];
+        if ($user['role'] === 'transporter') {
+            $matchMakingStmt = $pdo->prepare("
+                SELECT 
+                    clm.id,
+                    clm.created_at as match_date,
+                    clm.driver_name,
+                    clm.unique_id_driver as driver_tmid,
+                    clm.job_id,
+                    clm.match_status,
+                    clm.feedback
+                FROM call_logs_match_making clm
+                WHERE clm.unique_id_transporter = :tmid
+                AND (clm.feedback LIKE '%Match Making Done%' OR clm.match_status = 'Match Making Done')
+                ORDER BY clm.created_at DESC
+                LIMIT 50
+            ");
+            $matchMakingStmt->execute(['tmid' => $tmid]);
+            $matchMakingHistory = $matchMakingStmt->fetchAll();
+        }
+        
+        // Get complete call history
+        $callHistoryStmt = $pdo->prepare("
+            SELECT 
+                clm.id,
+                clm.caller_id,
+                a.name as telecaller_name,
+                'connected' as call_status,
+                clm.feedback,
+                clm.remark as remarks,
+                NULL as call_duration,
+                clm.call_recording as recording_url,
+                NULL as manual_call_recording_url,
+                clm.created_at as call_time,
+                clm.created_at,
+                'match_making' as call_type,
+                clm.match_status,
+                clm.job_id,
+                CASE 
+                    WHEN clm.unique_id_driver = :tmid THEN clm.transporter_name
+                    ELSE clm.driver_name
+                END as other_party_name,
+                CASE 
+                    WHEN clm.unique_id_driver = :tmid THEN clm.unique_id_transporter
+                    ELSE clm.unique_id_driver
+                END as other_party_tmid
+            FROM call_logs_match_making clm
+            LEFT JOIN admins a ON clm.caller_id = a.id
+            WHERE (clm.unique_id_driver = :tmid OR clm.unique_id_transporter = :tmid)
+            AND clm.feedback IS NOT NULL 
+            AND clm.feedback != ''
+            AND clm.feedback != 'pending'
+            
+            UNION ALL
+            
+            SELECT 
+                cl.id,
+                cl.caller_id,
+                a.name as telecaller_name,
+                cl.call_status,
+                cl.feedback,
+                cl.remarks,
+                cl.call_duration,
+                cl.recording_url,
+                cl.manual_call_recording_url,
+                COALESCE(cl.call_initiated_at, cl.call_time, cl.created_at) as call_time,
+                cl.created_at,
+                'welcome_call' as call_type,
+                NULL as match_status,
+                NULL as job_id,
+                NULL as other_party_name,
+                NULL as other_party_tmid
+            FROM call_logs cl
+            LEFT JOIN admins a ON cl.caller_id = a.id
+            WHERE cl.user_id = :user_id
+            AND cl.call_status != 'pending'
+            AND (cl.feedback IS NOT NULL AND cl.feedback != '' AND cl.feedback != 'pending')
+            AND NOT EXISTS (
+                SELECT 1 FROM call_logs_match_making clm2
+                WHERE (clm2.unique_id_driver = :tmid OR clm2.unique_id_transporter = :tmid)
+                AND clm2.caller_id = cl.caller_id
+                AND ABS(TIMESTAMPDIFF(MINUTE, clm2.created_at, COALESCE(cl.call_initiated_at, cl.call_time, cl.created_at))) <= 5
+            )
+            
+            ORDER BY call_time DESC
+            LIMIT 100
+        ");
+        $callHistoryStmt->execute([
+            'user_id' => $user['id'],
+            'tmid' => $tmid
+        ]);
+        $callHistory = $callHistoryStmt->fetchAll();
+        
+        // Get assigned telecaller
+        $assignedTelecaller = null;
+        if (!empty($user['assigned_to'])) {
+            $telecallerStmt = $pdo->prepare("
+                SELECT name FROM admins WHERE id = :telecaller_id LIMIT 1
+            ");
+            $telecallerStmt->execute(['telecaller_id' => $user['assigned_to']]);
+            $telecallerRow = $telecallerStmt->fetch();
+            if ($telecallerRow) {
+                $assignedTelecaller = $telecallerRow['name'];
+            }
+        }
+        
+        $userData = [
+            'id' => (string)$user['id'],
+            'tmid' => $tmid,
+            'name' => $user['name'] ?? 'User ' . $user['id'],
+            'company' => $company,
+            'phoneNumber' => $user['mobile'] ?? '',
+            'email' => $user['email'] ?? '',
+            'city' => $user['city'] ?? 'Unknown',
+            'state' => $user['states'] ?? 'Unknown',
+            'role' => $user['role'] ?? 'driver',
+            'subscriptionStatus' => $subscriptionStatus,
+            'userStatus' => $user['status'] ?? 'inactive',
+            'callStatus' => $callStatus,
+            'lastFeedback' => $lastFeedback,
+            'lastCallTime' => $lastCallTime,
+            'remarks' => $remarks,
+            'paymentInfo' => $paymentInfo,
+            'registrationDate' => $user['Created_at'] ?? date('Y-m-d H:i:s'),
+            'profile_completion' => $profileCompletion . '%',
+            'profilePicture' => $profilePicture,
+            'licenseType' => $user['type_of_license'] ?? null,
+            'fleetSize' => $user['fleet_size'] ?? null,
+            'appliedJobs' => $appliedJobs,
+            'postedJobs' => $postedJobs,
+            'matchMakingHistory' => $matchMakingHistory,
+            'assignedTelecaller' => $assignedTelecaller,
+            'callHistory' => $callHistory,
+            'trainingInfo' => ($user['role'] === 'driver') ? getDriverTrainingCompletion($pdo, $user['id']) : null
+        ];
+        
+        echo json_encode([
+            'success' => true,
+            'data' => $userData,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
+        
+    } catch(Exception $e) {
+        echo json_encode([
+            'success' => false,
+            'error' => 'Failed to fetch user: ' . $e->getMessage()
+        ]);
+    }
+}
+
 function calculateProfileCompletionFast($user) {
     $role = $user['role'] ?? 'driver';
     
-    // Define required fields based on role - EXACT MATCH with profile_completion_api.php
+    // Define required fields based on role - EXACT MATCH with profile_completion_helper.php
     $requiredFields = [];
     if ($role === 'driver') {
         $requiredFields = [
-            'name', 'email', 'city', 'sex', 'vehicle_type',
+            'name', 'email', 'mobile', 'states', 'city', 'sex', 'vehicle_type',
             'father_name', 'images', 'address', 'dob',
             'type_of_license', 'driving_experience', 'highest_education', 'license_number',
             'expiry_date_of_license', 'expected_monthly_income', 'current_monthly_income',
@@ -417,9 +955,9 @@ function calculateProfileCompletionFast($user) {
         ];
     } elseif ($role === 'transporter') {
         $requiredFields = [
-            'name', 'email', 'transport_name', 'year_of_establishment',
-            'fleet_size', 'operational_segment', 'average_km', 'city', 'images', 'address',
-            'pan_number', 'pan_image', 'gst_certificate'
+            'name', 'email', 'mobile', 'transport_name', 'year_of_establishment',
+            'fleet_size', 'operational_segment', 'average_km', 'city', 'states',
+            'images', 'address', 'pan_number', 'pan_image', 'gst_certificate'
         ];
     } else {
         return 0;
@@ -483,7 +1021,7 @@ function calculateProfileCompletion($pdo, $userId) {
     try {
         $stmt = $pdo->prepare("
             SELECT 
-                name, email, city, status, sex, vehicle_type, role,
+                name, email, mobile, city, states, status, sex, vehicle_type, role,
                 father_name, images, address, dob,
                 type_of_license, driving_experience, highest_education, license_number,
                 expiry_date_of_license, expected_monthly_income, current_monthly_income,
@@ -507,7 +1045,7 @@ function calculateProfileCompletion($pdo, $userId) {
         $requiredFields = [];
         if ($role === 'driver') {
             $requiredFields = [
-                'name', 'email', 'city', 'sex', 'vehicle_type',
+                'name', 'email', 'mobile', 'states', 'city', 'sex', 'vehicle_type',
                 'father_name', 'images', 'address', 'dob',
                 'type_of_license', 'driving_experience', 'highest_education', 'license_number',
                 'expiry_date_of_license', 'expected_monthly_income', 'current_monthly_income',
@@ -516,9 +1054,9 @@ function calculateProfileCompletion($pdo, $userId) {
             ];
         } elseif ($role === 'transporter') {
             $requiredFields = [
-                'name', 'email', 'transport_name', 'year_of_establishment',
-                'fleet_size', 'operational_segment', 'average_km', 'city', 'images', 'address',
-                'pan_number', 'pan_image', 'gst_certificate'
+                'name', 'email', 'mobile', 'transport_name', 'year_of_establishment',
+                'fleet_size', 'operational_segment', 'average_km', 'city', 'states',
+                'images', 'address', 'pan_number', 'pan_image', 'gst_certificate'
             ];
         }
         
@@ -551,4 +1089,84 @@ function calculateProfileCompletion($pdo, $userId) {
         return 0;
     }
 }
-?>
+
+
+function getDriverTrainingCompletion($pdo, $driver_id) 
+{
+    try {
+        // STEP 1: Query quiz_results table for this driver
+        $stmt = $pdo->prepare("
+            SELECT 
+                COUNT(*) as total_questions,
+                SUM(CASE WHEN user_answer = correct_answer THEN 1 ELSE 0 END) as correct_answers
+            FROM quiz_results
+            WHERE user_id = ?
+        ");
+        $stmt->execute([$driver_id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // STEP 2: Get counts
+        $totalQuestions = (int)($result['total_questions'] ?? 0);
+        $correctAnswers = (int)($result['correct_answers'] ?? 0);
+
+        // STEP 3: Calculate percentage
+        $percentage = $totalQuestions > 0 ? ($correctAnswers / $totalQuestions) * 100 : 0;
+
+        // STEP 4: Calculate rating (1-5 stars)
+        if ($percentage <= 20) {
+            $rating = 1;
+        } elseif ($percentage <= 40) {
+            $rating = 2;
+        } elseif ($percentage <= 60) {
+            $rating = 3;
+        } elseif ($percentage <= 80) {
+            $rating = 4;
+        } else {
+            $rating = 5;
+        }
+
+        // STEP 5: Calculate ranking percentage (based on 12 questions)
+        $rankingPercentage = round(($correctAnswers / 12) * 100, 2);
+
+        // STEP 6: Determine tier
+        if ($rankingPercentage >= 95) {
+            $tier = 'Diamond';
+        } elseif ($rankingPercentage >= 81) {
+            $tier = 'Platinum';
+        } elseif ($rankingPercentage >= 61) {
+            $tier = 'Gold';
+        } elseif ($rankingPercentage >= 41) {
+            $tier = 'Silver';
+        } elseif ($rankingPercentage > 0) {
+            $tier = 'Bronze';
+        } else {
+            $tier = 'N/A';
+        }
+
+        // STEP 7: Check if training is completed
+        $isCompleted = ($totalQuestions > 0 && $rating > 0);
+
+        // STEP 8: Return all data
+        return [
+            'is_completed' => $isCompleted,
+            'total_questions' => $totalQuestions,
+            'correct_answers' => $correctAnswers,
+            'percentage' => round($percentage, 2),
+            'rating' => $rating,
+            'ranking_percentage' => $rankingPercentage,
+            'tier' => $tier,
+        ];
+    } catch (Exception $e) {
+        // Return default values on error
+        return [
+            'is_completed' => false,
+            'total_questions' => 0,
+            'correct_answers' => 0,
+            'percentage' => 0,
+            'rating' => 0,
+            'ranking_percentage' => 0,
+            'tier' => 'N/A',
+        ];
+    }
+}
+

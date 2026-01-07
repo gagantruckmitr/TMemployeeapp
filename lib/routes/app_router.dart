@@ -11,10 +11,15 @@ import '../features/telecaller/screens/dynamic_profile_screen.dart';
 import '../features/telecaller/screens/edit_profile_screen.dart';
 import '../features/telecaller/screens/settings_screen.dart';
 import '../features/telecaller/screens/driver_full_detail_page.dart';
+import '../features/telecaller/screens/leave_break_management_screen.dart';
 import '../features/manager/manager_dashboard_page.dart';
+import '../features/drivers/driver_bucket_screen.dart';
 import '../core/services/real_auth_service.dart';
 import '../test_db_connection.dart';
 import '../features/dashboard/interested_dashboard_wrapper.dart';
+import '../widgets/callback_notification_overlay.dart'
+    show callbackNavigatorKey;
+import '../attendance/attendance_screen.dart';
 
 // Wrapper to get manager info from auth service
 class ManagerDashboardWrapper extends StatelessWidget {
@@ -25,11 +30,8 @@ class ManagerDashboardWrapper extends StatelessWidget {
     final user = RealAuthService.instance.currentUser;
     final managerId = int.tryParse(user?.id ?? '1') ?? 1;
     final managerName = user?.name ?? 'Manager';
-    
-    return ManagerDashboardPage(
-      managerId: managerId,
-      managerName: managerName,
-    );
+
+    return ManagerDashboardPage(managerId: managerId, managerName: managerName);
   }
 }
 
@@ -48,20 +50,27 @@ class AppRouter {
   static const String driverDetail = '/dashboard/driver-detail';
   static const String testDb = '/test-db';
   static const String interestedDashboard = '/dashboard/interested-dashboard';
+  static const String driverBucket = '/driver-bucket';
+  static const String leaveBreak = '/leave-break';
+  static const String attendance = '/attendance';
 
   static final GoRouter router = GoRouter(
+    navigatorKey: callbackNavigatorKey,
     initialLocation: splash,
     redirect: (context, state) async {
       final isLoggedIn = await RealAuthService.instance.isLoggedIn();
       final isOnLoginPage = state.matchedLocation == login;
       final isOnSplashPage = state.matchedLocation == splash;
       final isOnOnboardingPage = state.matchedLocation == onboarding;
-      
+
       // If not logged in and trying to access protected routes, redirect to login
-      if (!isLoggedIn && !isOnLoginPage && !isOnSplashPage && !isOnOnboardingPage) {
+      if (!isLoggedIn &&
+          !isOnLoginPage &&
+          !isOnSplashPage &&
+          !isOnOnboardingPage) {
         return login;
       }
-      
+
       return null; // No redirect needed
     },
     routes: [
@@ -148,19 +157,28 @@ class AppRouter {
           GoRoute(
             path: 'smart-calling',
             name: 'smart-calling',
-            pageBuilder: (context, state) => CustomTransitionPage(
-              key: state.pageKey,
-              child: const SmartCallingPage(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(1.0, 0.0),
-                    end: Offset.zero,
-                  ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
-                  child: child,
-                );
-              },
-            ),
+            pageBuilder: (context, state) {
+              final tcFor = state.uri.queryParameters['tc_for'];
+              return CustomTransitionPage(
+                key: state.pageKey,
+                child: SmartCallingPage(tcFor: tcFor),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                      return SlideTransition(
+                        position:
+                            Tween<Offset>(
+                              begin: const Offset(1.0, 0.0),
+                              end: Offset.zero,
+                            ).animate(
+                              CurveTween(
+                                curve: Curves.easeOutCubic,
+                              ).animate(animation),
+                            ),
+                        child: child,
+                      );
+                    },
+              );
+            },
           ),
           GoRoute(
             path: 'subscriptions',
@@ -168,15 +186,21 @@ class AppRouter {
             pageBuilder: (context, state) => CustomTransitionPage(
               key: state.pageKey,
               child: const SubscriptionsScreen(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(1.0, 0.0),
-                    end: Offset.zero,
-                  ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
-                  child: child,
-                );
-              },
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return SlideTransition(
+                      position:
+                          Tween<Offset>(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          ).animate(
+                            CurveTween(
+                              curve: Curves.easeOutCubic,
+                            ).animate(animation),
+                          ),
+                      child: child,
+                    );
+                  },
             ),
           ),
           GoRoute(
@@ -185,15 +209,21 @@ class AppRouter {
             pageBuilder: (context, state) => CustomTransitionPage(
               key: state.pageKey,
               child: const PerformanceAnalyticsPage(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.0, 1.0),
-                    end: Offset.zero,
-                  ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
-                  child: child,
-                );
-              },
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return SlideTransition(
+                      position:
+                          Tween<Offset>(
+                            begin: const Offset(0.0, 1.0),
+                            end: Offset.zero,
+                          ).animate(
+                            CurveTween(
+                              curve: Curves.easeOutCubic,
+                            ).animate(animation),
+                          ),
+                      child: child,
+                    );
+                  },
             ),
           ),
           GoRoute(
@@ -208,15 +238,21 @@ class AppRouter {
                   driverId: driverId,
                   driverName: Uri.decodeComponent(driverName),
                 ),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                  return SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(1.0, 0.0),
-                      end: Offset.zero,
-                    ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
-                    child: child,
-                  );
-                },
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) {
+                      return SlideTransition(
+                        position:
+                            Tween<Offset>(
+                              begin: const Offset(1.0, 0.0),
+                              end: Offset.zero,
+                            ).animate(
+                              CurveTween(
+                                curve: Curves.easeOutCubic,
+                              ).animate(animation),
+                            ),
+                        child: child,
+                      );
+                    },
               );
             },
           ),
@@ -226,15 +262,21 @@ class AppRouter {
             pageBuilder: (context, state) => CustomTransitionPage(
               key: state.pageKey,
               child: const InterestedDashboardWrapper(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(1.0, 0.0),
-                    end: Offset.zero,
-                  ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
-                  child: child,
-                );
-              },
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return SlideTransition(
+                      position:
+                          Tween<Offset>(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          ).animate(
+                            CurveTween(
+                              curve: Curves.easeOutCubic,
+                            ).animate(animation),
+                          ),
+                      child: child,
+                    );
+                  },
             ),
           ),
           GoRoute(
@@ -243,15 +285,21 @@ class AppRouter {
             pageBuilder: (context, state) => CustomTransitionPage(
               key: state.pageKey,
               child: const DynamicProfileScreen(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(1.0, 0.0),
-                    end: Offset.zero,
-                  ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
-                  child: child,
-                );
-              },
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return SlideTransition(
+                      position:
+                          Tween<Offset>(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          ).animate(
+                            CurveTween(
+                              curve: Curves.easeOutCubic,
+                            ).animate(animation),
+                          ),
+                      child: child,
+                    );
+                  },
             ),
             routes: [
               // Child routes of profile
@@ -261,15 +309,21 @@ class AppRouter {
                 pageBuilder: (context, state) => CustomTransitionPage(
                   key: state.pageKey,
                   child: const EditProfileScreen(),
-                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                    return SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(1.0, 0.0),
-                        end: Offset.zero,
-                      ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
-                      child: child,
-                    );
-                  },
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                        return SlideTransition(
+                          position:
+                              Tween<Offset>(
+                                begin: const Offset(1.0, 0.0),
+                                end: Offset.zero,
+                              ).animate(
+                                CurveTween(
+                                  curve: Curves.easeOutCubic,
+                                ).animate(animation),
+                              ),
+                          child: child,
+                        );
+                      },
                 ),
               ),
               GoRoute(
@@ -278,15 +332,21 @@ class AppRouter {
                 pageBuilder: (context, state) => CustomTransitionPage(
                   key: state.pageKey,
                   child: const SettingsScreen(),
-                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                    return SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(1.0, 0.0),
-                        end: Offset.zero,
-                      ).animate(CurveTween(curve: Curves.easeOutCubic).animate(animation)),
-                      child: child,
-                    );
-                  },
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                        return SlideTransition(
+                          position:
+                              Tween<Offset>(
+                                begin: const Offset(1.0, 0.0),
+                                end: Offset.zero,
+                              ).animate(
+                                CurveTween(
+                                  curve: Curves.easeOutCubic,
+                                ).animate(animation),
+                              ),
+                          child: child,
+                        );
+                      },
                 ),
               ),
             ],
@@ -303,6 +363,78 @@ class AppRouter {
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
               opacity: CurveTween(curve: Curves.easeInOut).animate(animation),
+              child: child,
+            );
+          },
+        ),
+      ),
+      // Driver Bucket Route
+      GoRoute(
+        path: driverBucket,
+        name: 'driver-bucket',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const DriverBucketScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(1, 0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
+              child: child,
+            );
+          },
+        ),
+      ),
+      // Leave & Break Management Route
+      GoRoute(
+        path: leaveBreak,
+        name: 'leave-break',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const LeaveBreakManagementScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(1, 0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
+              child: child,
+            );
+          },
+        ),
+      ),
+      // Attendance Route
+      GoRoute(
+        path: attendance,
+        name: 'attendance',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const AttendanceScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(1, 0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
               child: child,
             );
           },

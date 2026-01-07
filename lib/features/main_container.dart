@@ -6,6 +6,8 @@ import 'jobs/dynamic_jobs_screen.dart';
 import 'calls/call_history_hub_screen.dart';
 import 'analytics/call_analytics_screen.dart';
 import 'profile/profile_screen.dart';
+import 'telecaller/screens/search_users_screen.dart';
+import '../widgets/draggable_floating_action_button.dart';
 
 class MainContainer extends StatefulWidget {
   const MainContainer({super.key});
@@ -51,44 +53,66 @@ class _MainContainerState extends State<MainContainer> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-              spreadRadius: 2,
+    return Stack(
+      children: [
+        Scaffold(
+          body: IndexedStack(index: _currentIndex, children: _screens),
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, -5),
+                  spreadRadius: 2,
+                ),
+              ],
             ),
-          ],
-        ),
-        child: SafeArea(
-          child: AnimatedBottomNavigationBar.builder(
-            itemCount: _icons.length,
-            tabBuilder: (int index, bool isActive) {
-              return _buildNavItem(index, _icons[index], _labels[index], isActive);
-            },
-            activeIndex: _currentIndex,
-            gapLocation: GapLocation.none,
-            notchSmoothness: NotchSmoothness.softEdge,
-            leftCornerRadius: 20,
-            rightCornerRadius: 20,
-            onTap: (index) => setState(() => _currentIndex = index),
-            backgroundColor: Colors.transparent,
-            splashColor: AppColors.primary.withValues(alpha: 0.2),
-            splashSpeedInMilliseconds: 300,
-            height: 80,
-            elevation: 0,
+            child: SafeArea(
+              child: AnimatedBottomNavigationBar.builder(
+                itemCount: _icons.length,
+                tabBuilder: (int index, bool isActive) {
+                  return _buildNavItem(
+                    index,
+                    _icons[index],
+                    _labels[index],
+                    isActive,
+                  );
+                },
+                activeIndex: _currentIndex,
+                gapLocation: GapLocation.none,
+                notchSmoothness: NotchSmoothness.softEdge,
+                leftCornerRadius: 20,
+                rightCornerRadius: 20,
+                onTap: (index) => setState(() => _currentIndex = index),
+                backgroundColor: Colors.transparent,
+                splashColor: AppColors.primary.withValues(alpha: 0.2),
+                splashSpeedInMilliseconds: 300,
+                height: 80,
+                elevation: 0,
+              ),
+            ),
           ),
         ),
-      ),
+        DraggableFloatingActionButton(
+          heroTag: 'global_search',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SearchUsersScreen(),
+              ),
+            );
+          },
+          backgroundColor: AppColors.primary,
+          child: const Icon(Icons.search, color: Colors.white),
+        ),
+      ],
     );
   }
 

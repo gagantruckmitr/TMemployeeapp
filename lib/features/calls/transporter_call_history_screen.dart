@@ -180,11 +180,7 @@ class _TransporterCallHistoryScreenState
       itemCount: _callHistory.length,
       itemBuilder: (context, index) {
         final record = _callHistory[index];
-        return _CallHistoryCard(
-          record: record,
-          onEdit: () => _editCallRecord(record),
-          onDelete: () => _deleteCallRecord(record['id']),
-        );
+        return _CallHistoryCard(record: record);
       },
     );
   }
@@ -192,14 +188,10 @@ class _TransporterCallHistoryScreenState
 
 class _CallHistoryCard extends StatelessWidget {
   final Map<String, dynamic> record;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
 
   const _CallHistoryCard({
     Key? key,
     required this.record,
-    required this.onEdit,
-    required this.onDelete,
   }) : super(key: key);
 
   @override
@@ -233,39 +225,70 @@ class _CallHistoryCard extends StatelessWidget {
                 'Called by: ${record['callerName']}',
                 style: TextStyle(fontSize: 11, color: Colors.grey[600]),
               ),
+            // Call Status Badge
+            if (record['callStatusFeedback'] != null &&
+                record['callStatusFeedback'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _getCallStatusColor(record['callStatusFeedback']).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: _getCallStatusColor(record['callStatusFeedback']).withOpacity(0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    record['callStatusFeedback'].toString(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: _getCallStatusColor(record['callStatusFeedback']),
+                    ),
+                  ),
+                ),
+              ),
+            // Call Feedback Text
+            if (record['callFeedback'] != null &&
+                record['callFeedback'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  record['callFeedback'].toString(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[700],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
             // Recording indicator
             if (record['callRecording'] != null &&
                 record['callRecording'].toString().isNotEmpty)
-              Row(
-                children: [
-                  Icon(Icons.mic, size: 12, color: Colors.green[700]),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Recording available',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.green[700],
-                      fontWeight: FontWeight.w600,
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.mic, size: 12, color: Colors.green[700]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Recording available',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
           ],
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit, size: 20),
-              onPressed: onEdit,
-              color: AppColors.primary,
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete, size: 20),
-              onPressed: onDelete,
-              color: Colors.red,
-            ),
-          ],
+        trailing: const Icon(
+          Icons.expand_more,
+          color: Colors.grey,
         ),
         children: [
           Padding(
@@ -429,6 +452,19 @@ class _CallHistoryCard extends StatelessWidget {
       return Colors.red.shade700;
     } else if (statusStr.contains('driver')) {
       return Colors.blue;
+    }
+    return Colors.grey;
+  }
+
+  // Get color for call status badge (connected/not_connected/callback_later)
+  Color _getCallStatusColor(dynamic status) {
+    final statusStr = status.toString().toLowerCase();
+    if (statusStr.contains('connected') && !statusStr.contains('not')) {
+      return Colors.green;
+    } else if (statusStr.contains('not connected') || statusStr.contains('not_connected')) {
+      return Colors.red;
+    } else if (statusStr.contains('callback') || statusStr.contains('later')) {
+      return Colors.orange;
     }
     return Colors.grey;
   }

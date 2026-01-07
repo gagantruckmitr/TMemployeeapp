@@ -14,6 +14,8 @@ class ProfileCompletionDetailsScreen extends StatefulWidget {
     required this.completionPercentage,
     required this.profileData,
   });
+  
+  bool get isTransporter => profileData['role'] == 'transporter';
 
   @override
   State<ProfileCompletionDetailsScreen> createState() =>
@@ -29,6 +31,7 @@ class _ProfileCompletionDetailsScreenState
   @override
   void initState() {
     super.initState();
+    // Both transporter and driver have 3 tabs
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       setState(() {
@@ -55,7 +58,7 @@ class _ProfileCompletionDetailsScreenState
     return count;
   }
 
-  int get _totalFields => 23;
+  int get _totalFields => widget.isTransporter ? 15 : 23;
 
   Color get _progressColor {
     return widget.completionPercentage >= 100
@@ -96,11 +99,17 @@ class _ProfileCompletionDetailsScreenState
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: [
-                _buildPersonalDetailTab(),
-                _buildDrivingDetailsTab(),
-                _buildUploadedDocumentsTab(),
-              ],
+              children: widget.isTransporter
+                  ? [
+                      _buildTransporterPersonalTab(),
+                      _buildTransporterFleetTab(),
+                      _buildTransporterDocumentsTab(),
+                    ]
+                  : [
+                      _buildPersonalDetailTab(),
+                      _buildDrivingDetailsTab(),
+                      _buildUploadedDocumentsTab(),
+                    ],
             ),
           ),
         ],
@@ -235,11 +244,17 @@ class _ProfileCompletionDetailsScreenState
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
-        children: [
-          _buildTabItem('Personal Detail', 0),
-          _buildTabItem('Driving Details', 1),
-          _buildTabItem('Uploaded Documents', 2),
-        ],
+        children: widget.isTransporter
+            ? [
+                _buildTabItem('Personal Details', 0),
+                _buildTabItem('Fleet Details', 1),
+                _buildTabItem('Documents', 2),
+              ]
+            : [
+                _buildTabItem('Personal Detail', 0),
+                _buildTabItem('Driving Details', 1),
+                _buildTabItem('Uploaded Documents', 2),
+              ],
       ),
     );
   }
@@ -360,6 +375,91 @@ class _ProfileCompletionDetailsScreenState
     return _buildTabContent(drivingFields);
   }
 
+  Widget _buildTransporterPersonalTab() {
+    final personalFields = [
+      {'key': 'full_name', 'label': 'Full Name', 'icon': Icons.person_outline},
+      {'key': 'email', 'label': 'Email', 'icon': Icons.email_outlined},
+      {'key': 'mobile', 'label': 'Mobile', 'icon': Icons.phone_outlined},
+      {'key': 'address', 'label': 'Address', 'icon': Icons.home_outlined},
+      {'key': 'city', 'label': 'City', 'icon': Icons.location_city_outlined},
+      {'key': 'state', 'label': 'State', 'icon': Icons.map_outlined},
+    ];
+
+    return _buildTabContent(personalFields);
+  }
+
+  Widget _buildTransporterFleetTab() {
+    final fleetFields = [
+      {
+        'key': 'transport_name',
+        'label': 'Transport Name',
+        'icon': Icons.business_outlined
+      },
+      {
+        'key': 'year_of_establishment',
+        'label': 'Year of Establishment',
+        'icon': Icons.calendar_today_outlined
+      },
+      {
+        'key': 'fleet_size',
+        'label': 'Fleet Size',
+        'icon': Icons.local_shipping_outlined
+      },
+      {
+        'key': 'operational_segment',
+        'label': 'Operational Segment',
+        'icon': Icons.category_outlined
+      },
+      {
+        'key': 'average_km',
+        'label': 'Average KM',
+        'icon': Icons.speed_outlined
+      },
+    ];
+
+    return _buildTabContent(fleetFields);
+  }
+
+  Widget _buildTransporterDocumentsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        children: [
+          _buildDocumentPhotoCard(
+            'profile_photo',
+            'Profile Photo',
+            Icons.account_circle_outlined,
+          ),
+          const SizedBox(height: 12),
+          _buildInfoCard(
+            'pan_number',
+            'PAN Number',
+            Icons.credit_card_outlined,
+          ),
+          const SizedBox(height: 12),
+          _buildDocumentPhotoCard(
+            'pan_image',
+            'Uploaded PAN Image',
+            Icons.photo_outlined,
+          ),
+          const SizedBox(height: 12),
+          _buildInfoCard(
+            'gst_number',
+            'GST Number',
+            Icons.receipt_long_outlined,
+          ),
+          const SizedBox(height: 12),
+          _buildDocumentPhotoCard(
+            'gst_certificate',
+            'Uploaded GST Certificate',
+            Icons.description_outlined,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildUploadedDocumentsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -428,10 +528,23 @@ class _ProfileCompletionDetailsScreenState
     // CRITICAL FIX: Check for null, empty string, or whitespace
     final bool hasValue = _isValidValue(value);
 
+    // Determine if this field should be masked
+    final bool shouldMask = key == 'aadhar_number' || 
+                           key == 'license_number' || 
+                           key == 'gst_number' ||
+                           key == 'pan_number';
+
     // Use the actual value if present, otherwise show N/A
-    final String displayValue = hasValue
-        ? (isDate ? _formatDate(value.toString()) : value.toString())
-        : 'N/A';
+    String displayValue = 'N/A';
+    if (hasValue) {
+      if (isDate) {
+        displayValue = _formatDate(value.toString());
+      } else if (shouldMask) {
+        displayValue = _maskSensitiveNumber(value.toString());
+      } else {
+        displayValue = value.toString();
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -731,6 +844,20 @@ class _ProfileCompletionDetailsScreenState
     }
   }
 
+  // Mask sensitive numbers (show first 2 and last 2 digits)
+  String _maskSensitiveNumber(String number) {
+    if (number.length <= 4) {
+      return number; // Too short to mask
+    }
+    
+    final first2 = number.substring(0, 2);
+    final last2 = number.substring(number.length - 2);
+    final maskedLength = number.length - 4;
+    final masked = '*' * maskedLength;
+    
+    return '$first2$masked$last2';
+  }
+
   // Helper method to check if value is valid (not null, not empty, not "null", not "N/A")
   bool _isValidValue(dynamic value) {
     if (value == null) return false;
@@ -745,30 +872,50 @@ class _ProfileCompletionDetailsScreenState
   }
 
   List<Map<String, dynamic>> _getAllFields() {
-    return [
-      {'key': 'full_name', 'label': 'Full Name'},
-      {'key': 'email', 'label': 'Email'},
-      {'key': 'father_name', 'label': 'Father Name'},
-      {'key': 'dob', 'label': 'DOB'},
-      {'key': 'gender', 'label': 'Gender'},
-      {'key': 'marital_status', 'label': 'Marital Status'},
-      {'key': 'highest_education', 'label': 'Highest Education'},
-      {'key': 'address', 'label': 'Address'},
-      {'key': 'city', 'label': 'City'},
-      {'key': 'state', 'label': 'State'},
-      {'key': 'vehicle_type', 'label': 'Vehicle Type'},
-      {'key': 'driving_experience', 'label': 'Driving Experience'},
-      {'key': 'preferred_location', 'label': 'Preferred Location'},
-      {'key': 'current_monthly_income', 'label': 'Current Monthly Income'},
-      {'key': 'expected_monthly_income', 'label': 'Expected Monthly Income'},
-      {'key': 'type_of_license', 'label': 'Type of License'},
-      {'key': 'previous_employer', 'label': 'Previous Employer'},
-      {'key': 'job_placement', 'label': 'Job Placement'},
-      {'key': 'aadhar_number', 'label': 'Aadhar Number'},
-      {'key': 'aadhar_photo', 'label': 'Aadhar Photo'},
-      {'key': 'license_number', 'label': 'License Number'},
-      {'key': 'expiry_date_of_license', 'label': 'License Expiry'},
-      {'key': 'driving_license_photo', 'label': 'Driving License Photo'},
-    ];
+    if (widget.isTransporter) {
+      return [
+        {'key': 'full_name', 'label': 'Full Name'},
+        {'key': 'email', 'label': 'Email'},
+        {'key': 'mobile', 'label': 'Mobile'},
+        {'key': 'transport_name', 'label': 'Transport Name'},
+        {'key': 'year_of_establishment', 'label': 'Year of Establishment'},
+        {'key': 'fleet_size', 'label': 'Fleet Size'},
+        {'key': 'operational_segment', 'label': 'Operational Segment'},
+        {'key': 'average_km', 'label': 'Average KM'},
+        {'key': 'city', 'label': 'City'},
+        {'key': 'state', 'label': 'State'},
+        {'key': 'address', 'label': 'Address'},
+        {'key': 'pan_number', 'label': 'PAN Number'},
+        {'key': 'pan_image', 'label': 'PAN Image'},
+        {'key': 'gst_certificate', 'label': 'GST Certificate'},
+        {'key': 'profile_photo', 'label': 'Profile Photo'},
+      ];
+    } else {
+      return [
+        {'key': 'full_name', 'label': 'Full Name'},
+        {'key': 'email', 'label': 'Email'},
+        {'key': 'father_name', 'label': 'Father Name'},
+        {'key': 'dob', 'label': 'DOB'},
+        {'key': 'gender', 'label': 'Gender'},
+        {'key': 'marital_status', 'label': 'Marital Status'},
+        {'key': 'highest_education', 'label': 'Highest Education'},
+        {'key': 'address', 'label': 'Address'},
+        {'key': 'city', 'label': 'City'},
+        {'key': 'state', 'label': 'State'},
+        {'key': 'vehicle_type', 'label': 'Vehicle Type'},
+        {'key': 'driving_experience', 'label': 'Driving Experience'},
+        {'key': 'preferred_location', 'label': 'Preferred Location'},
+        {'key': 'current_monthly_income', 'label': 'Current Monthly Income'},
+        {'key': 'expected_monthly_income', 'label': 'Expected Monthly Income'},
+        {'key': 'type_of_license', 'label': 'Type of License'},
+        {'key': 'previous_employer', 'label': 'Previous Employer'},
+        {'key': 'job_placement', 'label': 'Job Placement'},
+        {'key': 'aadhar_number', 'label': 'Aadhar Number'},
+        {'key': 'aadhar_photo', 'label': 'Aadhar Photo'},
+        {'key': 'license_number', 'label': 'License Number'},
+        {'key': 'expiry_date_of_license', 'label': 'License Expiry'},
+        {'key': 'driving_license_photo', 'label': 'Driving License Photo'},
+      ];
+    }
   }
 }

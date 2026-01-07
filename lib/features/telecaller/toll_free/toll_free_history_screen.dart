@@ -4,6 +4,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/services/toll_free_feedback_service.dart';
 import '../widgets/tab_page_header.dart';
 import '../../../widgets/audio_player_widget.dart';
+import '../../../widgets/error_handler.dart';
 
 class TollFreeHistoryScreen extends StatefulWidget {
   const TollFreeHistoryScreen({super.key});
@@ -67,13 +68,7 @@ class _TollFreeHistoryScreenState extends State<TollFreeHistoryScreen> {
         _isRefreshing = false;
         _error = error.toString();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to refresh: $error'),
-          backgroundColor: AppTheme.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      ErrorHandler.showError(context, error, onRetry: _refresh);
     }
   }
 
@@ -82,10 +77,10 @@ class _TollFreeHistoryScreenState extends State<TollFreeHistoryScreen> {
     final subtitle = _isLoading
         ? 'Loading call history...'
         : _error != null
-            ? 'Tap refresh to try again.'
-            : _history.isEmpty
-                ? 'No call history yet.'
-                : '${_history.length} calls made';
+        ? 'Tap refresh to try again.'
+        : _history.isEmpty
+        ? 'No call history yet.'
+        : '${_history.length} calls made';
 
     return Scaffold(
       backgroundColor: AppTheme.lightGray,
@@ -122,29 +117,29 @@ class _TollFreeHistoryScreenState extends State<TollFreeHistoryScreen> {
             child: _isLoading
                 ? const _LoadingView()
                 : _error != null
-                    ? _ErrorView(message: _error!, onRetry: _loadHistory)
-                    : RefreshIndicator(
-                        onRefresh: _refresh,
-                        color: AppTheme.primaryBlue,
-                        child: _history.isEmpty
-                            ? const _EmptyView()
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(20),
-                                itemCount: _history.length,
-                                itemBuilder: (context, index) {
-                                  final call = _history[index];
-                                  return Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: index < _history.length - 1 ? 16 : 0,
-                                    ),
-                                    child: _CallHistoryCard(
-                                      call: call,
-                                      dateFormat: _dateFormat,
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
+                ? _ErrorView(message: _error!, onRetry: _loadHistory)
+                : RefreshIndicator(
+                    onRefresh: _refresh,
+                    color: AppTheme.primaryBlue,
+                    child: _history.isEmpty
+                        ? const _EmptyView()
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(20),
+                            itemCount: _history.length,
+                            itemBuilder: (context, index) {
+                              final call = _history[index];
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: index < _history.length - 1 ? 16 : 0,
+                                ),
+                                child: _CallHistoryCard(
+                                  call: call,
+                                  dateFormat: _dateFormat,
+                                ),
+                              );
+                            },
+                          ),
+                  ),
           ),
         ],
       ),
@@ -153,10 +148,7 @@ class _TollFreeHistoryScreenState extends State<TollFreeHistoryScreen> {
 }
 
 class _CallHistoryCard extends StatelessWidget {
-  const _CallHistoryCard({
-    required this.call,
-    required this.dateFormat,
-  });
+  const _CallHistoryCard({required this.call, required this.dateFormat});
 
   final Map<String, dynamic> call;
   final DateFormat dateFormat;
@@ -165,7 +157,8 @@ class _CallHistoryCard extends StatelessWidget {
     final feedback = call['feedback']?.toString().toLowerCase() ?? '';
     if (feedback.contains('interested') || feedback.contains('connected')) {
       return AppTheme.success;
-    } else if (feedback.contains('not interested') || feedback.contains('rejected')) {
+    } else if (feedback.contains('not interested') ||
+        feedback.contains('rejected')) {
       return AppTheme.error;
     } else if (feedback.contains('callback') || feedback.contains('later')) {
       return AppTheme.warning;
@@ -240,7 +233,10 @@ class _CallHistoryCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.primaryBlue.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(12),
@@ -310,7 +306,8 @@ class _CallHistoryCard extends StatelessWidget {
                 ),
               ),
             ],
-            if (call['manual_call_recording_url']?.toString().isNotEmpty == true) ...[
+            if (call['manual_call_recording_url']?.toString().isNotEmpty ==
+                true) ...[
               AudioPlayerWidget(
                 recordingUrl: call['manual_call_recording_url'].toString(),
                 label: 'Toll-Free Call Recording',
@@ -327,7 +324,9 @@ class _CallHistoryCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         dateFormat.format(callDate),
-                        style: AppTheme.bodySmall.copyWith(color: AppTheme.gray),
+                        style: AppTheme.bodySmall.copyWith(
+                          color: AppTheme.gray,
+                        ),
                       ),
                     ],
                   ),
@@ -361,7 +360,9 @@ class _LoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue));
+    return Center(
+      child: CircularProgressIndicator(color: AppTheme.primaryBlue),
+    );
   }
 }
 
@@ -381,10 +382,7 @@ class _ErrorView extends StatelessWidget {
           children: [
             Icon(Icons.error_outline, size: 64, color: AppTheme.error),
             const SizedBox(height: 16),
-            Text(
-              'Failed to load history',
-              style: AppTheme.headingMedium,
-            ),
+            Text('Failed to load history', style: AppTheme.headingMedium),
             const SizedBox(height: 8),
             Text(
               message,
@@ -420,10 +418,7 @@ class _EmptyView extends StatelessWidget {
           children: [
             Icon(Icons.history, size: 64, color: AppTheme.gray),
             const SizedBox(height: 16),
-            Text(
-              'No call history yet',
-              style: AppTheme.headingMedium,
-            ),
+            Text('No call history yet', style: AppTheme.headingMedium),
             const SizedBox(height: 8),
             Text(
               'Your toll-free call history will appear here.',

@@ -22,7 +22,7 @@ class IVRCallWaitingOverlay extends StatefulWidget {
 
   @override
   State<IVRCallWaitingOverlay> createState() => _IVRCallWaitingOverlayState();
-  
+
   // Static method to remove mini overlay
   static void removeMiniOverlay() {
     _globalMiniOverlay?.remove();
@@ -70,24 +70,12 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
       vsync: this,
     );
 
-    _pulseAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.15,
-    ).animate(
-      CurvedAnimation(
-        parent: _pulseController,
-        curve: Curves.easeInOut,
-      ),
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    _rotationAnimation = Tween<double>(
-      begin: 0.0,
-      end: 2 * math.pi,
-    ).animate(
-      CurvedAnimation(
-        parent: _rotationController,
-        curve: Curves.linear,
-      ),
+    _rotationAnimation = Tween<double>(begin: 0.0, end: 2 * math.pi).animate(
+      CurvedAnimation(parent: _rotationController, curve: Curves.linear),
     );
 
     _pulseController.repeat(reverse: true);
@@ -118,14 +106,14 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
       return false;
     });
   }
-  
+
   void _minimizeToFloating(BuildContext context) {
     // Remove any existing mini overlay
     IVRCallWaitingOverlay.removeMiniOverlay();
-    
+
     // Pop the current full-screen overlay
     Navigator.of(context).pop();
-    
+
     // Create and insert mini overlay
     _globalMiniOverlay = OverlayEntry(
       builder: (context) => _MiniFloatingWidget(
@@ -134,7 +122,7 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
         onExpand: () {
           // Remove mini overlay
           IVRCallWaitingOverlay.removeMiniOverlay();
-          
+
           // Show full screen again
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -157,7 +145,7 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
         },
       ),
     );
-    
+
     // Insert into overlay
     Overlay.of(context).insert(_globalMiniOverlay!);
   }
@@ -172,15 +160,13 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
             onTap: () {
               // Tapping background does nothing, user must use buttons
             },
-            child: Container(
-              color: Colors.transparent,
-            ),
+            child: Container(color: Colors.transparent),
           ),
           _buildMiniMode(context),
         ],
       );
     }
-    
+
     return Material(
       color: Colors.black.withValues(alpha: 0.95),
       child: Container(
@@ -283,7 +269,9 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: AppTheme.primaryBlue.withValues(alpha: 0.3),
+                              color: AppTheme.primaryBlue.withValues(
+                                alpha: 0.3,
+                              ),
                               width: 2,
                             ),
                           ),
@@ -303,8 +291,8 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
                       animation: _waveController,
                       builder: (context, child) {
                         final delay = index * 0.3;
-                        final animationValue =
-                            (_waveController.value - delay).clamp(0.0, 1.0);
+                        final animationValue = (_waveController.value - delay)
+                            .clamp(0.0, 1.0);
 
                         return Container(
                           width: 140 + (animationValue * 60),
@@ -463,7 +451,10 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: ElevatedButton(
-                  onPressed: widget.onCallEnded,
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    widget.onCallEnded();
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryBlue,
                     foregroundColor: Colors.white,
@@ -520,10 +511,7 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF4A90E2),
-                  const Color(0xFF357ABD),
-                ],
+                colors: [const Color(0xFF4A90E2), const Color(0xFF357ABD)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -616,9 +604,7 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
                       height: 14,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.white,
-                        ),
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -694,11 +680,7 @@ class _IVRCallWaitingOverlayState extends State<IVRCallWaitingOverlay>
             ),
           ),
         ),
-        Icon(
-          icon,
-          color: Colors.white.withValues(alpha: 0.5),
-          size: 20,
-        ),
+        Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 20),
       ],
     );
   }
@@ -758,7 +740,7 @@ class _MiniFloatingWidgetState extends State<_MiniFloatingWidget> {
     final screenSize = MediaQuery.of(context).size;
     const widgetWidth = 360.0;
     const widgetHeight = 150.0;
-    
+
     return Positioned(
       top: _top,
       left: _left,
@@ -770,11 +752,17 @@ class _MiniFloatingWidgetState extends State<_MiniFloatingWidget> {
             setState(() {
               _left += details.delta.dx;
               _top += details.delta.dy;
-              
+
               // Keep widget within screen bounds with safe clamping
-              final maxLeft = (screenSize.width - widgetWidth).clamp(0.0, screenSize.width);
-              final maxTop = (screenSize.height - widgetHeight).clamp(0.0, screenSize.height);
-              
+              final maxLeft = (screenSize.width - widgetWidth).clamp(
+                0.0,
+                screenSize.width,
+              );
+              final maxTop = (screenSize.height - widgetHeight).clamp(
+                0.0,
+                screenSize.height,
+              );
+
               _left = _left.clamp(0.0, maxLeft);
               _top = _top.clamp(0.0, maxTop);
             });
@@ -784,10 +772,7 @@ class _MiniFloatingWidgetState extends State<_MiniFloatingWidget> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF4A90E2),
-                  const Color(0xFF357ABD),
-                ],
+                colors: [const Color(0xFF4A90E2), const Color(0xFF357ABD)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -900,9 +885,7 @@ class _MiniFloatingWidgetState extends State<_MiniFloatingWidget> {
                       height: 14,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.white,
-                        ),
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     ),
                     const SizedBox(width: 8),

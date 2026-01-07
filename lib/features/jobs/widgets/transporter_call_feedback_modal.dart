@@ -7,6 +7,7 @@ class TransporterCallFeedbackModal extends StatefulWidget {
   final String transporterTmid;
   final String transporterName;
   final String jobId;
+  final String? jobBriefId;
   final Function(String callStatus, String? notes, File? recordingFile) onSubmit;
 
   const TransporterCallFeedbackModal({
@@ -14,6 +15,7 @@ class TransporterCallFeedbackModal extends StatefulWidget {
     required this.transporterTmid,
     required this.transporterName,
     required this.jobId,
+    this.jobBriefId,
     required this.onSubmit,
   }) : super(key: key);
 
@@ -528,6 +530,7 @@ class _TransporterCallFeedbackModalState
         // If "Details Received" is selected, immediately submit and open job brief form
         if (option == 'Details Received' && _selectedMainStatus != null) {
           final callStatus = '$_selectedMainStatus: $option';
+          print('Details Received selected - calling onSubmit with: $callStatus');
           widget.onSubmit(callStatus, null, null);
         }
       },

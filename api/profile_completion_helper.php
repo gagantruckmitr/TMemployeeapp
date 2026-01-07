@@ -4,18 +4,51 @@
  * Used by both profile_completion_api.php and phase2_job_applicants_api.php
  */
 
-function getProfileCompletionData($conn, $userId) {
+/**
+ * Mask sensitive numbers - show first 2 and last 2 digits only
+ * Example: 1234567890 becomes 12******90
+ */
+function maskSensitiveNumber($number) {
+    if (empty($number)) {
+        return $number;
+    }
+    
+    // Convert to string to handle scientific notation
+    $number = (string)$number;
+    $number = trim($number);
+    
+    // Remove any scientific notation by formatting as string
+    if (is_numeric($number) && strpos($number, 'E') !== false) {
+        $number = sprintf('%.0f', floatval($number));
+    }
+    
+    $length = strlen($number);
+    
+    // If too short to mask, return as is
+    if ($length <= 4) {
+        return $number;
+    }
+    
+    $first2 = substr($number, 0, 2);
+    $last2 = substr($number, -2);
+    $maskedLength = $length - 4;
+    $masked = str_repeat('*', $maskedLength);
+    
+    return $first2 . $masked . $last2;
+}
+
+function getProfileCompletionData($conn, $userId, $roleOverride = null) {
     // Fetch user data with joins for vehicle_type and states
     $stmt = $conn->prepare("
         SELECT 
-            u.id, u.unique_id, u.name, u.email, u.city, u.status, u.sex, u.vehicle_type,
+            u.id, u.unique_id, u.name, u.email, u.mobile, u.city, u.status, u.sex, u.vehicle_type,
             u.father_name, u.images, u.address, u.dob, u.role, u.created_at, u.updated_at,
             u.type_of_license, u.driving_experience, u.highest_education, u.license_number,
             u.expiry_date_of_license, u.expected_monthly_income, u.current_monthly_income,
             u.marital_status, u.preferred_location, u.aadhar_number, u.aadhar_photo,
             u.driving_license, u.previous_employer, u.job_placement,
             u.transport_name, u.year_of_establishment, u.fleet_size, u.operational_segment,
-            u.average_km, u.pan_number, u.pan_image, u.gst_certificate, u.states,
+            u.average_km, u.pan_number, u.pan_image, u.gst_number, u.gst_certificate, u.states,
             COALESCE(vt.vehicle_name, u.vehicle_type) as vehicle_type_name,
             s.name as state_name,
             s2.name as preferred_location_name
@@ -35,7 +68,8 @@ function getProfileCompletionData($conn, $userId) {
     }
     
     $user = $result->fetch_assoc();
-    $role = $user['role'];
+    // Use role override if provided, otherwise use database role
+    $role = $roleOverride ?? $user['role'];
     
     // Define required fields based on role (excluding system fields)
     $requiredFields = [];
@@ -64,7 +98,7 @@ function getProfileCompletionData($conn, $userId) {
         $requiredFields = [
             'name', 'email', 'mobile', 'transport_name', 'year_of_establishment',
             'fleet_size', 'operational_segment', 'average_km', 'city', 'states',
-            'images', 'address', 'pan_number', 'pan_image', 'gst_certificate'
+            'images', 'address', 'pan_number', 'pan_image', 'gst_number', 'gst_certificate'
         ];
     }
     
@@ -72,6 +106,9 @@ function getProfileCompletionData($conn, $userId) {
     $documentValues = [];
     $filledFields = 0;
     $totalFields = count($requiredFields);
+    
+    // Sensitive fields that need masking
+    $sensitiveFields = ['aadhar_number', 'license_number', 'pan_number', 'gst_number'];
     
     foreach ($requiredFields as $field) {
         // Check if there's a display field mapping (e.g., vehicle_type -> vehicle_type_name)
@@ -98,6 +135,11 @@ function getProfileCompletionData($conn, $userId) {
                 // Not an array and not empty
                 $isPresent = true;
                 $displayValue = $value;
+                
+                // Mask sensitive fields (show first 2 and last 2 digits only)
+                if (in_array($field, $sensitiveFields)) {
+                    $displayValue = maskSensitiveNumber($value);
+                }
             }
         }
         
@@ -127,8 +169,8 @@ function getProfileCompletionData($conn, $userId) {
 }
 
 // Simple function that just returns the percentage
-function calculateProfileCompletion($conn, $userId) {
-    $data = getProfileCompletionData($conn, $userId);
+function calculateProfileCompletion($conn, $userId, $roleOverride = null) {
+    $data = getProfileCompletionData($conn, $userId, $roleOverride);
     return $data['percentage'];
 }
 ?>

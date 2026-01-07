@@ -135,25 +135,57 @@ class _EnhancedLeaveBreakWidgetState extends State<EnhancedLeaveBreakWidget> {
   }
 
   Widget _buildBreakButtons() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _buildBreakButton(
-            'Tea Break',
-            'tea_break',
-            Icons.local_cafe_rounded,
-            const Color(0xFFFFA726),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildBreakButton(
+                'Lunch Break',
+                'lunch_break',
+                Icons.restaurant_rounded,
+                const Color(0xFF66BB6A),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildBreakButton(
+                'Tea Break',
+                'tea_break',
+                Icons.local_cafe_rounded,
+                const Color(0xFFFFA726),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildBreakButton(
-            'Lunch',
-            'lunch_break',
-            Icons.restaurant_rounded,
-            const Color(0xFF66BB6A),
-            statusText: _getStatusText(),
-          ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildBreakButton(
+                'Rest Break',
+                'rest_break',
+                Icons.weekend_rounded,
+                const Color(0xFF42A5F5),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildBreakButton(
+                'Training Break',
+                'training_break',
+                Icons.school_rounded,
+                const Color(0xFFAB47BC),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildBreakButton(
+          'Meeting Break',
+          'meeting_break',
+          Icons.groups_rounded,
+          const Color(0xFFEF5350),
         ),
       ],
     );
@@ -216,71 +248,7 @@ class _EnhancedLeaveBreakWidgetState extends State<EnhancedLeaveBreakWidget> {
   }
 
   Widget _buildStatusRow() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 2,
-          child: _buildSecondaryBreakButton(
-            'Prayer',
-            'prayer_break',
-            Icons.mosque_rounded,
-            const Color(0xFF42A5F5),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 2,
-          child: _buildSecondaryBreakButton(
-            'Personal',
-            'personal_break',
-            Icons.person_rounded,
-            const Color(0xFFAB47BC),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(flex: 3, child: _buildOnlineStatus()),
-      ],
-    );
-  }
-
-  Widget _buildSecondaryBreakButton(
-    String label,
-    String breakType,
-    IconData icon,
-    Color color,
-  ) {
-    final isActive = _isOnBreak && _activeBreak?['break_type'] == breakType;
-
-    return GestureDetector(
-      onTap: isActive ? _endBreak : () => _startBreak(breakType),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return _buildOnlineStatus();
   }
 
   Widget _buildOnlineStatus() {
@@ -288,11 +256,9 @@ class _EnhancedLeaveBreakWidgetState extends State<EnhancedLeaveBreakWidget> {
     final isOnline = status == 'online';
     final onlineDuration =
         _myStatus?['online_duration_formatted'] ?? '00:00:00';
-    final todayConnected = _myStatus?['today_connected'] ?? 0;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Container(
           padding: const EdgeInsets.all(6),
@@ -308,67 +274,36 @@ class _EnhancedLeaveBreakWidgetState extends State<EnhancedLeaveBreakWidget> {
             size: 20,
           ),
         ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: isOnline ? const Color(0xFF10B981) : Colors.grey,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                onlineDuration,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1F2937),
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.info_outline_rounded,
-                size: 12,
-                color: Colors.grey.shade600,
-              ),
-            ),
-          ],
+        const SizedBox(width: 8),
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: isOnline ? const Color(0xFF10B981) : Colors.grey,
+            shape: BoxShape.circle,
+          ),
         ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.phone_in_talk_rounded,
-              size: 12,
-              color: Colors.grey.shade600,
-            ),
-            const SizedBox(width: 3),
-            Flexible(
-              child: Text(
-                '$todayConnected Calls',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey.shade600,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+        const SizedBox(width: 4),
+        Text(
+          onlineDuration,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: Colors.grey.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.info_outline_rounded,
+            size: 12,
+            color: Colors.grey.shade600,
+          ),
         ),
       ],
     );

@@ -345,6 +345,19 @@ class CallbackRequest {
   final String? profileCompletion;
   final String? subscribeDate;
   final String? profileImage;
+  final String? callFeedback;
+  final String? callRemarks;
+  final DateTime? lastCallTime;
+  final int? appliedJobsCount;
+  final int? callHistoryCount;
+  final String? trainingStatus;
+  final String? assignedTelecaller;
+  final DateTime? registrationDate;
+  final List<dynamic>? appliedJobs;
+  final List<dynamic>? callHistory;
+  final int? userId;
+  final List<dynamic>? callbackHistory; // List of all callback requests for this user
+  final int? callbackRequestsCount; // Total number of callback requests
 
   CallbackRequest({
     required this.id,
@@ -362,6 +375,19 @@ class CallbackRequest {
     this.profileCompletion,
     this.subscribeDate,
     this.profileImage,
+    this.callFeedback,
+    this.callRemarks,
+    this.lastCallTime,
+    this.appliedJobsCount,
+    this.callHistoryCount,
+    this.trainingStatus,
+    this.assignedTelecaller,
+    this.registrationDate,
+    this.appliedJobs,
+    this.callHistory,
+    this.userId,
+    this.callbackHistory,
+    this.callbackRequestsCount,
   });
 
   factory CallbackRequest.fromJson(Map<String, dynamic> json) {
@@ -388,6 +414,23 @@ class CallbackRequest {
           json['images'] != null && json['images'].toString().isNotEmpty
           ? '${ApiConfig.publicUrl}/${json['images']}'
           : null,
+      callFeedback: json['call_feedback'] as String?,
+      callRemarks: json['call_remarks'] as String?,
+      lastCallTime: json['last_call_time'] != null
+          ? DateTime.parse(json['last_call_time'])
+          : null,
+      appliedJobsCount: json['applied_jobs_count'] as int?,
+      callHistoryCount: json['call_history_count'] as int?,
+      trainingStatus: json['training_status'] as String?,
+      assignedTelecaller: json['assigned_telecaller'] as String?,
+      registrationDate: json['registration_date'] != null
+          ? DateTime.parse(json['registration_date'])
+          : null,
+      appliedJobs: json['applied_jobs'] as List<dynamic>?,
+      callHistory: json['call_history'] as List<dynamic>?,
+      userId: json['user_id'] as int?,
+      callbackHistory: json['callback_history'] as List<dynamic>?,
+      callbackRequestsCount: json['callback_requests_count'] as int?,
     );
   }
 
@@ -407,6 +450,9 @@ class CallbackRequest {
       'updated_at': updatedAt?.toIso8601String(),
       'profile_completion': profileCompletion,
       'subscribe_date': subscribeDate,
+      'call_feedback': callFeedback,
+      'call_remarks': callRemarks,
+      'last_call_time': lastCallTime?.toIso8601String(),
     };
   }
 }

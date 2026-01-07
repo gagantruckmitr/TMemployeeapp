@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../core/theme/app_theme.dart';
-import '../../../core/config/api_config.dart';
 import '../../../core/services/real_auth_service.dart';
 import '../../../models/smart_calling_models.dart';
 import '../widgets/driver_contact_card.dart';
@@ -60,30 +59,74 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
     });
 
     try {
-      final user = RealAuthService.instance.currentUser;
-      final callerId = user?.id ?? 0;
+      // Get bearer token from login session
+      final token = await RealAuthService.instance.getAuthToken();
+      if (token == null || token.isEmpty) {
+        setState(() {
+          _errorMessage = 'Please login again to search users';
+          _isLoading = false;
+        });
+        return;
+      }
 
-      // Request more results if filters are active to ensure we get enough after filtering
-      final requestLimit = _filters.hasActiveFilters ? '150' : '100';
-      
-      final queryParams = {
-        'action': 'search',
-        'query': query.trim(),
-        'caller_id': callerId.toString(),
-        'limit': requestLimit,
-        ..._filters.toQueryParams(),
-      };
-
+      // Build URL with search query
       final uri = Uri.parse(
-        '${ApiConfig.baseUrl}/search_users_api.php',
-      ).replace(queryParameters: queryParams);
+        'https://truckmitr.com/api/telehead/payments/search',
+      ).replace(queryParameters: {'search': query.trim()});
 
-      final response = await http.get(uri).timeout(ApiConfig.timeout);
+      print('🔍 Searching users: $uri');
+
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('📥 Response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
-          final List<dynamic> usersJson = data['data'] ?? [];
+          final List<dynamic> usersJson = data['users'] ?? [];
+
+          print('✅ Found ${usersJson.length} users');
+
+          // Debug: Print first user's call_logs structure
+          if (usersJson.isNotEmpty) {
+            final firstUser = usersJson[0] as Map<String, dynamic>;
+            print('📋 First user keys: ${firstUser.keys.toList()}');
+
+            // Check for call_logs in full_details
+            final fullDetails =
+                firstUser['full_details'] as Map<String, dynamic>?;
+            if (fullDetails != null) {
+              print('📋 full_details keys: ${fullDetails.keys.toList()}');
+              if (fullDetails['call_logs'] != null) {
+                final callLogs = fullDetails['call_logs'] as List;
+                if (callLogs.isNotEmpty) {
+                  print(
+                    '📋 First call_log keys: ${(callLogs[0] as Map).keys.toList()}',
+                  );
+                  print('📋 First call_log data: ${callLogs[0]}');
+                }
+              }
+            }
+
+            // Also check root level call_history
+            if (firstUser['call_history'] != null) {
+              final callHistory = firstUser['call_history'] as List;
+              if (callHistory.isNotEmpty) {
+                print(
+                  '📋 Root call_history keys: ${(callHistory[0] as Map).keys.toList()}',
+                );
+                print('📋 Root call_history data: ${callHistory[0]}');
+              }
+            }
+          }
 
           setState(() {
             _searchResults = usersJson
@@ -93,116 +136,33 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
           });
         } else {
           setState(() {
-            _errorMessage = data['error'] ?? 'Failed to search users';
+            _errorMessage = data['message'] ?? 'Failed to search users';
             _isLoading = false;
           });
         }
+      } else if (response.statusCode == 401) {
+        setState(() {
+          _errorMessage = 'Session expired. Please login again.';
+          _isLoading = false;
+        });
       } else {
         setState(() {
-          _errorMessage = 'HTTP ${response.statusCode}: ${response.body}';
+          _errorMessage = 'Server error: ${response.statusCode}';
           _isLoading = false;
         });
       }
     } catch (e) {
+      print('❌ Search error: $e');
       setState(() {
-        _errorMessage = 'Error: ${e.toString()}';
+        _errorMessage = 'Connection error. Please try again.';
         _isLoading = false;
       });
     }
   }
 
   DriverContact _mapJsonToDriverContact(Map<String, dynamic> json) {
-    return DriverContact(
-      id: json['id']?.toString() ?? '',
-      tmid: json['tmid']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      company: json['company']?.toString() ?? '',
-      phoneNumber: json['phoneNumber']?.toString() ?? '',
-      state: json['state']?.toString() ?? '',
-      subscriptionStatus: _parseSubscriptionStatus(
-        json['subscriptionStatus']?.toString(),
-      ),
-      status: _parseCallStatus(json['callStatus']?.toString()),
-      lastFeedback: json['lastFeedback']?.toString(),
-      lastCallTime: json['lastCallTime'] != null
-          ? DateTime.tryParse(json['lastCallTime'].toString())
-          : null,
-      remarks: json['remarks']?.toString(),
-      paymentInfo: json['paymentInfo'] != null
-          ? PaymentInfo(
-              subscriptionType: json['paymentInfo']['subscriptionType']
-                  ?.toString(),
-              paymentStatus: _parsePaymentStatus(
-                json['paymentInfo']['paymentStatus']?.toString(),
-              ),
-              paymentDate: json['paymentInfo']['paymentDate'] != null
-                  ? DateTime.tryParse(
-                      json['paymentInfo']['paymentDate'].toString(),
-                    )
-                  : null,
-              amount: json['paymentInfo']['amount']?.toString(),
-              expiryDate: json['paymentInfo']['expiryDate'] != null
-                  ? DateTime.tryParse(
-                      json['paymentInfo']['expiryDate'].toString(),
-                    )
-                  : null,
-            )
-          : null,
-      registrationDate: json['registrationDate'] != null
-          ? DateTime.tryParse(json['registrationDate'].toString())
-          : null,
-      profileCompletion: json['profile_completion'] != null
-          ? ProfileCompletion.fromPercentageString(
-              json['profile_completion'].toString(),
-            )
-          : null,
-      profilePicture: json['profilePicture']?.toString(),
-    );
-  }
-
-  SubscriptionStatus _parseSubscriptionStatus(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'active':
-        return SubscriptionStatus.active;
-      case 'pending':
-        return SubscriptionStatus.pending;
-      case 'expired':
-        return SubscriptionStatus.expired;
-      default:
-        return SubscriptionStatus.inactive;
-    }
-  }
-
-  CallStatus _parseCallStatus(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'connected':
-        return CallStatus.connected;
-      case 'callback':
-        return CallStatus.callBack;
-      case 'callback_later':
-        return CallStatus.callBackLater;
-      case 'not_reachable':
-        return CallStatus.notReachable;
-      case 'not_interested':
-        return CallStatus.notInterested;
-      case 'invalid':
-        return CallStatus.invalid;
-      default:
-        return CallStatus.pending;
-    }
-  }
-
-  PaymentStatus _parsePaymentStatus(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'success':
-        return PaymentStatus.success;
-      case 'pending':
-        return PaymentStatus.pending;
-      case 'failed':
-        return PaymentStatus.failed;
-      default:
-        return PaymentStatus.none;
-    }
+    // Use the existing factory method that handles the telehead API format
+    return DriverContact.fromBacklogJson(json);
   }
 
   @override

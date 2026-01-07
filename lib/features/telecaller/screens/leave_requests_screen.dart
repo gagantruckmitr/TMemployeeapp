@@ -4,6 +4,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../models/leave_models.dart';
 import '../../../core/services/real_auth_service.dart';
 import '../../../core/services/api_service.dart';
+import '../../../widgets/error_handler.dart';
 
 class LeaveRequestsScreen extends StatefulWidget {
   const LeaveRequestsScreen({super.key});
@@ -47,12 +48,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load leave requests: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorHandler.showError(context, e, onRetry: _loadLeaveRequests);
       }
     }
   }
@@ -61,7 +57,9 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
     if (_selectedFilter == 'all') {
       return _leaveRequests;
     }
-    return _leaveRequests.where((req) => req.status == _selectedFilter).toList();
+    return _leaveRequests
+        .where((req) => req.status == _selectedFilter)
+        .toList();
   }
 
   Color _getStatusColor(String status) {
@@ -79,9 +77,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
-          gradient: AppTheme.backgroundGradient,
-        ),
+        decoration: BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: SafeArea(
           child: Column(
             children: [
@@ -91,8 +87,8 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
                 child: _isLoading
                     ? _buildLoadingState()
                     : _filteredRequests.isEmpty
-                        ? _buildEmptyState()
-                        : _buildLeaveList(),
+                    ? _buildEmptyState()
+                    : _buildLeaveList(),
               ),
             ],
           ),
@@ -196,7 +192,9 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
         fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
       ),
       side: BorderSide(
-        color: isSelected ? AppTheme.primaryBlue : AppTheme.gray.withOpacity(0.3),
+        color: isSelected
+            ? AppTheme.primaryBlue
+            : AppTheme.gray.withOpacity(0.3),
       ),
     );
   }
@@ -255,7 +253,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
 
   Widget _buildLeaveCard(LeaveRequest request) {
     final statusColor = _getStatusColor(request.status);
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -279,7 +277,10 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor,
                     borderRadius: BorderRadius.circular(20),
@@ -300,7 +301,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
               ],
             ),
           ),
-          
+
           // Content
           Padding(
             padding: const EdgeInsets.all(16),
@@ -325,7 +326,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Dates
                 Row(
                   children: [
@@ -353,7 +354,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Reason
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -372,16 +373,14 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        request.reason,
-                        style: AppTheme.bodyMedium,
-                      ),
+                      Text(request.reason, style: AppTheme.bodyMedium),
                     ],
                   ),
                 ),
-                
+
                 // Manager Remarks (if any)
-                if (request.managerRemarks != null && request.managerRemarks!.isNotEmpty) ...[
+                if (request.managerRemarks != null &&
+                    request.managerRemarks!.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -395,11 +394,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
                       children: [
                         Row(
                           children: [
-                            Icon(
-                              Icons.comment,
-                              size: 16,
-                              color: statusColor,
-                            ),
+                            Icon(Icons.comment, size: 16, color: statusColor),
                             const SizedBox(width: 4),
                             Text(
                               'Manager Remarks:',

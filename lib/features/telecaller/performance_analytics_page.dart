@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/api_service.dart';
-import '../../widgets/gradient_background.dart';
 
 class PerformanceAnalyticsPage extends StatefulWidget {
   final VoidCallback? onNavigateBack;
-  
+
   const PerformanceAnalyticsPage({super.key, this.onNavigateBack});
 
   @override
@@ -17,17 +16,15 @@ class PerformanceAnalyticsPage extends StatefulWidget {
 class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  bool _isLoading = true;
-  String _selectedPeriod = 'today';
   Map<String, dynamic> analyticsData = {};
   List<Map<String, dynamic>> callHistory = [];
-  Map<String, dynamic> performanceMetrics = {};
-  List<Map<String, dynamic>> weeklyData = [];
+  bool _isLoading = true;
+  String _selectedPeriod = 'today';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _loadAnalyticsData();
   }
 
@@ -48,17 +45,12 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
         setState(() {
           analyticsData = response['data'] ?? {};
 
+          print('📊 Analytics Data Received: $analyticsData');
+          print('📈 Overview Data: ${analyticsData['overview']}');
+
           // Get call history from recent_calls
           callHistory = List<Map<String, dynamic>>.from(
             analyticsData['recent_calls'] ?? [],
-          );
-
-          // Get performance metrics
-          performanceMetrics = analyticsData['performance_metrics'] ?? {};
-
-          // Get weekly/trend data
-          weeklyData = List<Map<String, dynamic>>.from(
-            analyticsData['call_trends'] ?? [],
           );
 
           _isLoading = false;
@@ -68,8 +60,6 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
         setState(() {
           analyticsData = _getEmptyAnalyticsData();
           callHistory = [];
-          performanceMetrics = {};
-          weeklyData = [];
           _isLoading = false;
         });
       }
@@ -79,11 +69,9 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
       setState(() {
         analyticsData = _getEmptyAnalyticsData();
         callHistory = [];
-        performanceMetrics = {};
-        weeklyData = [];
         _isLoading = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -113,28 +101,22 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GradientBackground(
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(),
-              _buildPeriodSelector(),
-              _buildTabBar(),
-              Expanded(
-                child: _isLoading
-                    ? _buildLoadingState()
-                    : TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildOverviewTab(),
-                          _buildCallsTab(),
-                          _buildGoalsTab(),
-                          _buildTrendsTab(),
-                        ],
-                      ),
-              ),
-            ],
-          ),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            _buildPeriodSelector(),
+            _buildTabBar(),
+            Expanded(
+              child: _isLoading
+                  ? _buildLoadingState()
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [_buildOverviewTab(), _buildCallsTab()],
+                    ),
+            ),
+          ],
         ),
       ),
     );
@@ -143,26 +125,16 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryColor,
-            AppTheme.primaryColor.withValues(alpha: 0.8),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
+      color: Colors.white,
       child: Row(
         children: [
           IconButton(
             icon: const Icon(
-              Icons.arrow_back_ios_new,
-              color: Colors.white,
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.black87,
               size: 20,
             ),
             onPressed: () {
-              // Try callback first, then fallback to context.go
               if (widget.onNavigateBack != null) {
                 widget.onNavigateBack!();
               } else {
@@ -179,24 +151,13 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Performance Analytics',
+                  'Analytics',
                   style: AppTheme.headingMedium.copyWith(
-                    color: Colors.white,
+                    color: Colors.black,
                     fontWeight: FontWeight.w800,
-                    fontSize: 20,
+                    letterSpacing: -0.5,
+                    fontSize: 22,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Track your progress & insights',
-                  style: AppTheme.bodySmall.copyWith(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    fontSize: 13,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -204,8 +165,8 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
           IconButton(
             icon: const Icon(
               Icons.refresh_rounded,
-              color: Colors.white,
-              size: 22,
+              color: Colors.black87,
+              size: 24,
             ),
             onPressed: _loadAnalyticsData,
             padding: EdgeInsets.zero,
@@ -217,68 +178,58 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
   }
 
   Widget _buildPeriodSelector() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.grey.withValues(alpha: 0.3),
-          width: 1.5,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(14),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _buildPeriodButton('Today', 'today'),
-          _buildPeriodButton('Week', 'week'),
-          _buildPeriodButton('Month', 'month'),
-          _buildPeriodButton('Year', 'year'),
-        ],
+        child: Row(
+          children: [
+            _buildPeriodButton('Today', 'today'),
+            _buildPeriodButton('Yesterday', 'yesterday'),
+            _buildPeriodButton('This Week', 'this_week'),
+            _buildPeriodButton('This Month', 'this_month'),
+            _buildPeriodButton('All', 'all'),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildPeriodButton(String label, String value) {
     final isSelected = _selectedPeriod == value;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _selectedPeriod = value);
-          _loadAnalyticsData();
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            gradient: isSelected ? AppTheme.primaryGradient : null,
-            color: isSelected ? null : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: AppTheme.bodyMedium.copyWith(
-              color: isSelected ? Colors.white : Colors.grey.shade700,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-              fontSize: 14,
-            ),
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedPeriod = value);
+        _loadAnalyticsData();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: AppTheme.bodyMedium.copyWith(
+            color: isSelected ? Colors.black : Colors.grey.shade600,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            fontSize: 13,
           ),
         ),
       ),
@@ -287,49 +238,36 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
 
   Widget _buildTabBar() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      padding: const EdgeInsets.all(4),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-          gradient: AppTheme.primaryGradient,
-          borderRadius: BorderRadius.circular(14),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
-              color: AppTheme.primaryColor.withValues(alpha: 0.3),
-              blurRadius: 8,
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 4,
               offset: const Offset(0, 2),
             ),
           ],
         ),
+        indicatorPadding: const EdgeInsets.all(4),
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: Colors.transparent,
-        labelColor: Colors.white,
+        labelColor: Colors.black,
         unselectedLabelColor: Colors.grey.shade600,
-        labelStyle: AppTheme.bodySmall.copyWith(
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
-        ),
-        unselectedLabelStyle: AppTheme.bodySmall.copyWith(
+        labelStyle: AppTheme.bodyMedium.copyWith(fontWeight: FontWeight.w700),
+        unselectedLabelStyle: AppTheme.bodyMedium.copyWith(
           fontWeight: FontWeight.w500,
-          fontSize: 13,
         ),
         tabs: const [
           Tab(text: 'Overview'),
-          Tab(text: 'Calls'),
-          Tab(text: 'Goals'),
-          Tab(text: 'Trends'),
+          Tab(text: 'Call Logs'),
         ],
       ),
     );
@@ -337,18 +275,47 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
 
   Widget _buildLoadingState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Loading analytics...',
-            style: AppTheme.bodyMedium.copyWith(color: Colors.grey.shade600),
-          ),
-        ],
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppTheme.primaryColor,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Updating Data',
+              style: AppTheme.bodyMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Fetching latest insights...',
+              style: AppTheme.bodySmall.copyWith(color: Colors.grey.shade500),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -356,18 +323,92 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
   Widget _buildOverviewTab() {
     final overview = analyticsData['overview'] ?? {};
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Performance Overview',
-            style: AppTheme.titleMedium.copyWith(fontWeight: FontWeight.w700),
+            'Activity Summary',
+            style: AppTheme.titleMedium.copyWith(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              letterSpacing: -0.2,
+            ),
           ),
           const SizedBox(height: 16),
           _buildOverviewCards(overview),
-          const SizedBox(height: 20),
-          _buildPerformanceMetrics(),
+          const SizedBox(height: 24),
+          _buildSuccessRateCard(overview),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuccessRateCard(Map<String, dynamic> overview) {
+    final successRate = overview['success_rate']?.toDouble() ?? 0.0;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Success Rate',
+                  style: AppTheme.bodySmall.copyWith(
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${successRate.toStringAsFixed(1)}%',
+                  style: AppTheme.headingMedium.copyWith(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 60,
+            width: 60,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CircularProgressIndicator(
+                  value: successRate / 100,
+                  strokeWidth: 8,
+                  backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppTheme.primaryColor,
+                  ),
+                  strokeCap: StrokeCap.round,
+                ),
+                Center(
+                  child: Icon(
+                    Icons.trending_up_rounded,
+                    color: AppTheme.primaryColor,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -382,41 +423,39 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
               child: _buildStatCard(
                 'Total Calls',
                 '${overview['total_calls'] ?? 0}',
-                Icons.phone,
-                Colors.blue,
+                Icons.phone_rounded,
+                const Color(0xFF007AFF), // iOS Blue
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             Expanded(
               child: _buildStatCard(
                 'Connected',
                 '${overview['connected_calls'] ?? 0}',
-                Icons.check_circle,
-                Colors.green,
+                Icons.check_circle_rounded,
+                const Color(0xFF34C759), // iOS Green
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
-              child: _buildClickableStatCard(
-                'Interested',
-                '${overview['interested_count'] ?? 0}',
-                Icons.favorite,
-                Colors.green,
-                () => _navigateToInterestedScreen(),
+              child: _buildStatCard(
+                'No Connection',
+                '${overview['not_connected_calls'] ?? 0}',
+                Icons.phone_missed_rounded,
+                const Color(0xFFFF3B30), // iOS Red
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             Expanded(
-              child: _buildClickableStatCard(
-                'Not Interested',
-                '${overview['not_interested'] ?? 0}',
-                Icons.cancel,
-                Colors.red,
-                () => _showNotInterestedCallsDialog(),
+              child: _buildStatCard(
+                'Callbacks',
+                '${overview['callbacks_scheduled'] ?? 0}',
+                Icons.timer_rounded,
+                const Color(0xFFFF9500), // iOS Orange
               ),
             ),
           ],
@@ -435,12 +474,12 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -448,438 +487,29 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: color, size: 22),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Text(
             value,
             style: AppTheme.headingMedium.copyWith(
-              fontSize: 24,
+              fontSize: 26,
               fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             title,
             style: AppTheme.bodySmall.copyWith(
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildClickableStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: color, size: 20),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 14,
-                  color: Colors.grey.shade400,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: AppTheme.headingMedium.copyWith(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: AppTheme.bodySmall.copyWith(
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _navigateToInterestedScreen() {
-    // Navigate to the Interested Screen
-    context.go('/smart-calling/interested');
-  }
-
-  void _showNotInterestedCallsDialog() {
-    final notInterestedCalls = List<Map<String, dynamic>>.from(
-      analyticsData['not_interested_calls'] ?? [],
-    );
-
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Container(
-          constraints: const BoxConstraints(maxHeight: 600),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.red, Colors.red.shade700],
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.cancel, color: Colors.white, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Not Interested Calls (${notInterestedCalls.length})',
-                        style: AppTheme.headingMedium.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(
-                child: notInterestedCalls.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(40),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.cancel_outlined,
-                                size: 64, color: Colors.grey.shade400),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No not interested calls',
-                              style: AppTheme.bodyMedium.copyWith(
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.all(16),
-                        itemCount: notInterestedCalls.length,
-                        itemBuilder: (context, index) {
-                          final call = notInterestedCalls[index];
-                          return _buildCallListItem(call, Colors.red);
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCallListItem(Map<String, dynamic> call, Color accentColor) {
-    final driverName = call['driver_name'] ?? 'Unknown';
-    final driverMobile = call['driver_mobile'] ?? 'N/A';
-    final timeAgo = call['time_ago'] ?? '';
-    final feedback = call['feedback'] ?? '';
-    final duration = call['duration_formatted'] ?? '0:00';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: accentColor.withValues(alpha: 0.3), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.person, color: accentColor, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      driverName,
-                      style: AppTheme.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      driverMobile,
-                      style: AppTheme.bodySmall.copyWith(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                timeAgo,
-                style: AppTheme.bodySmall.copyWith(
-                  color: Colors.grey.shade500,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-          if (feedback.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.comment, size: 14, color: Colors.grey.shade600),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      feedback,
-                      style: AppTheme.bodySmall.copyWith(
-                        color: Colors.grey.shade700,
-                        fontSize: 12,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.timer, size: 14, color: Colors.grey.shade500),
-              const SizedBox(width: 4),
-              Text(
-                'Duration: $duration',
-                style: AppTheme.bodySmall.copyWith(
-                  color: Colors.grey.shade600,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPerformanceMetrics() {
-    final conversionRate = performanceMetrics['conversion_rate'] ?? {};
-    final successRate = performanceMetrics['success_rate'] ?? {};
-    final followUpRate = performanceMetrics['follow_up_rate'] ?? {};
-    final avgCallTime = performanceMetrics['avg_call_time'] ?? {};
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Key Metrics',
-          style: AppTheme.titleMedium.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildMetricCard(
-                'Conversion',
-                '${conversionRate['value'] ?? 0}%',
-                '${(conversionRate['change'] ?? 0) >= 0 ? '+' : ''}${conversionRate['change'] ?? 0}%',
-                (conversionRate['change'] ?? 0) >= 0,
-                Icons.trending_up,
-                Colors.purple,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildMetricCard(
-                'Success Rate',
-                '${successRate['value'] ?? 0}%',
-                '${(successRate['change'] ?? 0) >= 0 ? '+' : ''}${successRate['change'] ?? 0}%',
-                (successRate['change'] ?? 0) >= 0,
-                Icons.check_circle_outline,
-                Colors.green,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildMetricCard(
-                'Follow-ups',
-                '${followUpRate['value'] ?? 0}%',
-                '${(followUpRate['change'] ?? 0) >= 0 ? '+' : ''}${followUpRate['change'] ?? 0}%',
-                (followUpRate['change'] ?? 0) >= 0,
-                Icons.schedule,
-                Colors.orange,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildMetricCard(
-                'Avg Call Time',
-                avgCallTime['formatted'] ?? '0:00',
-                '${(avgCallTime['change'] ?? 0) >= 0 ? '+' : ''}${avgCallTime['change'] ?? 0}%',
-                (avgCallTime['change'] ?? 0) >= 0,
-                Icons.timer,
-                Colors.blue,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMetricCard(
-    String title,
-    String value,
-    String change,
-    bool positive,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 16),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: (positive ? Colors.green : Colors.red).withValues(
-                    alpha: 0.1,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  change,
-                  style: AppTheme.bodySmall.copyWith(
-                    color: positive
-                        ? Colors.green.shade600
-                        : Colors.red.shade600,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: AppTheme.headingMedium.copyWith(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: AppTheme.bodySmall.copyWith(
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade500,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
             ),
           ),
         ],
@@ -888,40 +518,63 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
   }
 
   Widget _buildCallsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+          child: Text(
+            'Recent Activity',
+            style: AppTheme.titleMedium.copyWith(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ),
+        Expanded(
+          child: callHistory.isEmpty
+              ? _buildEmptyCallsState()
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: callHistory.length,
+                  itemBuilder: (context, index) =>
+                      _buildCallHistoryItem(callHistory[index]),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyCallsState() {
+    return Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            'Recent Call History',
-            style: AppTheme.titleMedium.copyWith(fontWeight: FontWeight.w700),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.phone_disabled_rounded,
+              size: 48,
+              color: Colors.white.withValues(alpha: 0.5),
+            ),
           ),
           const SizedBox(height: 16),
-          if (callHistory.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(40),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.phone_disabled,
-                      size: 64,
-                      color: Colors.grey.shade400,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No call history available',
-                      style: AppTheme.bodyMedium.copyWith(
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            ...callHistory.map((call) => _buildCallHistoryItem(call)),
+          Text(
+            'No Recent Calls',
+            style: AppTheme.titleMedium.copyWith(color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Calls will appear here once they are made.',
+            style: AppTheme.bodySmall.copyWith(
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
+          ),
         ],
       ),
     );
@@ -929,79 +582,76 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
 
   Widget _buildCallHistoryItem(Map<String, dynamic> call) {
     final status = call['call_status'] ?? 'pending';
-    final driverName = call['driver_name'] ?? '';
+    final name = (call['driver_name'] ?? call['user_name'] ?? 'Unknown').trim();
     final duration = call['duration_formatted'] ?? '0:00';
     final timeAgo = call['time_ago'] ?? '';
+    final mobile = call['mobile'] ?? '';
 
     Color statusColor = _getStatusColor(status);
-    IconData statusIcon = _getStatusIcon(status);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(statusIcon, color: statusColor, size: 18),
+            child: Icon(_getStatusIcon(status), color: statusColor, size: 20),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  driverName,
+                  name,
                   style: AppTheme.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 12,
-                      color: Colors.grey.shade500,
-                    ),
-                    const SizedBox(width: 4),
+                    if (mobile.isNotEmpty) ...[
+                      Text(
+                        mobile,
+                        style: AppTheme.bodySmall.copyWith(
+                          color: Colors.grey.shade500,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 4,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     Text(
                       timeAgo,
                       style: AppTheme.bodySmall.copyWith(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Icon(
-                      Icons.timer_outlined,
-                      size: 12,
-                      color: Colors.grey.shade500,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      duration,
-                      style: AppTheme.bodySmall.copyWith(
-                        color: Colors.grey.shade600,
+                        color: Colors.grey.shade500,
                         fontSize: 12,
                       ),
                     ),
@@ -1010,24 +660,26 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: statusColor.withValues(alpha: 0.3),
-                width: 1,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                duration,
+                style: AppTheme.bodySmall.copyWith(
+                  color: Colors.grey.shade800,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            child: Text(
-              _formatStatus(status),
-              style: AppTheme.bodySmall.copyWith(
-                color: statusColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 11,
+              const SizedBox(height: 4),
+              Text(
+                _formatStatus(status),
+                style: AppTheme.bodySmall.copyWith(
+                  color: statusColor,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 10,
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
@@ -1037,262 +689,49 @@ class _PerformanceAnalyticsPageState extends State<PerformanceAnalyticsPage>
   Color _getStatusColor(String status) {
     switch (status) {
       case 'connected':
-        return Colors.green;
+        return const Color(0xFF34C759);
       case 'callback':
       case 'callback_later':
-        return Colors.orange;
+        return const Color(0xFFFF9500);
       case 'not_interested':
-        return Colors.red;
+        return const Color(0xFFFF3B30);
       case 'not_reachable':
-        return Colors.grey;
+        return const Color(0xFF8E8E93);
       default:
-        return Colors.blue;
+        return const Color(0xFF007AFF);
     }
   }
 
   IconData _getStatusIcon(String status) {
     switch (status) {
       case 'connected':
-        return Icons.check_circle;
+        return Icons.call_made_rounded;
       case 'callback':
       case 'callback_later':
-        return Icons.schedule;
+        return Icons.history_rounded;
       case 'not_interested':
-        return Icons.cancel;
+        return Icons.call_end_rounded;
       case 'not_reachable':
-        return Icons.phone_disabled;
+        return Icons.phone_disabled_rounded;
       default:
-        return Icons.pending;
+        return Icons.call_rounded;
     }
   }
 
   String _formatStatus(String status) {
     switch (status) {
       case 'connected':
-        return 'CONNECTED';
+        return 'Connected';
       case 'callback':
-        return 'CALLBACK';
+        return 'Callback';
       case 'callback_later':
-        return 'CALL LATER';
+        return 'Soon';
       case 'not_interested':
-        return 'NOT INTERESTED';
+        return 'Declined';
       case 'not_reachable':
-        return 'NOT REACHABLE';
+        return 'Missed';
       default:
-        return status.toUpperCase();
+        return status[0].toUpperCase() + status.substring(1);
     }
-  }
-
-  Widget _buildGoalsTab() {
-    final dailyCallsData = performanceMetrics['daily_calls'] ?? {};
-    final conversionData = performanceMetrics['conversion_rate'] ?? {};
-    final followUpData = performanceMetrics['follow_up_rate'] ?? {};
-
-    final goals = [
-      {
-        'title': 'Daily Calls',
-        'current': dailyCallsData['current'] ?? 0,
-        'target': dailyCallsData['target'] ?? 50,
-        'unit': 'calls',
-      },
-      {
-        'title': 'Conversion Rate',
-        'current': conversionData['value'] ?? 0,
-        'target': conversionData['target'] ?? 30,
-        'unit': '%',
-      },
-      {
-        'title': 'Follow-ups',
-        'current': followUpData['value'] ?? 0,
-        'target': followUpData['target'] ?? 95,
-        'unit': '%',
-      },
-    ];
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Goals Progress',
-              style: AppTheme.titleMedium.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 20),
-            ...goals.map((goal) => _buildGoalItem(goal)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGoalItem(Map<String, dynamic> goal) {
-    final current = goal['current'] is int ? goal['current'] : 0;
-    final target = goal['target'] is int ? goal['target'] : 1;
-    final progress = target > 0 ? current / target : 0.0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                goal['title'],
-                style: AppTheme.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                '$current/$target ${goal['unit']}',
-                style: AppTheme.bodySmall.copyWith(color: Colors.grey.shade600),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: progress,
-            backgroundColor: Colors.grey.shade200,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              progress >= 0.8
-                  ? Colors.green
-                  : progress >= 0.5
-                  ? Colors.orange
-                  : Colors.red,
-            ),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTrendsTab() {
-    final trends = analyticsData['trends'] ?? [];
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Performance Trends',
-              style: AppTheme.titleMedium.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 16),
-            if (trends.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(40),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.trending_up,
-                        size: 64,
-                        color: Colors.grey.shade400,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No trends data available',
-                        style: AppTheme.bodyMedium.copyWith(
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              ...trends.map(
-                (trend) => _buildTrendItem(
-                  trend['text'] ?? '',
-                  _getTrendIcon(trend['type'] ?? 'stable'),
-                  _getTrendColor(trend['type'] ?? 'stable'),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  IconData _getTrendIcon(String type) {
-    switch (type) {
-      case 'up':
-        return Icons.trending_up;
-      case 'down':
-        return Icons.trending_down;
-      default:
-        return Icons.trending_flat;
-    }
-  }
-
-  Color _getTrendColor(String type) {
-    switch (type) {
-      case 'up':
-        return Colors.green;
-      case 'down':
-        return Colors.red;
-      default:
-        return Colors.orange;
-    }
-  }
-
-  Widget _buildTrendItem(String text, IconData icon, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: AppTheme.bodyMedium.copyWith(fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

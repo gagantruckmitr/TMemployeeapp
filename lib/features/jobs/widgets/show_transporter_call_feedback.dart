@@ -7,6 +7,7 @@ Future<void> showTransporterCallFeedback({
   required String transporterTmid,
   required String transporterName,
   required String jobId,
+  String? jobBriefId,
   required Function(String callStatus, String? notes, File? recordingFile) onSubmit,
 }) async {
   return showModalBottomSheet(
@@ -17,6 +18,7 @@ Future<void> showTransporterCallFeedback({
       transporterTmid: transporterTmid,
       transporterName: transporterName,
       jobId: jobId,
+      jobBriefId: jobBriefId,
       onSubmit: onSubmit,
     ),
   );

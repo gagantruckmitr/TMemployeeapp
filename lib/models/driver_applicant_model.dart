@@ -1,5 +1,6 @@
 class DriverApplicant {
   final int jobId;
+  final String jobIdString; // Full job ID like "TMJB00250"
   final String jobTitle;
   final int contractorId;
   final String transporterTmid;
@@ -30,14 +31,18 @@ class DriverApplicant {
   final String? subscriptionStartDate;
   final String? subscriptionEndDate;
   final String subscriptionStatus;
+  final String? callStatus;
   final String? callFeedback;
+  final String? callRemarks;
   final String? matchStatus;
   final String? matchMakerName;
   final String? feedbackNotes;
   final String? otherAppliedJobs;
+  final int totalJobsApplied;
 
   DriverApplicant({
     required this.jobId,
+    this.jobIdString = '',
     required this.jobTitle,
     required this.contractorId,
     this.transporterTmid = '',
@@ -68,16 +73,20 @@ class DriverApplicant {
     this.subscriptionStartDate,
     this.subscriptionEndDate,
     this.subscriptionStatus = 'inactive',
+    this.callStatus,
     this.callFeedback,
+    this.callRemarks,
     this.matchStatus,
     this.matchMakerName,
     this.feedbackNotes,
     this.otherAppliedJobs,
+    this.totalJobsApplied = 0,
   });
 
   factory DriverApplicant.fromJson(Map<String, dynamic> json) {
     return DriverApplicant(
       jobId: json['jobId'] ?? 0,
+      jobIdString: json['jobIdString'] ?? '',
       jobTitle: json['jobTitle'] ?? '',
       contractorId: json['contractorId'] ?? 0,
       transporterTmid: json['transporterTmid'] ?? '',
@@ -90,7 +99,7 @@ class DriverApplicant {
       city: json['city'] ?? '',
       state: json['state'] ?? '',
       gender: json['gender'],
-      profileImage: json['profileImage'],
+      profileImage: json['profileImage'] ?? json['images'],
       vehicleType: json['vehicleType'] ?? '',
       drivingExperience: json['drivingExperience'] ?? '',
       licenseType: json['licenseType'] ?? '',
@@ -103,16 +112,19 @@ class DriverApplicant {
       createdAt: json['createdAt'] ?? '',
       updatedAt: json['updatedAt'] ?? '',
       appliedAt: json['appliedAt'] ?? '',
-      profileCompletion: json['profileCompletion'] ?? json['profile_completion'] ?? 0,
+      profileCompletion: int.tryParse((json['profileCompletion'] ?? json['profile_completion'] ?? 0).toString()) ?? 0,
       subscriptionAmount: json['subscriptionAmount']?.toString(),
       subscriptionStartDate: json['subscriptionStartDate'],
       subscriptionEndDate: json['subscriptionEndDate'],
       subscriptionStatus: json['subscriptionStatus'] ?? 'inactive',
-      callFeedback: json['callFeedback'],
+      callStatus: json['callStatus'] ?? json['call_status'],
+      callFeedback: json['callFeedback'] ?? json['call_feedback'],
+      callRemarks: json['callRemarks'] ?? json['call_remarks'],
       matchStatus: json['matchStatus'],
       matchMakerName: json['matchMakerName'],
       feedbackNotes: json['feedbackNotes'],
       otherAppliedJobs: json['otherAppliedJobs'],
+      totalJobsApplied: int.tryParse((json['totalJobsApplied'] ?? json['total_jobs_applied'] ?? 0).toString()) ?? 0,
     );
   }
 }

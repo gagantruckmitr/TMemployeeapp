@@ -8,6 +8,7 @@ import '../../../models/toll_free_models.dart';
 import '../widgets/driver_contact_card.dart';
 import '../widgets/call_feedback_modal.dart';
 import '../widgets/tab_page_header.dart';
+import '../../../widgets/error_handler.dart';
 
 const Map<String, String> _tollFreeProfileFields = {
   'city': 'City',
@@ -201,7 +202,9 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
       final result = await TollFreeService.instance.searchUser(cacheKey);
       if (!mounted || _lastRemoteQuery != cacheKey) return;
       setState(() {
-        _remoteSearchResult = result != null ? _convertToTollFreeDetail(result) : null;
+        _remoteSearchResult = result != null
+            ? _convertToTollFreeDetail(result)
+            : null;
         _isRemoteSearching = false;
       });
     } catch (e) {
@@ -239,13 +242,7 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
     } catch (e) {
       if (mounted) {
         setState(() => _isRefreshing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to refresh: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ErrorHandler.showError(context, e, onRetry: _refreshData);
       }
     }
   }
@@ -260,14 +257,13 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder:
-          (context) => CallFeedbackModal(
-            contact: contact,
-            onFeedbackSubmitted: (feedback) {
-              _handleFeedbackSubmitted(contact, feedback);
-              Navigator.of(context).pop();
-            },
-          ),
+      builder: (context) => CallFeedbackModal(
+        contact: contact,
+        onFeedbackSubmitted: (feedback) async {
+          await _handleFeedbackSubmitted(contact, feedback);
+          Navigator.of(context).pop();
+        },
+      ),
     );
   }
 
@@ -385,34 +381,33 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
                     Icons.search_rounded,
                     color: Colors.grey.shade500,
                   ),
-                  suffixIcon:
-                      _searchQuery.isNotEmpty
-                          ? IconButton(
-                            icon: const Icon(Icons.close_rounded),
-                            color: Colors.grey.shade500,
-                            onPressed: () {
-                              _searchController.clear();
-                            },
-                          )
-                          : _isRemoteSearching
-                          ? Padding(
-                            padding: const EdgeInsets.only(
-                              right: 12,
-                              top: 12,
-                              bottom: 12,
-                            ),
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.green.shade600,
-                                ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          color: Colors.grey.shade500,
+                          onPressed: () {
+                            _searchController.clear();
+                          },
+                        )
+                      : _isRemoteSearching
+                      ? Padding(
+                          padding: const EdgeInsets.only(
+                            right: 12,
+                            top: 12,
+                            bottom: 12,
+                          ),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.green.shade600,
                               ),
                             ),
-                          )
-                          : null,
+                          ),
+                        )
+                      : null,
                   hintText: 'Search by name, TM ID, or number',
                   hintStyle: AppTheme.bodyLarge.copyWith(
                     color: Colors.grey.shade500,
@@ -428,29 +423,26 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
             ),
           ),
           Expanded(
-            child:
-                _isLoading
-                    ? const _LoadingWidget()
-                    : RefreshIndicator(
-                      onRefresh: _refreshData,
-                      child:
-                          isEmptyState
-                              ? const _EmptyStateWidget()
-                              : _ContactsList(
-                                contacts: contactsToDisplay,
-                                scrollController: _scrollController,
-                                onCallPressed: _onCallPressed,
-                                onContactTap: (contact) {
-                                  if (remoteDetail != null &&
-                                      contact.tmid ==
-                                          remoteDetail.driver.tmid) {
-                                    _showRemoteDetail(remoteDetail);
-                                  } else {
-                                    _showContactDetail(contact);
-                                  }
-                                },
-                              ),
-                    ),
+            child: _isLoading
+                ? const _LoadingWidget()
+                : RefreshIndicator(
+                    onRefresh: _refreshData,
+                    child: isEmptyState
+                        ? const _EmptyStateWidget()
+                        : _ContactsList(
+                            contacts: contactsToDisplay,
+                            scrollController: _scrollController,
+                            onCallPressed: _onCallPressed,
+                            onContactTap: (contact) {
+                              if (remoteDetail != null &&
+                                  contact.tmid == remoteDetail.driver.tmid) {
+                                _showRemoteDetail(remoteDetail);
+                              } else {
+                                _showContactDetail(contact);
+                              }
+                            },
+                          ),
+                  ),
           ),
         ],
       ),
@@ -497,7 +489,7 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
   TollFreeContactDetail _convertToTollFreeDetail(Map<String, dynamic> data) {
     // This is a simplified conversion - adjust based on actual API response structure
     final userData = data['user'] ?? data;
-    
+
     return TollFreeContactDetail(
       driver: DriverContact(
         id: userData['id']?.toString() ?? '',
@@ -506,8 +498,8 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
         company: '',
         phoneNumber: userData['mobile'] ?? '',
         state: userData['states'] ?? '',
-        subscriptionStatus: userData['latest_successful_payment'] != null 
-            ? SubscriptionStatus.active 
+        subscriptionStatus: userData['latest_successful_payment'] != null
+            ? SubscriptionStatus.active
             : SubscriptionStatus.inactive,
         status: CallStatus.pending,
         lastFeedback: null,
@@ -763,31 +755,28 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
   List<Widget> _buildProfileSubscriptionRows(TollFreeContactDetail detail) {
     final driver = detail.driver;
     final payment = detail.latestPayment;
-    
+
     return [
       _InfoRow(
         icon: Icons.calendar_today,
         label: 'Registered On',
-        value:
-            driver.registrationDate != null
-                ? _formatDate(driver.registrationDate!)
-                : 'Not available',
+        value: driver.registrationDate != null
+            ? _formatDate(driver.registrationDate!)
+            : 'Not available',
       ),
       _InfoRow(
         icon: Icons.schedule,
         label: 'Paid On',
-        value:
-            payment?.createdAt != null
-                ? _formatDate(payment!.createdAt!)
-                : 'N/A',
+        value: payment?.createdAt != null
+            ? _formatDate(payment!.createdAt!)
+            : 'N/A',
       ),
       _InfoRow(
         icon: Icons.event_available,
         label: 'Valid Till',
-        value:
-            payment?.expiryDate != null
-                ? _formatDate(payment!.expiryDate!)
-                : 'N/A',
+        value: payment?.expiryDate != null
+            ? _formatDate(payment!.expiryDate!)
+            : 'N/A',
       ),
     ];
   }
@@ -798,8 +787,11 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
     final raw = detail.rawUserData;
 
     void addDocument(String key, String label) {
-      final formattedValue =
-          _formatProfileFieldValue(key, raw[key], detail).trim();
+      final formattedValue = _formatProfileFieldValue(
+        key,
+        raw[key],
+        detail,
+      ).trim();
       final hasValue = formattedValue.isNotEmpty;
       final item = _DocumentItem(
         label: label,
@@ -967,10 +959,9 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
                     item.isComplete
                         ? Icons.check_circle
                         : Icons.radio_button_unchecked,
-                    color:
-                        item.isComplete
-                            ? Colors.green.shade600
-                            : Colors.red.shade500,
+                    color: item.isComplete
+                        ? Colors.green.shade600
+                        : Colors.red.shade500,
                     size: 18,
                   ),
                   const SizedBox(width: 10),
@@ -1029,67 +1020,66 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
   Widget _buildJobsSection(List<TollFreeJobApplication> jobs) {
     return _buildDetailSection(
       title: 'Applied Jobs',
-      rows:
-          jobs
-              .map(
-                (job) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppTheme.lightGray,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          job.jobTitle ?? 'Job',
-                          style: AppTheme.headingMedium.copyWith(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        if (job.jobId != null && job.jobId!.isNotEmpty)
-                          _InlineDetail(
-                            icon: Icons.badge_outlined,
-                            text: 'Job ID: ${job.jobId!}',
-                          ),
-                        if (job.transporterId != null && job.transporterId!.isNotEmpty)
-                          _InlineDetail(
-                            icon: Icons.business_outlined,
-                            text: 'Transporter ID: ${job.transporterId!}',
-                          ),
-                        if (job.location != null && job.location!.isNotEmpty)
-                          _InlineDetail(
-                            icon: Icons.location_on_outlined,
-                            text: job.location!,
-                          ),
-                        if (job.salaryRange != null &&
-                            job.salaryRange!.isNotEmpty)
-                          _InlineDetail(
-                            icon: Icons.currency_rupee,
-                            text: job.salaryRange!,
-                          ),
-                        if (job.requiredExperience != null &&
-                            job.requiredExperience!.isNotEmpty)
-                          _InlineDetail(
-                            icon: Icons.work_outline,
-                            text: 'Experience: ${job.requiredExperience!}',
-                          ),
-                        if (job.applicationDeadline != null)
-                          _InlineDetail(
-                            icon: Icons.calendar_today_outlined,
-                            text:
-                                'Deadline: ${_formatDate(job.applicationDeadline!)}',
-                          ),
-                      ],
-                    ),
-                  ),
+      rows: jobs
+          .map(
+            (job) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.lightGray,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-              )
-              .toList(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      job.jobTitle ?? 'Job',
+                      style: AppTheme.headingMedium.copyWith(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (job.jobId != null && job.jobId!.isNotEmpty)
+                      _InlineDetail(
+                        icon: Icons.badge_outlined,
+                        text: 'Job ID: ${job.jobId!}',
+                      ),
+                    if (job.transporterId != null &&
+                        job.transporterId!.isNotEmpty)
+                      _InlineDetail(
+                        icon: Icons.business_outlined,
+                        text: 'Transporter ID: ${job.transporterId!}',
+                      ),
+                    if (job.location != null && job.location!.isNotEmpty)
+                      _InlineDetail(
+                        icon: Icons.location_on_outlined,
+                        text: job.location!,
+                      ),
+                    if (job.salaryRange != null && job.salaryRange!.isNotEmpty)
+                      _InlineDetail(
+                        icon: Icons.currency_rupee,
+                        text: job.salaryRange!,
+                      ),
+                    if (job.requiredExperience != null &&
+                        job.requiredExperience!.isNotEmpty)
+                      _InlineDetail(
+                        icon: Icons.work_outline,
+                        text: 'Experience: ${job.requiredExperience!}',
+                      ),
+                    if (job.applicationDeadline != null)
+                      _InlineDetail(
+                        icon: Icons.calendar_today_outlined,
+                        text:
+                            'Deadline: ${_formatDate(job.applicationDeadline!)}',
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -1249,8 +1239,9 @@ class _ConnectedCallsScreenState extends State<ConnectedCallsScreen>
     }
     if (value is String) {
       if (value.isEmpty || value.toLowerCase() == 'null') return null;
-      final normalized =
-          value.contains('T') ? value : value.replaceAll(' ', 'T');
+      final normalized = value.contains('T')
+          ? value
+          : value.replaceAll(' ', 'T');
       return DateTime.tryParse(normalized);
     }
     return null;

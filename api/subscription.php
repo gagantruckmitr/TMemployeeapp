@@ -1,65 +1,76 @@
 <?php
 /**
- * Admin Subscriptions API
- * Track subscriptions based on call_logs.user_id matching with payments.user_id
- * Credits telecaller who made the call that led to subscription
+ * Telecaller Subscriptions API
+ * Simple logic: Count subscriptions where user is assigned to telecaller 
+ * and has a payment with status = 'captured'
  */
+
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
 
 require_once 'config.php';
 
-// Get filter parameters
-$telecaller_id = isset($_GET['telecaller_id']) ? intval($_GET['telecaller_id']) : null;
-$start_date = isset($_GET['start_date']) ? $_GET['start_date'] : null;
-$end_date = isset($_GET['end_date']) ? $_GET['end_date'] : null;
-$payment_status = isset($_GET['payment_status']) ? $_GET['payment_status'] : 'captured';
-
 try {
-    // Main query: Get subscriptions from call_logs table
-    // Match call_logs.user_id with payments.user_id where payment_status = 'captured'
-    // and payment created_at is after created_at
+    $telecaller_id = $_GET['user_id'] ?? null;
+    $period = $_GET['period'] ?? 'all'; // 'today', 'yesterday', 'week', 'all'
+    
+    if (!$telecaller_id) {
+        throw new Exception('User ID is required');
+    }
+    
+    // Build date filter based on period (filter by payment date)
+    $dateFilter = '';
+    switch ($period) {
+        case 'today':
+            $dateFilter = 'AND DATE(p.created_at) = CURDATE()';
+            break;
+        case 'yesterday':
+            $dateFilter = 'AND DATE(p.created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)';
+            break;
+        case 'week':
+            $dateFilter = 'AND p.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
+            break;
+        case 'all':
+        default:
+            $dateFilter = '';
+            break;
+    }
+    
+    // Main query: Get subscriptions where user is assigned to telecaller
+    // and has a captured payment
     $query = "
         SELECT 
-            cl.id as call_log_id,
-            cl.user_id as driver_id,
-            COALESCE(cl.driver_name, u.name) as driver_name,
-            COALESCE(cl.user_number, u.mobile) as driver_phone,
-            cl.caller_id as telecaller_id,
+            p.id as payment_id,
+            p.user_id as driver_id,
+            u.name as driver_name,
+            u.mobile as driver_mobile,
+            u.unique_id as driver_tmid,
+            u.assigned_telecaller as telecaller_id,
             a.name as telecaller_name,
-            cl.created_at as call_time,
-            cl.call_status,
-            cl.call_duration,
             p.created_at as payment_created_at,
-            FROM_UNIXTIME(p.start_at) AS payment_start_time,
-            TIMESTAMPDIFF(MINUTE, cl.created_at, p.created_at) as minutes_after_call,
+            FROM_UNIXTIME(p.start_at) as payment_start_time,
+            FROM_UNIXTIME(p.end_at) as payment_end_time,
             p.amount,
-            p.payment_id,
+            p.payment_id as razorpay_payment_id,
             p.payment_status,
             p.payment_type,
             DATEDIFF(FROM_UNIXTIME(p.end_at), FROM_UNIXTIME(p.start_at)) as subscription_days
-        FROM call_logs cl
-        JOIN payments p ON cl.user_id = p.user_id
-        LEFT JOIN users u ON cl.user_id = u.id
-        LEFT JOIN admins a ON cl.caller_id = a.id
-        WHERE p.payment_status = 'captured'
-        AND p.created_at > cl.created_at
+        FROM users u
+        JOIN payments p ON u.id = p.user_id
+        LEFT JOIN admins a ON u.assigned_telecaller = a.id
+        WHERE u.assigned_telecaller = " . intval($telecaller_id) . "
+        AND p.payment_status = 'captured'
+        $dateFilter
+        ORDER BY p.created_at DESC
     ";
     
-    // Add filters
-    if ($telecaller_id) {
-        $query .= " AND cl.caller_id = " . intval($telecaller_id);
-    }
-    
-    if ($start_date) {
-        $query .= " AND DATE(cl.created_at) >= '" . $conn->real_escape_string($start_date) . "'";
-    }
-    
-    if ($end_date) {
-        $query .= " AND DATE(cl.created_at) <= '" . $conn->real_escape_string($end_date) . "'";
-    }
-    
-    $query .= " ORDER BY cl.created_at DESC";
-    
-    // Execute query
     $result = $conn->query($query);
     
     if (!$result) {
@@ -75,26 +86,17 @@ try {
     $summary_query = "
         SELECT 
             COUNT(DISTINCT p.id) as total_subscriptions,
-            COUNT(DISTINCT cl.caller_id) as total_telecallers,
             SUM(p.amount) as total_revenue,
-            AVG(p.amount) as avg_subscription_value
-        FROM call_logs cl
-        JOIN payments p ON cl.user_id = p.user_id
-        WHERE p.payment_status = 'captured'
-        AND p.created_at > cl.created_at
+            AVG(p.amount) as avg_subscription_value,
+            COUNT(DISTINCT u.id) as unique_subscribers,
+            MIN(p.created_at) as first_subscription_date,
+            MAX(p.created_at) as latest_subscription_date
+        FROM users u
+        JOIN payments p ON u.id = p.user_id
+        WHERE u.assigned_telecaller = " . intval($telecaller_id) . "
+        AND p.payment_status = 'captured'
+        $dateFilter
     ";
-    
-    if ($telecaller_id) {
-        $summary_query .= " AND cl.caller_id = " . intval($telecaller_id);
-    }
-    
-    if ($start_date) {
-        $summary_query .= " AND DATE(cl.created_at) >= '" . $conn->real_escape_string($start_date) . "'";
-    }
-    
-    if ($end_date) {
-        $summary_query .= " AND DATE(cl.created_at) <= '" . $conn->real_escape_string($end_date) . "'";
-    }
     
     $summary_result = $conn->query($summary_query);
     
@@ -104,50 +106,51 @@ try {
     
     $summary = $summary_result->fetch_assoc();
     
-    // Get telecaller performance
-    $performance_query = "
+    // Get subscription count by date for charts
+    $by_date_query = "
         SELECT 
-            cl.caller_id as telecaller_id,
-            a.name as telecaller_name,
-            COUNT(DISTINCT p.id) as subscriptions_count,
-            SUM(p.amount) as total_revenue,
-            AVG(p.amount) as avg_subscription_value
-        FROM call_logs cl
-        JOIN payments p ON cl.user_id = p.user_id
-        LEFT JOIN admins a ON cl.caller_id = a.id
-        WHERE p.payment_status = 'captured'
-        AND p.created_at > cl.created_at
+            DATE(p.created_at) as subscription_date,
+            COUNT(DISTINCT p.id) as count,
+            SUM(p.amount) as daily_revenue
+        FROM users u
+        JOIN payments p ON u.id = p.user_id
+        WHERE u.assigned_telecaller = " . intval($telecaller_id) . "
+        AND p.payment_status = 'captured'
+        $dateFilter
+        GROUP BY DATE(p.created_at)
+        ORDER BY subscription_date DESC
     ";
     
-    if ($start_date) {
-        $performance_query .= " AND DATE(cl.created_at) >= '" . $conn->real_escape_string($start_date) . "'";
+    $by_date_result = $conn->query($by_date_query);
+    
+    if (!$by_date_result) {
+        throw new Exception("By date query failed: " . $conn->error);
     }
     
-    if ($end_date) {
-        $performance_query .= " AND DATE(cl.created_at) <= '" . $conn->real_escape_string($end_date) . "'";
+    $subscriptions_by_date = [];
+    while ($row = $by_date_result->fetch_assoc()) {
+        $subscriptions_by_date[] = $row;
     }
     
-    $performance_query .= " GROUP BY cl.caller_id, a.name ORDER BY subscriptions_count DESC";
-    
-    $performance_result = $conn->query($performance_query);
-    
-    if (!$performance_result) {
-        throw new Exception("Performance query failed: " . $conn->error);
-    }
-    
-    $performance = [];
-    while ($row = $performance_result->fetch_assoc()) {
-        $performance[] = $row;
-    }
-    
-    sendSuccess([
-        'subscriptions' => $subscriptions,
-        'summary' => $summary,
-        'telecaller_performance' => $performance
+    echo json_encode([
+        'success' => true,
+        'data' => [
+            'total_subscriptions' => (int)($summary['total_subscriptions'] ?? 0),
+            'total_revenue' => (float)($summary['total_revenue'] ?? 0),
+            'avg_subscription_value' => (float)($summary['avg_subscription_value'] ?? 0),
+            'unique_subscribers' => (int)($summary['unique_subscribers'] ?? 0),
+            'subscriptions' => $subscriptions,
+            'subscriptions_by_date' => $subscriptions_by_date,
+            'period' => $period,
+            'summary' => $summary
+        ]
     ]);
     
 } catch (Exception $e) {
-    error_log('Subscriptions API Error: ' . $e->getMessage());
-    sendError('Failed to fetch subscriptions: ' . $e->getMessage(), 500);
+    error_log('Telecaller Subscriptions API Error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error' => $e->getMessage()
+    ]);
 }
-

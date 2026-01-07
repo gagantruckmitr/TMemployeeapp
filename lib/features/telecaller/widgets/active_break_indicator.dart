@@ -53,14 +53,16 @@ class _ActiveBreakIndicatorState extends State<ActiveBreakIndicator> {
 
   Color _getBreakColor() {
     switch (widget.breakType) {
-      case 'tea_break':
-        return const Color(0xFFFFA726);
       case 'lunch_break':
         return const Color(0xFF66BB6A);
-      case 'prayer_break':
+      case 'tea_break':
+        return const Color(0xFFFFA726);
+      case 'rest_break':
         return const Color(0xFF42A5F5);
-      case 'personal_break':
+      case 'training_break':
         return const Color(0xFFAB47BC);
+      case 'meeting_break':
+        return const Color(0xFFEF5350);
       default:
         return const Color(0xFF9E9E9E);
     }
@@ -68,14 +70,16 @@ class _ActiveBreakIndicatorState extends State<ActiveBreakIndicator> {
 
   IconData _getBreakIcon() {
     switch (widget.breakType) {
-      case 'tea_break':
-        return Icons.local_cafe_rounded;
       case 'lunch_break':
         return Icons.restaurant_rounded;
-      case 'prayer_break':
-        return Icons.mosque_rounded;
-      case 'personal_break':
-        return Icons.person_rounded;
+      case 'tea_break':
+        return Icons.local_cafe_rounded;
+      case 'rest_break':
+        return Icons.weekend_rounded;
+      case 'training_break':
+        return Icons.school_rounded;
+      case 'meeting_break':
+        return Icons.groups_rounded;
       default:
         return Icons.pause_circle_rounded;
     }
@@ -83,14 +87,16 @@ class _ActiveBreakIndicatorState extends State<ActiveBreakIndicator> {
 
   String _getBreakLabel() {
     switch (widget.breakType) {
-      case 'tea_break':
-        return 'Tea Break';
       case 'lunch_break':
         return 'Lunch Break';
-      case 'prayer_break':
-        return 'Prayer Break';
-      case 'personal_break':
-        return 'Personal Break';
+      case 'tea_break':
+        return 'Tea Break';
+      case 'rest_break':
+        return 'Rest Break';
+      case 'training_break':
+        return 'Training Break';
+      case 'meeting_break':
+        return 'Meeting Break';
       default:
         return 'Break';
     }

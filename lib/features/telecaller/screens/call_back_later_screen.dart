@@ -10,6 +10,7 @@ import '../../../core/services/real_auth_service.dart';
 import '../../../core/services/call_hit_service.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/ivr_call_waiting_overlay.dart';
+import '../../../widgets/error_handler.dart';
 
 class CallBackLaterScreen extends StatefulWidget {
   const CallBackLaterScreen({super.key});
@@ -51,13 +52,15 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
 
   Future<void> _loadCallBackLaterContactsAsync() async {
     if (!mounted) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       // Force refresh to get latest data
-      final contacts = await SmartCallingService.instance.getDriversByCategory(NavigationSection.callBackLater);
-      
+      final contacts = await SmartCallingService.instance.getDriversByCategory(
+        NavigationSection.callBackLater,
+      );
+
       if (mounted) {
         setState(() {
           _callBackLaterContacts = contacts;
@@ -76,14 +79,16 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
 
   Future<void> _refreshData() async {
     if (_isRefreshing) return;
-    
+
     setState(() => _isRefreshing = true);
-    
+
     try {
       // Clear cache and fetch fresh data
       SmartCallingService.instance.clearCache();
-      final contacts = await SmartCallingService.instance.getDriversByCategory(NavigationSection.callBackLater);
-      
+      final contacts = await SmartCallingService.instance.getDriversByCategory(
+        NavigationSection.callBackLater,
+      );
+
       if (mounted) {
         setState(() {
           _callBackLaterContacts = contacts;
@@ -93,13 +98,7 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
     } catch (e) {
       if (mounted) {
         setState(() => _isRefreshing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to refresh: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ErrorHandler.showError(context, e, onRetry: _refreshData);
       }
     }
   }
@@ -131,9 +130,8 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
       if (mounted) {
         final callType = await showDialog<String>(
           context: context,
-          builder: (context) => CallTypeSelectionDialog(
-            driverName: contact.name,
-          ),
+          builder: (context) =>
+              CallTypeSelectionDialog(driverName: contact.name),
         );
 
         if (callType == null) return;
@@ -200,10 +198,7 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -215,7 +210,10 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
       final currentUser = RealAuthService.instance.currentUser;
       if (currentUser == null) return;
 
-      final telecallerPhone = currentUser.mobile.replaceAll(RegExp(r'[^\d]'), '');
+      final telecallerPhone = currentUser.mobile.replaceAll(
+        RegExp(r'[^\d]'),
+        '',
+      );
 
       if (!mounted) return;
 
@@ -231,14 +229,16 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
         clientPhone: cleanMobile,
         callerId: callerId.toString(),
         contactId: contact.id,
+        tmid: contact.tmid,
         contactType: 'driver',
       );
 
       if (mounted) {
         if (result['success'] == true) {
-          final referenceId = result['reference_id'] ?? 
-                             result['data']?['call_id'] ?? 
-                             DateTime.now().millisecondsSinceEpoch.toString();
+          final referenceId =
+              result['reference_id'] ??
+              result['data']?['call_id'] ??
+              DateTime.now().millisecondsSinceEpoch.toString();
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -278,10 +278,7 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -299,8 +296,12 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
         child: CallFeedbackModal(
           contact: contact,
           referenceId: referenceId,
-          onFeedbackSubmitted: (feedback) {
-            _handleFeedbackSubmitted(contact, feedback, referenceId: referenceId);
+          onFeedbackSubmitted: (feedback) async {
+            await _handleFeedbackSubmitted(
+              contact,
+              feedback,
+              referenceId: referenceId,
+            );
             Navigator.of(context).pop();
           },
         ),
@@ -308,7 +309,11 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
     );
   }
 
-  Future<void> _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback, {String? referenceId}) async {
+  Future<void> _handleFeedbackSubmitted(
+    DriverContact contact,
+    CallFeedback feedback, {
+    String? referenceId,
+  }) async {
     // Show loading indicator
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -336,7 +341,7 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
 
     // Build complete feedback text with all details
     final feedbackText = _buildCompleteFeedbackText(feedback);
-    
+
     // Update via API with complete feedback
     final success = await SmartCallingService.instance.updateCallStatus(
       driverId: contact.id,
@@ -359,7 +364,7 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
     if (success) {
       // Refresh the list to get updated data
       await _refreshData();
-      
+
       if (mounted) {
         HapticFeedback.lightImpact();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -368,9 +373,7 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
               children: [
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Text('Updated ${contact.name}\n$feedbackText'),
-                ),
+                Expanded(child: Text('Updated ${contact.name}\n$feedbackText')),
               ],
             ),
             backgroundColor: Colors.green,
@@ -398,10 +401,10 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
 
   String _buildCompleteFeedbackText(CallFeedback feedback) {
     final parts = <String>[];
-    
+
     // Add status
     parts.add('Status: ${feedback.status.name}');
-    
+
     // Add specific feedback based on status
     if (feedback.connectedFeedback != null) {
       parts.add('Feedback: ${feedback.connectedFeedback!.displayName}');
@@ -410,19 +413,19 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
     } else if (feedback.callBackTime != null) {
       parts.add('Time: ${feedback.callBackTime!.displayName}');
     }
-    
+
     // Add remarks if present
     if (feedback.remarks != null && feedback.remarks!.isNotEmpty) {
       parts.add('Notes: ${feedback.remarks}');
     }
-    
+
     return parts.join(' | ');
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       body: Column(
@@ -450,7 +453,6 @@ class _CallBackLaterScreenState extends State<CallBackLaterScreen>
       ),
     );
   }
-
 }
 
 // Optimized separate widgets
@@ -458,7 +460,7 @@ class _CallBackLaterHeader extends StatelessWidget {
   final int contactCount;
   final VoidCallback onRefresh;
   final bool isRefreshing;
-  
+
   const _CallBackLaterHeader({
     required this.contactCount,
     required this.onRefresh,
@@ -603,9 +605,7 @@ class _EmptyStateWidget extends StatelessWidget {
           Text(
             'Contacts scheduled for later\ncallbacks will appear here',
             textAlign: TextAlign.center,
-            style: AppTheme.bodyLarge.copyWith(
-              color: Colors.grey.shade500,
-            ),
+            style: AppTheme.bodyLarge.copyWith(color: Colors.grey.shade500),
           ),
         ],
       ),
@@ -618,8 +618,6 @@ class _LoadingWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(),
-    );
+    return const Center(child: CircularProgressIndicator());
   }
 }

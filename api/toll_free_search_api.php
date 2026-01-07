@@ -96,18 +96,16 @@ try {
     $postedJobs = [];
     if ($user['role'] === 'transporter') {
         $postedSql = "SELECT 
-                        j.id as job_id,
+                        j.id,
                         j.job_id as job_code,
                         j.job_title,
                         j.job_location as location,
                         j.Salary_Range as salary,
+                        j.Created_at as posted_date,
                         j.status,
-                        j.Created_at as created_at,
-                        u.name as company_name,
-                        u.transport_name,
-                        (SELECT COUNT(*) FROM applyjobs WHERE job_id = j.id) as applicants_count
+                        j.active_inactive,
+                        (SELECT COUNT(*) FROM applyjobs WHERE job_id = j.id) as applicant_count
                       FROM jobs j
-                      LEFT JOIN users u ON j.transporter_id = u.id
                       WHERE j.transporter_id = :user_id
                       ORDER BY j.Created_at DESC
                       LIMIT 50";
@@ -116,18 +114,106 @@ try {
         $postedJobs = $postedStmt->fetchAll();
     }
     
-    // Get call logs
-    $callLogsSql = "SELECT * FROM call_logs 
-                    WHERE user_number = :mobile 
-                    OR user_id = :user_id
-                    ORDER BY call_time DESC 
-                    LIMIT 20";
-    $callLogsStmt = $pdo->prepare($callLogsSql);
-    $callLogsStmt->execute([
-        'mobile' => $user['mobile'],
-        'user_id' => $user['id']
+    // Get match making history for transporters
+    $matchMakingHistory = [];
+    if ($user['role'] === 'transporter') {
+        $matchMakingSql = "SELECT 
+                            clm.id,
+                            clm.created_at as match_date,
+                            clm.driver_name,
+                            clm.unique_id_driver as driver_tmid,
+                            clm.job_id,
+                            clm.match_status,
+                            clm.feedback
+                          FROM call_logs_match_making clm
+                          WHERE clm.unique_id_transporter = :tmid
+                          AND (clm.feedback LIKE '%Match Making Done%' OR clm.match_status = 'Match Making Done')
+                          ORDER BY clm.created_at DESC
+                          LIMIT 50";
+        $matchMakingStmt = $pdo->prepare($matchMakingSql);
+        $matchMakingStmt->execute(['tmid' => $user['unique_id']]);
+        $matchMakingHistory = $matchMakingStmt->fetchAll();
+    }
+    
+    // Get complete call history with telecaller names and match-making calls
+    $tmid = $user['unique_id'];
+    $callHistorySql = "
+        SELECT 
+            clm.id,
+            clm.caller_id,
+            a.name as telecaller_name,
+            'connected' as call_status,
+            clm.feedback,
+            clm.remark as remarks,
+            NULL as call_duration,
+            clm.call_recording as recording_url,
+            NULL as manual_call_recording_url,
+            clm.created_at as call_time,
+            clm.created_at,
+            'match_making' as call_type,
+            clm.match_status,
+            clm.job_id,
+            CASE 
+                WHEN clm.unique_id_driver = :tmid THEN clm.transporter_name
+                ELSE clm.driver_name
+            END as other_party_name,
+            CASE 
+                WHEN clm.unique_id_driver = :tmid THEN clm.unique_id_transporter
+                ELSE clm.unique_id_driver
+            END as other_party_tmid
+        FROM call_logs_match_making clm
+        LEFT JOIN admins a ON clm.caller_id = a.id
+        WHERE (clm.unique_id_driver = :tmid OR clm.unique_id_transporter = :tmid)
+        AND clm.feedback IS NOT NULL 
+        AND clm.feedback != ''
+        AND clm.feedback != 'pending'
+        
+        UNION ALL
+        
+        SELECT 
+            cl.id,
+            cl.caller_id,
+            a.name as telecaller_name,
+            cl.call_status,
+            cl.feedback,
+            cl.remarks,
+            cl.call_duration,
+            cl.recording_url,
+            cl.manual_call_recording_url,
+            COALESCE(cl.call_initiated_at, cl.call_time, cl.created_at) as call_time,
+            cl.created_at,
+            'welcome_call' as call_type,
+            NULL as match_status,
+            NULL as job_id,
+            NULL as other_party_name,
+            NULL as other_party_tmid
+        FROM call_logs cl
+        LEFT JOIN admins a ON cl.caller_id = a.id
+        WHERE cl.user_id = :user_id
+        AND cl.call_status != 'pending'
+        AND (cl.feedback IS NOT NULL AND cl.feedback != '' AND cl.feedback != 'pending')
+        AND NOT EXISTS (
+            SELECT 1 FROM call_logs_match_making clm2
+            WHERE (clm2.unique_id_driver = :tmid OR clm2.unique_id_transporter = :tmid)
+            AND clm2.caller_id = cl.caller_id
+            AND ABS(TIMESTAMPDIFF(MINUTE, clm2.created_at, COALESCE(cl.call_initiated_at, cl.call_time, cl.created_at))) <= 5
+        )
+        
+        ORDER BY call_time DESC
+        LIMIT 100
+    ";
+    $callHistoryStmt = $pdo->prepare($callHistorySql);
+    $callHistoryStmt->execute([
+        'user_id' => $user['id'],
+        'tmid' => $tmid
     ]);
-    $callLogs = $callLogsStmt->fetchAll();
+    $callHistory = $callHistoryStmt->fetchAll();
+    
+    // Get training info for drivers
+    $trainingInfo = null;
+    if ($user['role'] === 'driver') {
+        $trainingInfo = getDriverTrainingCompletion($pdo, $user['id']);
+    }
     
     // Calculate profile completion
     $profileCompletion = calculateProfileCompletion($user);
@@ -138,9 +224,11 @@ try {
         'user' => array_merge($user, [
             'profile_completion' => $profileCompletion . '%',
             'latest_successful_payment' => $payment ?: false,
-            'applied_jobs' => $appliedJobs,
-            'posted_jobs' => $postedJobs,
-            'call_logs' => $callLogs
+            'appliedJobs' => $appliedJobs,
+            'postedJobs' => $postedJobs,
+            'matchMakingHistory' => $matchMakingHistory,
+            'callHistory' => $callHistory,
+            'trainingInfo' => $trainingInfo
         ])
     ];
     
@@ -159,19 +247,21 @@ function calculateProfileCompletion($user) {
     
     $requiredFields = [];
     if ($role === 'driver') {
+        // EXACT MATCH with profile_completion_helper.php
         $requiredFields = [
             'name', 'email', 'city', 'sex', 'vehicle_type',
-            'Father_Name', 'images', 'address', 'DOB',
-            'Type_of_License', 'Driving_Experience', 'Highest_Education', 'License_Number',
-            'Expiry_date_of_License', 'Expected_Monthly_Income', 'Current_Monthly_Income',
-            'Marital_Status', 'Preferred_Location', 'Aadhar_Number', 'Aadhar_Photo',
-            'Driving_License', 'previous_employer', 'job_placement'
+            'father_name', 'images', 'address', 'dob',
+            'type_of_license', 'driving_experience', 'highest_education', 'license_number',
+            'expiry_date_of_license', 'expected_monthly_income', 'current_monthly_income',
+            'marital_status', 'preferred_location', 'aadhar_number', 'aadhar_photo',
+            'driving_license', 'previous_employer', 'job_placement'
         ];
     } elseif ($role === 'transporter') {
+        // EXACT MATCH with profile_completion_helper.php - MUST include mobile and states
         $requiredFields = [
-            'name', 'email', 'transport_name', 'year_of_establishment',
-            'fleet_size', 'operational_segment', 'average_km', 'city', 'images', 'address',
-            'pan_number', 'pan_image', 'gst_certificate'
+            'name', 'email', 'mobile', 'transport_name', 'year_of_establishment',
+            'fleet_size', 'operational_segment', 'average_km', 'city', 'states',
+            'images', 'address', 'pan_number', 'pan_image', 'gst_certificate'
         ];
     }
     
@@ -196,5 +286,81 @@ function calculateProfileCompletion($user) {
     }
     
     return round(($filledFields / $totalFields) * 100);
+}
+
+function getDriverTrainingCompletion($pdo, $driver_id) 
+{
+    try {
+        // Query quiz_results table for this driver
+        $stmt = $pdo->prepare("
+            SELECT 
+                COUNT(*) as total_questions,
+                SUM(CASE WHEN user_answer = correct_answer THEN 1 ELSE 0 END) as correct_answers
+            FROM quiz_results
+            WHERE user_id = ?
+        ");
+        $stmt->execute([$driver_id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $totalQuestions = (int)($result['total_questions'] ?? 0);
+        $correctAnswers = (int)($result['correct_answers'] ?? 0);
+
+        // Calculate percentage
+        $percentage = $totalQuestions > 0 ? ($correctAnswers / $totalQuestions) * 100 : 0;
+
+        // Calculate rating (1-5 stars)
+        if ($percentage <= 20) {
+            $rating = 1;
+        } elseif ($percentage <= 40) {
+            $rating = 2;
+        } elseif ($percentage <= 60) {
+            $rating = 3;
+        } elseif ($percentage <= 80) {
+            $rating = 4;
+        } else {
+            $rating = 5;
+        }
+
+        // Calculate ranking percentage (based on 12 questions)
+        $rankingPercentage = round(($correctAnswers / 12) * 100, 2);
+
+        // Determine tier
+        if ($rankingPercentage >= 95) {
+            $tier = 'Diamond';
+        } elseif ($rankingPercentage >= 81) {
+            $tier = 'Platinum';
+        } elseif ($rankingPercentage >= 61) {
+            $tier = 'Gold';
+        } elseif ($rankingPercentage >= 41) {
+            $tier = 'Silver';
+        } elseif ($rankingPercentage > 0) {
+            $tier = 'Bronze';
+        } else {
+            $tier = 'N/A';
+        }
+
+        // Check if training is completed
+        $isCompleted = ($totalQuestions > 0 && $rating > 0);
+
+        return [
+            'is_completed' => $isCompleted,
+            'total_questions' => $totalQuestions,
+            'correct_answers' => $correctAnswers,
+            'percentage' => round($percentage, 2),
+            'rating' => $rating,
+            'ranking_percentage' => $rankingPercentage,
+            'tier' => $tier,
+        ];
+    } catch (Exception $e) {
+        return [
+            'is_completed' => false,
+            'total_questions' => 0,
+            'correct_answers' => 0,
+            'percentage' => 0,
+            'rating' => 0,
+            'ranking_percentage' => 0,
+            'tier' => 'N/A',
+        ];
+    }
 }
 ?>

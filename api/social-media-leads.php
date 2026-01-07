@@ -129,7 +129,7 @@ if ($action === 'get_social_media_leads') {
                 AND cl.tc_for = 'social-media'
             WHERE cl.id IS NULL
                 AND sml.assigned_id = ?
-            ORDER BY sml.created_at DESC 
+            ORDER BY sml.chat_date_time DESC 
             LIMIT 100";
     
     $stmt = $conn->prepare($sql);

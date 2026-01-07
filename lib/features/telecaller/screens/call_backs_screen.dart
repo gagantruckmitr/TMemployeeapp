@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/smart_calling_models.dart';
 import '../../../core/services/smart_calling_service.dart';
+import '../../../core/services/real_auth_service.dart';
+import '../../../core/services/call_hit_service.dart';
+import '../../../core/services/call_feedback_guard_service.dart';
 import '../widgets/driver_contact_card.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/call_type_selection_dialog.dart';
+import '../widgets/easygo_ivr_call_helper.dart';
+import 'search_users_screen.dart';
+import '../../../widgets/draggable_floating_action_button.dart';
+import '../../../widgets/error_handler.dart';
 
 class CallBacksScreen extends StatefulWidget {
   const CallBacksScreen({super.key});
@@ -46,13 +55,15 @@ class _CallBacksScreenState extends State<CallBacksScreen>
 
   Future<void> _loadCallBackContactsAsync() async {
     if (!mounted) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       // Force refresh to get latest data
-      final contacts = await SmartCallingService.instance.getDriversByCategory(NavigationSection.callBacks);
-      
+      final contacts = await SmartCallingService.instance.getDriversByCategory(
+        NavigationSection.callBacks,
+      );
+
       if (mounted) {
         setState(() {
           _callBackContacts = contacts;
@@ -71,14 +82,16 @@ class _CallBacksScreenState extends State<CallBacksScreen>
 
   Future<void> _refreshData() async {
     if (_isRefreshing) return;
-    
+
     setState(() => _isRefreshing = true);
-    
+
     try {
       // Clear cache and fetch fresh data
       SmartCallingService.instance.clearCache();
-      final contacts = await SmartCallingService.instance.getDriversByCategory(NavigationSection.callBacks);
-      
+      final contacts = await SmartCallingService.instance.getDriversByCategory(
+        NavigationSection.callBacks,
+      );
+
       if (mounted) {
         setState(() {
           _callBackContacts = contacts;
@@ -88,20 +101,100 @@ class _CallBacksScreenState extends State<CallBacksScreen>
     } catch (e) {
       if (mounted) {
         setState(() => _isRefreshing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to refresh: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ErrorHandler.showError(context, e, onRetry: _refreshData);
       }
     }
   }
 
-  void _onCallPressed(DriverContact contact) {
+  Future<void> _onCallPressed(DriverContact contact) async {
     HapticFeedback.mediumImpact();
-    _showCallFeedbackModal(contact);
+
+    // Check for pending feedback before allowing call
+    final hasPending = await CallFeedbackGuardService.instance
+        .hasLastCallPendingFeedback();
+    if (hasPending && mounted) {
+      CallFeedbackGuardService.showPendingFeedbackToast(context);
+      return;
+    }
+
+    // Show call type selection dialog
+    final callType = await showDialog<String>(
+      context: context,
+      builder: (context) => CallTypeSelectionDialog(driverName: contact.name),
+    );
+
+    if (callType == null || !mounted) return;
+
+    // Get current user
+    final user = RealAuthService.instance.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ User not logged in'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Log call hit
+    await CallHitService.instance.logCallHit(
+      contactId: contact.id,
+      contactName: contact.name,
+      contactType: 'driver',
+      callType: callType,
+      sourceScreen: 'call_backs',
+      phoneNumber: contact.phoneNumber,
+    );
+
+    final callerId = int.tryParse(user.id) ?? 1;
+    final cleanPhone = contact.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+
+    try {
+      if (callType == 'manual') {
+        // Manual call
+        final result = await SmartCallingService.instance.initiateManualCall(
+          driverMobile: cleanPhone.isEmpty ? contact.id : cleanPhone,
+          callerId: callerId,
+          driverId: contact.id,
+          callSource: 'call_backs',
+        );
+
+        if (result['success'] == true && mounted) {
+          final driverMobileRaw = result['data']?['driver_mobile_raw'];
+          await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) _showCallFeedbackModal(contact);
+        }
+      } else if (callType == 'easygo_ivr') {
+        // IVR call
+        await EasyGoIVRCallHelper.initiateCall(
+          context: context,
+          clientName: contact.name,
+          clientPhone: contact.phoneNumber,
+          clientId: contact.id,
+          tmid: contact.tmid,
+          contactType: 'driver',
+          callSource: 'call_backs',
+          onCallEnded: () {
+            if (mounted) {
+              _showCallFeedbackModal(contact);
+            }
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to make call: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _showCallFeedbackModal(DriverContact contact) {
@@ -109,48 +202,91 @@ class _CallBacksScreenState extends State<CallBacksScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      isDismissible: true,
+      enableDrag: true,
       builder: (context) => CallFeedbackModal(
         contact: contact,
-        onFeedbackSubmitted: (feedback) {
-          _handleFeedbackSubmitted(contact, feedback);
-          Navigator.of(context).pop();
+        allowDismiss: true,
+        onFeedbackSubmitted: (feedback) async {
+          await _handleFeedbackSubmitted(contact, feedback);
+          if (context.mounted) {
+            Navigator.of(context).pop();
+          }
         },
       ),
     );
   }
 
-  Future<void> _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback) async {
-    // Update via API
-    final success = await SmartCallingService.instance.updateCallStatus(
-      driverId: contact.id,
-      status: feedback.status,
-      feedback: _getFeedbackText(feedback),
-      remarks: feedback.remarks,
-    );
+  Future<void> _handleFeedbackSubmitted(
+    DriverContact contact,
+    CallFeedback feedback,
+  ) async {
+    // Optimistically remove contact from list immediately for instant UI update
+    if (mounted) {
+      setState(() {
+        _callBackContacts?.removeWhere((c) => c.id == contact.id);
+      });
+    }
 
-    if (success) {
-      // Refresh the list to get updated data
-      await _refreshData();
-      
-      if (mounted) {
+    try {
+      // Get feedback text
+      final feedbackText = _getFeedbackText(feedback);
+
+      // Simple approach: Just update the driver status in users table
+      // The call_logs entry will be created/updated by the API
+      final success = await SmartCallingService.instance.updateCallStatus(
+        driverId: contact.id,
+        status: feedback.status,
+        feedback: feedbackText,
+        remarks: feedback.remarks,
+      );
+
+      if (success && mounted) {
         HapticFeedback.lightImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Updated ${contact.name}'),
-            backgroundColor: Colors.orange,
+            content: Text('✅ Updated ${contact.name}'),
+            backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 2),
           ),
         );
+
+        // Refresh in background to sync with server
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _refreshData();
+          }
+        });
+      } else if (mounted) {
+        // If API call failed, add the contact back to the list
+        setState(() {
+          _callBackContacts?.add(contact);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Failed to update feedback'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to update status'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    } catch (e) {
+      // If error occurred, add the contact back to the list
+      if (mounted) {
+        setState(() {
+          _callBackContacts?.add(contact);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -171,32 +307,48 @@ class _CallBacksScreenState extends State<CallBacksScreen>
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
-      body: Column(
+      body: Stack(
         children: [
-          _CallBacksHeader(
-            contactCount: _callBackContacts?.length ?? 0,
-            onRefresh: _refreshData,
-            isRefreshing: _isRefreshing,
+          Column(
+            children: [
+              _CallBacksHeader(
+                contactCount: _callBackContacts?.length ?? 0,
+                onRefresh: _refreshData,
+                isRefreshing: _isRefreshing,
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const _LoadingWidget()
+                    : RefreshIndicator(
+                        onRefresh: _refreshData,
+                        child: (_callBackContacts?.isEmpty ?? true)
+                            ? const _EmptyStateWidget()
+                            : _ContactsList(
+                                contacts: _callBackContacts!,
+                                scrollController: _scrollController,
+                                onCallPressed: _onCallPressed,
+                              ),
+                      ),
+              ),
+            ],
           ),
-          Expanded(
-            child: _isLoading
-                ? const _LoadingWidget()
-                : RefreshIndicator(
-                    onRefresh: _refreshData,
-                    child: (_callBackContacts?.isEmpty ?? true)
-                        ? const _EmptyStateWidget()
-                        : _ContactsList(
-                            contacts: _callBackContacts!,
-                            scrollController: _scrollController,
-                            onCallPressed: _onCallPressed,
-                          ),
-                  ),
+          DraggableFloatingActionButton(
+            heroTag: 'callbacks_global_search',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SearchUsersScreen(),
+                ),
+              );
+            },
+            backgroundColor: AppTheme.primaryBlue,
+            child: const Icon(Icons.search, color: Colors.white),
           ),
         ],
       ),
     );
   }
-
 }
 
 // Optimized separate widgets
@@ -204,7 +356,7 @@ class _CallBacksHeader extends StatelessWidget {
   final int contactCount;
   final VoidCallback onRefresh;
   final bool isRefreshing;
-  
+
   const _CallBacksHeader({
     required this.contactCount,
     required this.onRefresh,
@@ -362,8 +514,6 @@ class _LoadingWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(),
-    );
+    return const Center(child: CircularProgressIndicator());
   }
 }

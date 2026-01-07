@@ -53,14 +53,16 @@ class _BreakStatusPopupState extends State<BreakStatusPopup> {
 
   Color _getBreakColor() {
     switch (widget.breakType) {
-      case 'tea_break':
-        return const Color(0xFFFFA726);
       case 'lunch_break':
         return const Color(0xFF66BB6A);
-      case 'prayer_break':
+      case 'tea_break':
+        return const Color(0xFFFFA726);
+      case 'rest_break':
         return const Color(0xFF42A5F5);
-      case 'personal_break':
+      case 'training_break':
         return const Color(0xFFAB47BC);
+      case 'meeting_break':
+        return const Color(0xFFEF5350);
       default:
         return const Color(0xFF9E9E9E);
     }
@@ -68,14 +70,16 @@ class _BreakStatusPopupState extends State<BreakStatusPopup> {
 
   IconData _getBreakIcon() {
     switch (widget.breakType) {
-      case 'tea_break':
-        return Icons.local_cafe_rounded;
       case 'lunch_break':
         return Icons.restaurant_rounded;
-      case 'prayer_break':
-        return Icons.mosque_rounded;
-      case 'personal_break':
-        return Icons.person_rounded;
+      case 'tea_break':
+        return Icons.local_cafe_rounded;
+      case 'rest_break':
+        return Icons.weekend_rounded;
+      case 'training_break':
+        return Icons.school_rounded;
+      case 'meeting_break':
+        return Icons.groups_rounded;
       default:
         return Icons.pause_circle_rounded;
     }
@@ -83,14 +87,16 @@ class _BreakStatusPopupState extends State<BreakStatusPopup> {
 
   String _getBreakLabel() {
     switch (widget.breakType) {
-      case 'tea_break':
-        return 'Tea Break';
       case 'lunch_break':
-        return 'Lunch Break';
-      case 'prayer_break':
-        return 'Prayer Break';
-      case 'personal_break':
-        return 'Personal Break';
+        return 'Lunch';
+      case 'tea_break':
+        return 'Tea';
+      case 'rest_break':
+        return 'Rest';
+      case 'training_break':
+        return 'Training';
+      case 'meeting_break':
+        return 'Meeting';
       default:
         return 'Break';
     }
@@ -167,7 +173,7 @@ class _BreakStatusPopupState extends State<BreakStatusPopup> {
           ),
           const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(16),
@@ -178,17 +184,22 @@ class _BreakStatusPopupState extends State<BreakStatusPopup> {
                 Icon(
                   Icons.timer_rounded,
                   color: Colors.white.withValues(alpha: 0.9),
-                  size: 24,
+                  size: 22,
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  _formatDuration(_duration),
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: 2,
-                    fontFeatures: [FontFeature.tabularFigures()],
+                const SizedBox(width: 8),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _formatDuration(_duration),
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 1,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
                   ),
                 ),
               ],

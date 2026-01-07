@@ -22,6 +22,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+// Set timezone to IST (India Standard Time)
+date_default_timezone_set('Asia/Kolkata');
+
 require_once 'config.php';
 require_once 'update_activity_middleware.php';
 
@@ -614,11 +617,22 @@ function startBreak($conn) {
     $input = json_decode(file_get_contents('php://input'), true);
     
     $telecallerId = $input['telecaller_id'] ?? null;
-    $breakType = $input['break_type'] ?? 'personal_break';
+    $breakType = $input['break_type'] ?? null;
     $notes = $input['notes'] ?? '';
+    
+    // Debug logging
+    error_log("startBreak called - telecaller_id: $telecallerId, break_type: $breakType");
+    error_log("Raw input: " . file_get_contents('php://input'));
     
     if (!$telecallerId) {
         echo json_encode(['success' => false, 'error' => 'Telecaller ID required']);
+        return;
+    }
+    
+    // Validate break_type - must be one of the allowed types
+    $allowedBreakTypes = ['lunch_break', 'tea_break', 'rest_break', 'training_break', 'meeting_break'];
+    if (empty($breakType) || !in_array($breakType, $allowedBreakTypes)) {
+        echo json_encode(['success' => false, 'error' => 'Invalid break type. Allowed: ' . implode(', ', $allowedBreakTypes)]);
         return;
     }
     
@@ -641,13 +655,19 @@ function startBreak($conn) {
     $conn->begin_transaction();
     
     try {
-        // Insert break log
+        // Set MySQL timezone to IST
+        $conn->query("SET time_zone = '+05:30'");
+        
+        // Get current IST time
+        $currentTime = date('Y-m-d H:i:s');
+        
+        // Insert break log with explicit time
         $query = "INSERT INTO break_logs 
-                  (caller_id, telecaller_name, break_type, start_time, notes, status) 
-                  VALUES (?, ?, ?, NOW(), ?, 'active')";
+                  (caller_id, telecaller_name, break_type, start_time, notes, status, created_at) 
+                  VALUES (?, ?, ?, ?, ?, 'active', ?)";
         
         $stmt = $conn->prepare($query);
-        $stmt->bind_param("isss", $telecallerId, $telecallerName, $breakType, $notes);
+        $stmt->bind_param("isssss", $telecallerId, $telecallerName, $breakType, $currentTime, $notes, $currentTime);
         $stmt->execute();
         
         $breakId = $conn->insert_id;
@@ -655,12 +675,12 @@ function startBreak($conn) {
         // Update telecaller status
         $query2 = "UPDATE telecaller_status SET 
                    current_status = 'break',
-                   break_start_time = NOW(),
-                   last_activity = NOW()
+                   break_start_time = ?,
+                   last_activity = ?
                    WHERE telecaller_id = ?";
         
         $stmt2 = $conn->prepare($query2);
-        $stmt2->bind_param("i", $telecallerId);
+        $stmt2->bind_param("ssi", $currentTime, $currentTime, $telecallerId);
         $stmt2->execute();
         
         $conn->commit();
@@ -669,7 +689,8 @@ function startBreak($conn) {
             'success' => true, 
             'message' => 'Break started',
             'break_id' => $breakId,
-            'start_time' => date('Y-m-d H:i:s')
+            'break_type' => $breakType,
+            'start_time' => $currentTime
         ]);
         
     } catch (Exception $e) {
@@ -691,6 +712,12 @@ function endBreak($conn) {
     $conn->begin_transaction();
     
     try {
+        // Set MySQL timezone to IST
+        $conn->query("SET time_zone = '+05:30'");
+        
+        // Get current IST time
+        $currentTime = date('Y-m-d H:i:s');
+        
         // Get active break
         $stmt = $conn->prepare("SELECT id, start_time FROM break_logs WHERE caller_id = ? AND status = 'active'");
         $stmt->bind_param("i", $telecallerId);

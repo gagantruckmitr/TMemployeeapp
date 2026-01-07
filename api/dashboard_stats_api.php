@@ -18,13 +18,12 @@ try {
     $result = $conn->query($driversQuery);
     $totalDrivers = $result->fetch_assoc()['count'];
     
-    // Get call logs stats
     $callLogsQuery = "SELECT 
         COUNT(*) as total_calls,
         COUNT(CASE WHEN call_status = 'connected' THEN 1 END) as connected_calls,
-        COUNT(CASE WHEN DATE(call_time) = CURDATE() THEN 1 END) as calls_today,
-        COUNT(CASE WHEN call_status IN ('in_progress', 'ringing') THEN 1 END) as active_calls
-    FROM call_logs";
+        COUNT(CASE WHEN DATE(created_at) = CURDATE() THEN 1 END) as calls_today,
+        0 as active_calls
+    FROM call_history";
     $result = $conn->query($callLogsQuery);
     $callStats = $result->fetch_assoc();
     
@@ -33,14 +32,14 @@ try {
         ? round(($callStats['connected_calls'] / $callStats['total_calls']) * 100, 1) 
         : 0;
     
-    // Get call trends (last 7 days)
+    // Get call trends (last 7 days) - using call_history table
     $trendsQuery = "SELECT 
-        DATE(call_time) as date,
+        DATE(created_at) as date,
         COUNT(*) as calls,
         COUNT(CASE WHEN call_status = 'connected' THEN 1 END) as connected
-    FROM call_logs
-    WHERE call_time >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-    GROUP BY DATE(call_time)
+    FROM call_history
+    WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+    GROUP BY DATE(created_at)
     ORDER BY date ASC";
     $result = $conn->query($trendsQuery);
     $callTrends = [];
@@ -52,30 +51,45 @@ try {
         ];
     }
     
-    // Get call distribution
+    // Get call distribution - using call_history table
     $distributionQuery = "SELECT 
-        call_status as name,
+        COALESCE(call_status, 'unknown') as name,
         COUNT(*) as value
-    FROM call_logs
-    WHERE call_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    FROM call_history
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     GROUP BY call_status
+    ORDER BY value DESC
     LIMIT 5";
     $result = $conn->query($distributionQuery);
     $callDistribution = [];
     while ($row = $result->fetch_assoc()) {
+        // Format call_status labels properly
+        $statusLabel = $row['name'];
+        if ($statusLabel === 'connected') {
+            $statusLabel = 'Connected';
+        } elseif ($statusLabel === 'not_connected') {
+            $statusLabel = 'Not Connected';
+        } elseif ($statusLabel === 'callback_later') {
+            $statusLabel = 'Call Back';
+        } elseif ($statusLabel === 'unknown' || $statusLabel === '' || $statusLabel === null) {
+            $statusLabel = 'Unknown';
+        } else {
+            $statusLabel = ucfirst(str_replace('_', ' ', $statusLabel));
+        }
+        
         $callDistribution[] = [
-            'name' => ucfirst(str_replace('_', ' ', $row['name'])),
+            'name' => $statusLabel,
             'value' => (int)$row['value']
         ];
     }
     
-    // Get top performers
+    // Get top performers - using call_history table with assigned_to
     $performersQuery = "SELECT 
         a.name,
-        COUNT(cl.id) as calls,
-        COUNT(CASE WHEN cl.call_status = 'connected' THEN 1 END) as connected
+        COUNT(ch.id) as calls,
+        COUNT(CASE WHEN ch.call_status = 'connected' THEN 1 END) as connected
     FROM admins a
-    LEFT JOIN call_logs cl ON a.id = cl.telecaller_id AND DATE(cl.call_time) = CURDATE()
+    LEFT JOIN call_history ch ON a.id = ch.assigned_to AND DATE(ch.created_at) = CURDATE()
     WHERE a.role = 'telecaller'
     GROUP BY a.id, a.name
     ORDER BY calls DESC
@@ -90,16 +104,16 @@ try {
         ];
     }
     
-    // Get recent activity
+    // Get recent activity - using call_history table with assigned_to
     $activityQuery = "SELECT 
         a.name as telecaller,
-        d.name as driver_name,
-        cl.call_status,
-        cl.call_time
-    FROM call_logs cl
-    JOIN admins a ON cl.caller_id = a.id
-    LEFT JOIN drivers d ON cl.driver_id = d.id
-    ORDER BY cl.call_time DESC
+        u.name as driver_name,
+        COALESCE(ch.call_status, 'unknown') as call_status,
+        ch.created_at as call_time
+    FROM call_history ch
+    JOIN admins a ON ch.assigned_to = a.id
+    LEFT JOIN users u ON ch.user_id = u.id
+    ORDER BY ch.created_at DESC
     LIMIT 10";
     $result = $conn->query($activityQuery);
     $recentActivity = [];
@@ -115,9 +129,23 @@ try {
             $timeStr = date('M d, H:i', strtotime($row['call_time']));
         }
         
+        // Format call_status labels
+        $statusLabel = $row['call_status'];
+        if ($statusLabel === 'connected') {
+            $statusLabel = 'Connected';
+        } elseif ($statusLabel === 'not_connected') {
+            $statusLabel = 'Not Connected';
+        } elseif ($statusLabel === 'callback_later') {
+            $statusLabel = 'Call Back';
+        } elseif ($statusLabel === 'unknown' || $statusLabel === '' || $statusLabel === null) {
+            $statusLabel = 'Unknown';
+        } else {
+            $statusLabel = ucfirst(str_replace('_', ' ', $statusLabel ?? ''));
+        }
+        
         $recentActivity[] = [
             'telecaller' => $row['telecaller'],
-            'action' => 'Called ' . ($row['driver_name'] ?? 'Unknown') . ' - ' . ucfirst($row['call_status']),
+            'action' => 'Called ' . ($row['driver_name'] ?? 'Unknown') . ' - ' . $statusLabel,
             'time' => $timeStr
         ];
     }

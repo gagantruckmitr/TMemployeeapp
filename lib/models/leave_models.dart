@@ -41,10 +41,15 @@ class LeaveRequest {
       reason: json['reason'] ?? '',
       status: json['status'] ?? json['manager_approval_status'] ?? 'pending',
       managerRemarks: json['manager_remarks'],
-      managerId: json['manager_id']?.toString() ?? json['approved_by']?.toString(),
-      createdAt: DateTime.parse(json['created_at'] ?? json['applied_at'] ?? DateTime.now().toIso8601String()),
-      approvedAt: json['approved_at'] != null && json['approved_at'] != '' 
-          ? DateTime.parse(json['approved_at']) 
+      managerId:
+          json['manager_id']?.toString() ?? json['approved_by']?.toString(),
+      createdAt: DateTime.parse(
+        json['created_at'] ??
+            json['applied_at'] ??
+            DateTime.now().toIso8601String(),
+      ),
+      approvedAt: json['approved_at'] != null && json['approved_at'] != ''
+          ? DateTime.parse(json['approved_at'])
           : null,
     );
   }
@@ -100,4 +105,72 @@ enum LeaveType {
   final String displayName;
   final String emoji;
   const LeaveType(this.displayName, this.emoji);
+}
+
+class BreakLog {
+  final int id;
+  final int callerId;
+  final String telecallerName;
+  final String breakType;
+  final DateTime startTime;
+  final DateTime? endTime;
+  final int? durationSeconds;
+  final String status;
+  final String notes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BreakLog({
+    required this.id,
+    required this.callerId,
+    required this.telecallerName,
+    required this.breakType,
+    required this.startTime,
+    this.endTime,
+    this.durationSeconds,
+    required this.status,
+    this.notes = '',
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory BreakLog.fromJson(Map<String, dynamic> json) {
+    return BreakLog(
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      callerId: json['caller_id'] is int
+          ? json['caller_id']
+          : int.tryParse(json['caller_id']?.toString() ?? '0') ?? 0,
+      telecallerName: json['telecaller_name'] ?? '',
+      breakType: json['break_type'] ?? '',
+      startTime: DateTime.tryParse(json['start_time'] ?? '') ?? DateTime.now(),
+      endTime: json['end_time'] != null
+          ? DateTime.tryParse(json['end_time'])
+          : null,
+      durationSeconds: json['duration_seconds'] is int
+          ? json['duration_seconds']
+          : int.tryParse(json['duration_seconds']?.toString() ?? ''),
+      status: json['status'] ?? 'pending',
+      notes: json['notes'] ?? '',
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'caller_id': callerId,
+      'telecaller_name': telecallerName,
+      'break_type': breakType,
+      'start_time': startTime.toIso8601String(),
+      'end_time': endTime?.toIso8601String(),
+      'duration_seconds': durationSeconds,
+      'status': status,
+      'notes': notes,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
 }

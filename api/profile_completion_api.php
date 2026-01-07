@@ -31,13 +31,14 @@ try {
 
 function getProfileDetails($conn) {
     $userId = $_GET['user_id'] ?? null;
+    $roleOverride = $_GET['role'] ?? null; // Optional role override
     
     if (!$userId) {
         throw new Exception('User ID is required');
     }
     
     // Use the shared helper function for consistent calculation
-    $profileData = getProfileCompletionData($conn, $userId);
+    $profileData = getProfileCompletionData($conn, $userId, $roleOverride);
     
     if ($profileData === 0 || !isset($profileData['user_data'])) {
         throw new Exception('User not found or invalid data');

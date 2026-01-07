@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../models/smart_calling_models.dart';
 import '../../../core/utils/state_code_mapper.dart';
+import '../../../core/services/call_feedback_guard_service.dart';
 import 'profile_completion_avatar.dart';
 import '../screens/profile_completion_details_page.dart';
 
@@ -11,6 +12,7 @@ class TransporterContactCard extends StatefulWidget {
   final VoidCallback onCallPressed;
   final bool isCallInProgress;
   final VoidCallback? onTap;
+  final bool hideCallButtonOnPendingFeedback;
 
   const TransporterContactCard({
     super.key,
@@ -18,6 +20,7 @@ class TransporterContactCard extends StatefulWidget {
     required this.onCallPressed,
     this.isCallInProgress = false,
     this.onTap,
+    this.hideCallButtonOnPendingFeedback = true,
   });
 
   @override
@@ -64,6 +67,86 @@ class _TransporterContactCardState extends State<TransporterContactCard> {
     return Colors.grey.shade600;
   }
 
+  /// Calculate profile completion percentage - EXACT COPY from ProfileCompletionDetailsPage.build()
+  int _calculateProfileCompletionPercentage() {
+    // Calculate completion based on the displayed documents list ONLY
+    // This ensures count matches the list shown to user
+    final documents = _getDriverDocuments();
+    final totalDocs = documents.length;
+    
+    // Count completed docs by checking actual values, not just API status
+    // This handles special cases like mobile (from contact) and state (from TMID)
+    final completion = widget.contact.profileCompletion;
+    final values = completion?.documentValues ?? {};
+    
+    int completedDocs = 0;
+    for (var doc in documents) {
+      var value = values[doc.fieldName];
+      
+      // Special handling for mobile - fallback to contact phone
+      if (doc.fieldName == 'mobile' && (value == null || value.isEmpty)) {
+        value = widget.contact.phoneNumber;
+      }
+      
+      // Special handling for state - extract from TMID
+      if (doc.fieldName == 'state' && (value == null || value.isEmpty)) {
+        value = StateCodeMapper.getStateName(widget.contact.tmid);
+      }
+      
+      // Check if value is valid
+      if (_isValidValue(value)) {
+        completedDocs++;
+      }
+    }
+
+    // Recalculate percentage from visible docs
+    // This ensures displayed percentage matches the displayed fraction (X/Y Records)
+    final percentage = totalDocs > 0
+        ? ((completedDocs / totalDocs) * 100).round()
+        : 0;
+
+    return percentage;
+  }
+
+  /// EXACT COPY from ProfileCompletionDetailsPage._getDriverDocuments()
+  List<_DocumentItem> _getDriverDocuments() {
+    final completion = widget.contact.profileCompletion;
+    final docs = completion?.documentStatus ?? {};
+    final values = completion?.documentValues ?? {};
+
+    // Transporter-specific fields (15 fields)
+    return [
+      _DocumentItem('Name', 'name', docs['name'] ?? false, values['name']),
+      _DocumentItem('Email', 'email', docs['email'] ?? false, values['email']),
+      _DocumentItem('Mobile', 'mobile', docs['mobile'] ?? false, values['mobile']),
+      _DocumentItem('Transport Name', 'transport_name', docs['transport_name'] ?? false, values['transport_name']),
+      _DocumentItem('Year of Establishment', 'year_of_establishment', docs['year_of_establishment'] ?? false, values['year_of_establishment']),
+      _DocumentItem('Fleet Size', 'fleet_size', docs['fleet_size'] ?? false, values['fleet_size']),
+      _DocumentItem('Operational Segment', 'operational_segment', docs['operational_segment'] ?? false, values['operational_segment']),
+      _DocumentItem('Average KM', 'average_km', docs['average_km'] ?? false, values['average_km']),
+      _DocumentItem('City', 'city', docs['city'] ?? false, values['city']),
+      _DocumentItem('State', 'state', docs['state'] ?? false, values['state']),
+      _DocumentItem('Profile Photo', 'images', docs['images'] ?? false, values['images']),
+      _DocumentItem('Address', 'address', docs['address'] ?? false, values['address']),
+      _DocumentItem('PAN Number', 'pan_number', docs['pan_number'] ?? false, values['pan_number']),
+      _DocumentItem('PAN Image', 'pan_image', docs['pan_image'] ?? false, values['pan_image']),
+      _DocumentItem('GST Certificate', 'gst_certificate', docs['gst_certificate'] ?? false, values['gst_certificate']),
+    ];
+  }
+
+  /// EXACT COPY from ProfileCompletionDetailsPage._isValidValue()
+  bool _isValidValue(dynamic value) {
+    if (value == null) return false;
+
+    final String stringValue = value.toString().trim();
+
+    if (stringValue.isEmpty) return false;
+    if (stringValue.toLowerCase() == 'null') return false;
+    if (stringValue.toLowerCase() == 'n/a') return false;
+
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -89,8 +172,7 @@ class _TransporterContactCardState extends State<TransporterContactCard> {
                       // Avatar with profile completion
                       ProfileCompletionAvatar(
                         name: widget.contact.name,
-                        completionPercentage:
-                            widget.contact.profileCompletion?.percentage ?? 0,
+                        completionPercentage: _calculateProfileCompletionPercentage(),
                         imageUrl: widget.contact.profilePicture,
                         size: 54,
                         onTap: () async {
@@ -190,54 +272,38 @@ class _TransporterContactCardState extends State<TransporterContactCard> {
 
                       const SizedBox(width: 12),
 
-                      // Call Button
-                      GestureDetector(
-                        onTap: widget.isCallInProgress
-                            ? null
-                            : () {
-                                HapticFeedback.mediumImpact();
-                                widget.onCallPressed();
-                              },
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: widget.isCallInProgress
-                                ? Colors.grey.shade300
-                                : const Color(0xFF2196F3),
-                            shape: BoxShape.circle,
-                            boxShadow: widget.isCallInProgress
-                                ? []
-                                : [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFF2196F3,
-                                      ).withValues(alpha: 0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                          ),
-                          child: widget.isCallInProgress
-                              ? const Center(
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
-                                      ),
-                                    ),
+                      // Call Button - Hidden when pending feedback
+                      if (widget.hideCallButtonOnPendingFeedback)
+                        ValueListenableBuilder<bool>(
+                          valueListenable: CallFeedbackGuardService.instance.hasPendingFeedbackNotifier,
+                          builder: (context, hasPendingFeedback, child) {
+                            if (hasPendingFeedback) {
+                              // Show disabled/hidden state when feedback is pending
+                              return GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  CallFeedbackGuardService.showPendingFeedbackToast(context);
+                                },
+                                child: Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade300,
+                                    shape: BoxShape.circle,
                                   ),
-                                )
-                              : const Icon(
-                                  Icons.phone,
-                                  color: Colors.white,
-                                  size: 22,
+                                  child: Icon(
+                                    Icons.phone_disabled,
+                                    color: Colors.grey.shade500,
+                                    size: 22,
+                                  ),
                                 ),
-                        ),
-                      ),
+                              );
+                            }
+                            return _buildCallButton();
+                          },
+                        )
+                      else
+                        _buildCallButton(),
                     ],
                   ),
 
@@ -301,6 +367,52 @@ class _TransporterContactCardState extends State<TransporterContactCard> {
                 ],
               ),
             );
+  }
+
+  Widget _buildCallButton() {
+    return GestureDetector(
+      onTap: widget.isCallInProgress
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              widget.onCallPressed();
+            },
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: widget.isCallInProgress
+              ? Colors.grey.shade300
+              : const Color(0xFF2196F3),
+          shape: BoxShape.circle,
+          boxShadow: widget.isCallInProgress
+              ? []
+              : [
+                  BoxShadow(
+                    color: const Color(0xFF2196F3).withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+        ),
+        child: widget.isCallInProgress
+            ? const Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+              )
+            : const Icon(
+                Icons.phone,
+                color: Colors.white,
+                size: 22,
+              ),
+      ),
+    );
   }
 
   Widget _buildDetailItem(IconData icon, String label, String value) {
@@ -504,4 +616,14 @@ class _TransporterContactCardState extends State<TransporterContactCard> {
       ),
     );
   }
+}
+
+/// Helper class for document items - EXACT COPY from ProfileCompletionDetailsPage
+class _DocumentItem {
+  final String displayName;
+  final String fieldName;
+  final bool isPresent;
+  final String? value;
+
+  _DocumentItem(this.displayName, this.fieldName, this.isPresent, this.value);
 }

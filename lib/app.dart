@@ -6,6 +6,8 @@ import 'core/utils/screenshot_helper.dart';
 import 'routes/app_router.dart';
 import 'core/database/database_setup.dart';
 import 'core/services/session_manager.dart';
+import 'core/services/callback_notification_service.dart';
+import 'widgets/callback_notification_overlay.dart';
 
 class TMEmployeeApp extends StatelessWidget {
   const TMEmployeeApp({super.key});
@@ -15,6 +17,8 @@ class TMEmployeeApp extends StatelessWidget {
     // Initialize database connection on app start
     _initializeDatabase();
     
+    // Initialize callback notification service
+    _initializeNotificationService();
   
     // Set system UI overlay style
     SystemChrome.setSystemUIOverlayStyle(
@@ -39,9 +43,18 @@ class TMEmployeeApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           routerConfig: AppRouter.router,
+          builder: (context, child) {
+            return CallbackNotificationOverlay(
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
         ),
       ),
     );
+  }
+
+  void _initializeNotificationService() {
+    CallbackNotificationService().initialize();
   }
 
   void _initializeDatabase() {

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import '../../models/smart_calling_models.dart';
 import '../../models/leave_models.dart';
 import '../config/api_config.dart';
@@ -15,38 +16,151 @@ class ApiService {
     _currentCallerId = callerId;
   }
 
-  // Get fresh leads (uncalled drivers) for telecaller
+  // Get fresh leads - DEPRECATED: fresh_leads_api.php has been removed
+  // Now returns empty list - use TodayLeadsService instead
   static Future<List<DriverContact>> getFreshLeads({
     int limit = 50,
     String? callerId,
+    String? userType, // 'driver' or 'transporter' for match-making
+  }) async {
+    // fresh_leads_api.php has been deleted from the server
+    // Return empty list - data is now loaded from TodayLeadsService
+    print('⚠️ getFreshLeads called but API removed - returning empty list');
+    return [];
+  }
+
+  // Get elechamps leads for smart calling
+  static Future<List<DriverContact>> getElechampsLeads({
+    required String adminId,
+    int limit = 50,
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl/fresh_leads_api.php').replace(
-        queryParameters: {
-          'action': 'fresh_leads',
-          'limit': limit.toString(),
-          'caller_id': callerId ?? _currentCallerId ?? '1',
-        },
+      // Use the new elechamps API endpoint
+      final uri = Uri.parse('$baseUrl/elechamps_users_api.php').replace(
+        queryParameters: {'admin_id': adminId, 'per_page': limit.toString()},
       );
 
+      print('🔵 Fetching elechamps leads from: $uri');
       final response = await http.get(uri).timeout(timeout);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['success'] == true) {
-          final List<dynamic> driversJson = data['data'];
-          return driversJson
-              .map((json) => _mapJsonToDriverContact(json))
-              .toList();
-        } else {
-          throw Exception(data['error'] ?? 'Failed to fetch fresh leads');
+
+        // Check for error status
+        if (data['status'] == 'error') {
+          throw Exception(data['message'] ?? 'Unknown error');
         }
+
+        // Handle different response structures
+        List<dynamic> usersJson = [];
+        if (data is List) {
+          usersJson = data;
+        } else if (data is Map) {
+          // Check for 'users' field (as per actual API response)
+          if (data['users'] != null) {
+            usersJson = data['users'] as List;
+          } else if (data['data'] != null) {
+            usersJson = data['data'] as List;
+          }
+
+          // Log API metadata
+          if (data['status'] != null) {
+            print('📊 API Status: ${data['status']}');
+          }
+          if (data['admin_name'] != null) {
+            print('📊 Admin: ${data['admin_name']}');
+          }
+          if (data['assigned_user_count'] != null) {
+            print('📊 Total assigned users: ${data['assigned_user_count']}');
+          }
+          if (data['current_page'] != null && data['last_page'] != null) {
+            print('📊 Page ${data['current_page']} of ${data['last_page']}');
+          }
+        }
+
+        print('✅ Fetched ${usersJson.length} elechamps leads');
+
+        return usersJson
+            .map((json) => _mapElechampsJsonToDriverContact(json))
+            .toList();
       } else {
         throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      throw Exception('Failed to fetch fresh leads: $e');
+      print('❌ Failed to fetch elechamps leads: $e');
+      throw Exception('Failed to fetch elechamps leads: $e');
     }
+  }
+
+  // Helper method to map elechamps JSON to DriverContact
+  static DriverContact _mapElechampsJsonToDriverContact(
+    Map<String, dynamic> json,
+  ) {
+    // Parse registration date from Created_at field
+    DateTime? regDate;
+    if (json['Created_at'] != null) {
+      regDate = DateTime.tryParse(json['Created_at']);
+    } else if (json['created_at'] != null) {
+      regDate = DateTime.tryParse(json['created_at']);
+    } else if (json['createdAt'] != null) {
+      regDate = DateTime.tryParse(json['createdAt']);
+    }
+
+    // Get name - prefer name_eng over name
+    String name =
+        json['name_eng'] ?? json['nameEng'] ?? json['name'] ?? 'Unknown';
+
+    // Get mobile number
+    String mobile =
+        json['mobile'] ?? json['phone'] ?? json['phoneNumber'] ?? '';
+
+    // Get unique ID (TMID)
+    String tmid =
+        json['unique_id'] ?? json['uniqueId'] ?? json['tmid'] ?? 'TM000000';
+
+    // Get role
+    String role = json['role'] ?? 'driver';
+
+    // Get profile completion - check multiple possible fields
+    int profileCompletion = 0;
+    if (json['profile_completion'] != null) {
+      profileCompletion =
+          int.tryParse(json['profile_completion'].toString()) ?? 0;
+    } else if (json['driver_completion'] != null) {
+      profileCompletion =
+          int.tryParse(json['driver_completion'].toString()) ?? 0;
+    } else if (json['driverCompletion'] != null) {
+      profileCompletion =
+          int.tryParse(json['driverCompletion'].toString()) ?? 0;
+    }
+
+    // Get state - handle both 'states' and 'state' fields
+    String state =
+        json['states']?.toString() ?? json['state']?.toString() ?? '0';
+
+    // Get assigned telecaller ID
+    String? assignedTelecaller;
+    if (json['assigned_to'] != null) {
+      assignedTelecaller = 'Admin ${json['assigned_to']}';
+    }
+
+    return DriverContact(
+      id: json['id']?.toString() ?? '',
+      tmid: tmid,
+      name: name,
+      company: role == 'driver' ? 'Driver' : 'Transporter',
+      phoneNumber: mobile,
+      state: state,
+      subscriptionStatus: SubscriptionStatus.inactive,
+      status: CallStatus.pending,
+      role: role,
+      registrationDate: regDate,
+      profileCompletion: ProfileCompletion(
+        percentage: profileCompletion,
+        documentStatus: {},
+      ),
+      assignedTelecaller: assignedTelecaller,
+    );
   }
 
   // Get all drivers for smart calling
@@ -58,11 +172,9 @@ class ApiService {
     String? callerId,
   }) async {
     try {
-      // Use fresh_leads_api for status-based queries
-      final apiEndpoint = status != null
-          ? 'fresh_leads_api.php'
-          : 'simple_drivers_api.php';
-      final action = status != null ? 'fresh_leads' : 'drivers';
+      // Always use simple_drivers_api.php (fresh_leads_api.php was removed)
+      const apiEndpoint = 'simple_drivers_api.php';
+      final action = 'drivers';
 
       final queryParams = <String, String>{
         'action': action,
@@ -90,6 +202,18 @@ class ApiService {
           final List<dynamic> driversJson = data['data'];
           print('✅ Fetched ${driversJson.length} drivers with status: $status');
           return driversJson
+              .where((json) {
+                final role = json['role']?.toString().toLowerCase();
+                final userType = json['user_type']?.toString().toLowerCase();
+                final tmid = json['tmid']?.toString().toUpperCase() ?? '';
+
+                if (role == 'transporter' ||
+                    userType == 'transporter' ||
+                    (tmid.contains('TR') && !tmid.contains('DR'))) {
+                  return false;
+                }
+                return true;
+              })
               .map((json) => _mapJsonToDriverContact(json))
               .toList();
         } else {
@@ -137,8 +261,9 @@ class ApiService {
     String? callerId,
   }) async {
     try {
+      // Use simple_drivers_api.php (fresh_leads_api.php was removed)
       final uri = Uri.parse(
-        '$baseUrl/fresh_leads_api.php',
+        '$baseUrl/simple_drivers_api.php',
       ).replace(queryParameters: {'action': 'mark_called'});
 
       final response = await http
@@ -245,8 +370,7 @@ class ApiService {
     try {
       final uri = Uri.parse('$baseUrl/telecaller_analytics_api.php').replace(
         queryParameters: {
-          'action': 'analytics',
-          'period': period ?? 'week',
+          'period': period ?? 'today',
           'caller_id': callerId ?? _currentCallerId ?? '1',
         },
       );
@@ -263,6 +387,15 @@ class ApiService {
 
         if (data['success'] == true) {
           print('✅ Analytics data fetched successfully');
+          print('📊 Full Response: $data');
+
+          // The API already returns the correct structure
+          // Just need to ensure overview has the fields we need
+          final responseData = data['data'] ?? {};
+          final overview = responseData['overview'] ?? {};
+
+          print('📈 Overview Data: $overview');
+
           return data;
         } else {
           print('❌ Analytics API error: ${data['error']}');
@@ -693,6 +826,8 @@ class ApiService {
     String? feedback,
     String? remarks,
     String? search,
+    DateTime? dateFrom,
+    DateTime? dateTo,
     int limit = 1000,
   }) async {
     try {
@@ -716,6 +851,14 @@ class ApiService {
 
       if (search != null && search.isNotEmpty) {
         queryParams['search'] = search;
+      }
+
+      if (dateFrom != null) {
+        queryParams['date_from'] = DateFormat('yyyy-MM-dd').format(dateFrom);
+      }
+
+      if (dateTo != null) {
+        queryParams['date_to'] = DateFormat('yyyy-MM-dd').format(dateTo);
       }
 
       final uri = Uri.parse(
@@ -786,6 +929,62 @@ class ApiService {
       return false;
     } catch (e) {
       print('❌ Failed to update feedback: $e');
+      return false;
+    }
+  }
+
+  // Update call history feedback by user ID (finds most recent call log)
+  static Future<bool> updateCallHistoryFeedbackByUserId({
+    required String userId,
+    required String callerId,
+    required String callStatus,
+    String? feedback,
+    String? remarks,
+  }) async {
+    try {
+      // Try to parse userId as int, if it fails it might be a TMID
+      final numericUserId = int.tryParse(userId);
+
+      final uri = Uri.parse(
+        '$baseUrl/easygo_ivr_api.php',
+      ).replace(queryParameters: {'action': 'update_feedback'});
+
+      final requestBody = {
+        if (numericUserId != null) 'user_id': numericUserId,
+        'call_status': callStatus,
+        if (feedback != null && feedback.isNotEmpty) 'feedback': feedback,
+        if (remarks != null && remarks.isNotEmpty) 'remarks': remarks,
+      };
+
+      print(
+        '🔵 Update Feedback by User ID Request: ${json.encode(requestBody)}',
+      );
+      print('🔵 Original userId: $userId, Numeric: $numericUserId');
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(requestBody),
+          )
+          .timeout(timeout);
+
+      print('🔵 Update Feedback by User ID Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final success = data['success'] == true;
+        if (!success) {
+          print(
+            '❌ API returned success=false: ${data['error'] ?? 'Unknown error'}',
+          );
+        }
+        return success;
+      }
+      print('❌ HTTP Status Code: ${response.statusCode}');
+      return false;
+    } catch (e) {
+      print('❌ Failed to update feedback by user ID: $e');
       return false;
     }
   }
@@ -1010,15 +1209,23 @@ class ApiService {
   static Future<List<TransporterContact>> getTransporters({
     int limit = 50,
     String? callerId,
+    String? userType, // 'transporter' for match-making
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl/transporter_leads_api.php').replace(
-        queryParameters: {
-          'action': 'transporter_leads',
-          'limit': limit.toString(),
-          'caller_id': callerId ?? _currentCallerId ?? '1',
-        },
-      );
+      final queryParams = {
+        'action': 'transporter_leads',
+        'limit': limit.toString(),
+        'caller_id': callerId ?? _currentCallerId ?? '1',
+      };
+
+      // Add user_type filter for match-making
+      if (userType != null) {
+        queryParams['user_type'] = userType;
+      }
+
+      final uri = Uri.parse(
+        '$baseUrl/transporter_leads_api.php',
+      ).replace(queryParameters: queryParams);
 
       print('🔵 Fetching transporters from: $uri');
       final response = await http.get(uri).timeout(timeout);
@@ -1029,6 +1236,19 @@ class ApiService {
           final List<dynamic> transportersJson = data['data'];
           print('✅ Fetched ${transportersJson.length} transporters');
           return transportersJson
+              .where((json) {
+                final role = json['role']?.toString().toLowerCase();
+                final userType = json['user_type']?.toString().toLowerCase();
+                final tmid = json['tmid']?.toString().toUpperCase() ?? '';
+
+                // Filter out if explicitly marked as driver OR if TMID contains 'DR' (e.g. TM2512GJDR...)
+                if (role == 'driver' ||
+                    userType == 'driver' ||
+                    (tmid.contains('DR') && !tmid.contains('TR'))) {
+                  return false;
+                }
+                return true;
+              })
               .map((json) => _mapJsonToTransporterContact(json))
               .toList();
         } else {

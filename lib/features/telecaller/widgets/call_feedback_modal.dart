@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/smart_calling_models.dart';
+import '../../../core/services/callback_notification_service.dart';
 
 class CallFeedbackModal extends StatefulWidget {
   final DriverContact contact;
-  final Function(CallFeedback) onFeedbackSubmitted;
-  final String? referenceId;
+  final Future<void> Function(CallFeedback) onFeedbackSubmitted;
+  final String? referenceId; // Can be call_log_id or IVR reference_id
   final int? callDuration;
   final bool allowDismiss; // Allow closing without feedback (for call history)
   final bool requireRecording; // Require recording upload (for smart calling)
+  final bool isIVRCall; // Flag to indicate if this is from an IVR call
+  final bool showRecordingUpload; // Show/hide the recording upload section
 
   const CallFeedbackModal({
     super.key,
@@ -21,6 +25,8 @@ class CallFeedbackModal extends StatefulWidget {
     this.callDuration,
     this.allowDismiss = false, // Default to false (smart calling behavior)
     this.requireRecording = false, // Default to false (call history behavior)
+    this.isIVRCall = false, // Default to false
+    this.showRecordingUpload = true, // Default to true (show recording upload)
   });
 
   @override
@@ -45,18 +51,25 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   bool _showConnectedOptions = false;
   bool _showCallBackReasons = false;
   bool _showCallBackTimes = false;
-  bool _showCloseJobOption = false;
-  bool? _closeJob;
 
   // Recording upload state
   File? _selectedRecording;
   String? _recordingFileName;
   bool _isPickingFile = false;
 
+  // Callback scheduling state
+  DateTime? _selectedCallbackDate;
+  TimeOfDay? _selectedCallbackTime;
+  final CallbackNotificationService _notificationService =
+      CallbackNotificationService();
+
+  // Submission state
+  bool _isSubmitting = false;
+
   @override
   void initState() {
     super.initState();
-  
+
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
@@ -101,8 +114,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
 
   void _onStatusSelected(CallStatus status) {
     // Preserve current scroll position
-    final currentScrollPosition = _scrollController.hasClients 
-        ? _scrollController.position.pixels 
+    final currentScrollPosition = _scrollController.hasClients
+        ? _scrollController.position.pixels
         : 0.0;
 
     setState(() {
@@ -189,25 +202,37 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   Color _getFeedbackColor(dynamic feedback) {
     if (feedback is ConnectedFeedback) {
       switch (feedback) {
+        case ConnectedFeedback.agreeForSubscription:
         case ConnectedFeedback.agreeForSubscriptionToday:
         case ConnectedFeedback.agreeForSubscriptionTomorrow:
         case ConnectedFeedback.alreadySubscribed:
+        case ConnectedFeedback.readyForInterview:
           return Colors.green;
         case ConnectedFeedback.needsHelpInProfile:
         case ConnectedFeedback.doesntUnderstandApp:
         case ConnectedFeedback.languageBarrier:
         case ConnectedFeedback.wantsDemoVideo:
+        case ConnectedFeedback.internetIssueLowSpeed:
           return Colors.blue;
         case ConnectedFeedback.willSubscribeLater:
         case ConnectedFeedback.willSubscribeWhenNeedJob:
         case ConnectedFeedback.wantsToThink:
+        case ConnectedFeedback.needLoad:
+        case ConnectedFeedback.needJobUrgently:
           return Colors.yellow.shade700;
-        case ConnectedFeedback.notATruckDriver:
+        case ConnectedFeedback.neitherTransporterNorDriver:
+        case ConnectedFeedback.transporterButRegisteredAsDriver:
+        case ConnectedFeedback.driverCabBus:
         case ConnectedFeedback.noMoney:
+        case ConnectedFeedback.notInterested:
+        case ConnectedFeedback.misbehave:
           return Colors.red;
         case ConnectedFeedback.appIssue:
           return Colors.orange;
-        default:
+        case ConnectedFeedback.wrongNumber:
+        case ConnectedFeedback.thirdPersonReceivedAskedToCallLater:
+          return Colors.orange;
+        case ConnectedFeedback.others:
           return Colors.grey;
       }
     }
@@ -285,11 +310,16 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
 
     switch (_selectedStatus!) {
       case CallStatus.connected:
-        return _selectedConnectedFeedback != null;
+        // Remarks compulsory for Connected
+        return _selectedConnectedFeedback != null &&
+            _remarksController.text.trim().isNotEmpty;
       case CallStatus.callBack:
+        // Remarks optional for Call Back (Not Connected)
         return _selectedCallBackReason != null;
       case CallStatus.callBackLater:
-        return _selectedCallBackTime != null;
+        // Remarks compulsory for Call Back Later
+        return _selectedCallBackTime != null &&
+            _remarksController.text.trim().isNotEmpty;
       case CallStatus.pending:
       case CallStatus.notReachable:
       case CallStatus.notInterested:
@@ -298,22 +328,114 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
     }
   }
 
-  void _submitFeedback() {
-    if (!_canSubmit()) return;
+  Future<void> _submitFeedback() async {
+    if (!_canSubmit() || _isSubmitting) return;
 
-    final feedback = CallFeedback(
-      status: _selectedStatus!,
-      connectedFeedback: _selectedConnectedFeedback,
-      callBackReason: _selectedCallBackReason,
-      callBackTime: _selectedCallBackTime,
-      remarks: _remarksController.text.trim().isEmpty
-          ? null
-          : _remarksController.text.trim(),
-      recordingFile: _selectedRecording,
+    // Set submitting state to show loading indicator
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    debugPrint(
+      '📝 [FeedbackModal] Submitting feedback for: ${widget.contact.name} (${widget.contact.tmid})',
     );
 
-    HapticFeedback.mediumImpact();
-    widget.onFeedbackSubmitted(feedback);
+    try {
+      // Mark any existing callback as completed for this contact
+      await _notificationService.markCallbackCompleted(widget.contact.tmid);
+      debugPrint(
+        '✅ [FeedbackModal] Callback marked as completed for TMID: ${widget.contact.tmid}',
+      );
+
+      // If Call Back Later is selected, create notification
+      if (_selectedStatus == CallStatus.callBackLater &&
+          _selectedCallbackDate != null &&
+          _selectedCallbackTime != null) {
+        final scheduledDateTime = DateTime(
+          _selectedCallbackDate!.year,
+          _selectedCallbackDate!.month,
+          _selectedCallbackDate!.day,
+          _selectedCallbackTime!.hour,
+          _selectedCallbackTime!.minute,
+        );
+
+        final notification = CallbackNotification(
+          id: '${widget.contact.id}_${DateTime.now().millisecondsSinceEpoch}',
+          contactName: widget.contact.name,
+          contactPhone: widget.contact.phoneNumber,
+          contactTmid: widget.contact.tmid,
+          scheduledTime: scheduledDateTime,
+          remarks: _remarksController.text.trim(),
+        );
+
+        debugPrint('📞 [FeedbackModal] Creating callback notification:');
+        debugPrint('   Name: ${notification.contactName}');
+        debugPrint('   Phone: ${notification.contactPhone}');
+        debugPrint('   Scheduled: $scheduledDateTime');
+        debugPrint('   Current time: ${DateTime.now()}');
+        debugPrint(
+          '   Minutes until callback: ${scheduledDateTime.difference(DateTime.now()).inMinutes}',
+        );
+
+        await _notificationService.addNotification(notification);
+
+        // Show confirmation
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '✓ Callback reminder set for ${DateFormat('MMM dd, hh:mm a').format(scheduledDateTime)}',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+
+      final feedback = CallFeedback(
+        status: _selectedStatus!,
+        connectedFeedback: _selectedConnectedFeedback,
+        callBackReason: _selectedCallBackReason,
+        callBackTime: _selectedCallBackTime,
+        remarks: _remarksController.text.trim().isEmpty
+            ? null
+            : _remarksController.text.trim(),
+        recordingFile: _selectedRecording,
+      );
+
+      debugPrint('📤 [FeedbackModal] Calling onFeedbackSubmitted callback...');
+      HapticFeedback.mediumImpact();
+
+      // CRITICAL: Call the callback and WAIT for it to complete (saves to database)
+      await widget.onFeedbackSubmitted(feedback);
+
+      debugPrint(
+        '✅ [FeedbackModal] Feedback submission callback completed - database updated',
+      );
+
+      // Fix: Reset loading state if modal is still mounted (meaning it wasn't closed by parent)
+      // This ensures the "Submitting..." state is cleared so user can try again if failed
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [FeedbackModal] Error during feedback submission: $e');
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error submitting feedback: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -336,7 +458,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
               child: SingleChildScrollView(
                 controller: _scrollController,
                 physics: const ClampingScrollPhysics(),
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: EdgeInsets.only(
                   left: 20,
                   right: 20,
@@ -349,8 +472,10 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
                     _buildContactInfo(),
                     const SizedBox(height: 24),
                     _buildCallStatusSection(),
-                    const SizedBox(height: 24),
-                    _buildRecordingUploadSection(),
+                    if (widget.showRecordingUpload) ...[
+                      const SizedBox(height: 24),
+                      _buildRecordingUploadSection(),
+                    ],
                     const SizedBox(height: 24),
                     _buildRemarksSection(),
                     const SizedBox(height: 32),
@@ -653,7 +778,238 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             Colors.blue,
           ),
         ),
+        if (_selectedCallBackTime != null) ...[
+          const SizedBox(height: 16),
+          _buildDateTimePicker(),
+        ],
       ],
+    );
+  }
+
+  Widget _buildDateTimePicker() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.blue.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.calendar_today, size: 16, color: Colors.blue),
+              const SizedBox(width: 8),
+              Text(
+                'Schedule Callback',
+                style: AppTheme.titleMedium.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.gray.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Optional',
+                  style: AppTheme.bodySmall.copyWith(
+                    color: AppTheme.gray,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedCallbackDate ?? DateTime.now(),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                      builder: (context, child) {
+                        return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: ColorScheme.light(
+                              primary: Colors.blue,
+                              onPrimary: Colors.white,
+                              surface: Colors.white,
+                              onSurface: Colors.black,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
+                    );
+                    if (date != null) {
+                      setState(() {
+                        _selectedCallbackDate = date;
+                      });
+                      HapticFeedback.selectionClick();
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _selectedCallbackDate != null
+                            ? Colors.blue
+                            : Colors.grey.shade300,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_month,
+                          color: _selectedCallbackDate != null
+                              ? Colors.blue
+                              : Colors.grey,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _selectedCallbackDate != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy',
+                                  ).format(_selectedCallbackDate!)
+                                : 'Select Date',
+                            style: AppTheme.bodyMedium.copyWith(
+                              color: _selectedCallbackDate != null
+                                  ? Colors.black
+                                  : Colors.grey,
+                              fontWeight: _selectedCallbackDate != null
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: _selectedCallbackTime ?? TimeOfDay.now(),
+                      builder: (context, child) {
+                        return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: ColorScheme.light(
+                              primary: Colors.blue,
+                              onPrimary: Colors.white,
+                              surface: Colors.white,
+                              onSurface: Colors.black,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
+                    );
+                    if (time != null) {
+                      setState(() {
+                        _selectedCallbackTime = time;
+                      });
+                      HapticFeedback.selectionClick();
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _selectedCallbackTime != null
+                            ? Colors.blue
+                            : Colors.grey.shade300,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          color: _selectedCallbackTime != null
+                              ? Colors.blue
+                              : Colors.grey,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _selectedCallbackTime != null
+                                ? _selectedCallbackTime!.format(context)
+                                : 'Select Time',
+                            style: AppTheme.bodyMedium.copyWith(
+                              color: _selectedCallbackTime != null
+                                  ? Colors.black
+                                  : Colors.grey,
+                              fontWeight: _selectedCallbackTime != null
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_selectedCallbackDate != null && _selectedCallbackTime != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Callback scheduled for ${DateFormat('MMM dd, yyyy').format(_selectedCallbackDate!)} at ${_selectedCallbackTime!.format(context)}',
+                        style: AppTheme.bodySmall.copyWith(
+                          color: Colors.green.shade900,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -868,6 +1224,10 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   }
 
   Widget _buildRemarksSection() {
+    final isRequired =
+        _selectedStatus == CallStatus.connected ||
+        _selectedStatus == CallStatus.callBackLater;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -886,13 +1246,15 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppTheme.gray.withValues(alpha: 0.1),
+                color: isRequired
+                    ? Colors.red.withValues(alpha: 0.1)
+                    : AppTheme.gray.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Optional',
+                isRequired ? 'Required' : 'Optional',
                 style: AppTheme.bodySmall.copyWith(
-                  color: AppTheme.gray,
+                  color: isRequired ? Colors.red : AppTheme.gray,
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),
@@ -907,12 +1269,16 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             color: AppTheme.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: AppTheme.primaryBlue.withValues(alpha: 0.2),
+              color: isRequired
+                  ? Colors.red.withValues(alpha: 0.3)
+                  : AppTheme.primaryBlue.withValues(alpha: 0.2),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.primaryBlue.withValues(alpha: 0.05),
+                color: isRequired
+                    ? Colors.red.withValues(alpha: 0.05)
+                    : AppTheme.primaryBlue.withValues(alpha: 0.05),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -923,8 +1289,9 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             maxLines: 4,
             maxLength: 500,
             decoration: InputDecoration(
-              hintText:
-                  'Add any important details, concerns, or follow-up notes...',
+              hintText: isRequired
+                  ? 'Required: Add important details, feedback notes, or follow-up information...'
+                  : 'Add any important details, concerns, or follow-up notes...',
               hintStyle: AppTheme.bodyLarge.copyWith(
                 color: AppTheme.gray.withValues(alpha: 0.5),
                 fontSize: 14,
@@ -943,6 +1310,75 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        // Quick insert date/time buttons
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (date != null) {
+                    final dateStr = DateFormat('MMM dd, yyyy').format(date);
+                    final currentText = _remarksController.text;
+                    final newText = currentText.isEmpty
+                        ? dateStr
+                        : '$currentText $dateStr';
+                    _remarksController.text = newText;
+                    _remarksController.selection = TextSelection.fromPosition(
+                      TextPosition(offset: newText.length),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.calendar_today, size: 16),
+                label: const Text('Insert Date'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primaryBlue,
+                  side: BorderSide(
+                    color: AppTheme.primaryBlue.withValues(alpha: 0.3),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.now(),
+                  );
+                  if (time != null) {
+                    final timeStr = time.format(context);
+                    final currentText = _remarksController.text;
+                    final newText = currentText.isEmpty
+                        ? timeStr
+                        : '$currentText $timeStr';
+                    _remarksController.text = newText;
+                    _remarksController.selection = TextSelection.fromPosition(
+                      TextPosition(offset: newText.length),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.access_time, size: 16),
+                label: const Text('Insert Time'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primaryBlue,
+                  side: BorderSide(
+                    color: AppTheme.primaryBlue.withValues(alpha: 0.3),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -952,7 +1388,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
 
     return Column(
       children: [
-        if (!canSubmit)
+        if (!canSubmit && !_isSubmitting)
           Container(
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.only(bottom: 12),
@@ -982,42 +1418,101 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
               ],
             ),
           ),
-        SizedBox(
-          width: double.infinity,
-          child: GestureDetector(
-            onTap: canSubmit ? _submitFeedback : null,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              decoration: BoxDecoration(
-                gradient: canSubmit
-                    ? AppTheme.primaryGradient
-                    : LinearGradient(
-                        colors: [
-                          AppTheme.gray.withValues(alpha: 0.3),
-                          AppTheme.gray.withValues(alpha: 0.2),
-                        ],
-                      ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: canSubmit ? AppTheme.buttonShadow : [],
+        if (_isSubmitting)
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryBlue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppTheme.primaryBlue.withValues(alpha: 0.3),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    canSubmit ? Icons.check_circle : Icons.lock_outline,
-                    color: AppTheme.white,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    canSubmit ? 'Submit Feedback' : 'Complete Required Fields',
-                    style: AppTheme.titleMedium.copyWith(
-                      color: AppTheme.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppTheme.primaryBlue,
                     ),
                   ),
-                ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Saving feedback to database...',
+                    style: AppTheme.bodyMedium.copyWith(
+                      color: AppTheme.primaryBlue,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        SizedBox(
+          width: double.infinity,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: (canSubmit && !_isSubmitting) ? _submitFeedback : null,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+                decoration: BoxDecoration(
+                  gradient: (canSubmit && !_isSubmitting)
+                      ? AppTheme.primaryGradient
+                      : LinearGradient(
+                          colors: [
+                            AppTheme.gray.withValues(alpha: 0.3),
+                            AppTheme.gray.withValues(alpha: 0.2),
+                          ],
+                        ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: (canSubmit && !_isSubmitting)
+                      ? AppTheme.buttonShadow
+                      : [],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isSubmitting)
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppTheme.white,
+                          ),
+                        ),
+                      )
+                    else
+                      Icon(
+                        canSubmit ? Icons.check_circle : Icons.lock_outline,
+                        color: AppTheme.white,
+                        size: 20,
+                      ),
+                    const SizedBox(width: 12),
+                    Text(
+                      _isSubmitting
+                          ? 'Submitting...'
+                          : (canSubmit
+                                ? 'Submit Feedback'
+                                : 'Complete Required Fields'),
+                      style: AppTheme.titleMedium.copyWith(
+                        color: AppTheme.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

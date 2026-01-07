@@ -31,13 +31,20 @@ class _SmartCallingScreenState extends State<SmartCallingScreen>
     super.dispose();
   }
 
-  void _handleCall(String name, String phone, String id, String type) async {
+  void _handleCall(
+    String name,
+    String phone,
+    String id,
+    String tmid,
+    String type,
+  ) async {
     // Import the helper at the top of the file
     await EasyGoIVRCallHelper.initiateCall(
       context: context,
       clientName: name,
       clientPhone: phone,
       clientId: id,
+      tmid: tmid,
       contactType: type,
       callSource: null, // Regular smart calling, not from job screens
       onCallEnded: () => _showFeedbackDialog(),
@@ -49,7 +56,10 @@ class _SmartCallingScreenState extends State<SmartCallingScreen>
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Call Feedback', style: TextStyle(color: AppColors.darkGray)),
+        title: Text(
+          'Call Feedback',
+          style: TextStyle(color: AppColors.darkGray),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -106,12 +116,9 @@ class _SmartCallingScreenState extends State<SmartCallingScreen>
         children: [
           TabBarView(
             controller: _tabController,
-            children: [
-              _buildDriverView(),
-              _buildTransporterView(),
-            ],
+            children: [_buildDriverView(), _buildTransporterView()],
           ),
-          
+
           // Call Bar
           if (_isCallActive)
             Positioned(
@@ -144,9 +151,10 @@ class _SmartCallingScreenState extends State<SmartCallingScreen>
           child: DriverCard(
             driver: driver,
             onCall: () => _handleCall(
-              driver['name'], 
+              driver['name'],
               driver['phone'],
               driver['id'] ?? 'DRIVER_${index + 1}',
+              driver['tmid'] ?? 'TM${driver['id']}',
               'driver',
             ),
           ),
@@ -166,9 +174,10 @@ class _SmartCallingScreenState extends State<SmartCallingScreen>
           child: TransporterJobCard(
             transporter: transporter,
             onCall: () => _handleCall(
-              transporter['name'], 
+              transporter['name'],
               transporter['phone'],
               transporter['id'] ?? 'TRANS_${index + 1}',
+              transporter['tmid'] ?? 'TM${transporter['id']}',
               'transporter',
             ),
           ),

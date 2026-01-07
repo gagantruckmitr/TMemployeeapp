@@ -429,20 +429,53 @@ function updateCallStatus($pdo) {
         
         $pdo->exec($createTableSql);
         
-        // Insert call log with IST timezone
-        $sql = "INSERT INTO call_logs (caller_id, user_id, caller_number, user_number, call_status, feedback, remarks, call_time) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(NOW(), '+00:00', '+05:30'))";
+        // Check if there's a recent pending/disconnected call log for this user (within last 10 minutes)
+        $checkSql = "SELECT id FROM call_logs 
+                     WHERE user_id = ? 
+                     AND call_status IN ('pending', 'disconnected', 'callback') 
+                     AND created_at >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+                     ORDER BY id DESC 
+                     LIMIT 1";
+        $checkStmt = $pdo->prepare($checkSql);
+        $checkStmt->execute([$driverId]);
+        $existingLog = $checkStmt->fetch();
         
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            $callerId,
-            $driverId,
-            '', // caller_number - can be fetched from caller_id if needed
-            $driver['mobile'],
-            $status,
-            $feedback,
-            $remarks
-        ]);
+        if ($existingLog) {
+            // UPDATE existing call log
+            $sql = "UPDATE call_logs 
+                    SET call_status = ?, 
+                        feedback = ?, 
+                        remarks = ?,
+                        updated_at = CONVERT_TZ(NOW(), '+00:00', '+05:30')
+                    WHERE id = ?";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                $status,
+                $feedback,
+                $remarks,
+                $existingLog['id']
+            ]);
+            
+            error_log("✅ Updated existing call_logs entry ID: " . $existingLog['id']);
+        } else {
+            // INSERT new call log only if no recent one exists
+            $sql = "INSERT INTO call_logs (caller_id, user_id, caller_number, user_number, call_status, feedback, remarks, call_time) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(NOW(), '+00:00', '+05:30'))";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                $callerId,
+                $driverId,
+                '', // caller_number - can be fetched from caller_id if needed
+                $driver['mobile'],
+                $status,
+                $feedback,
+                $remarks
+            ]);
+            
+            error_log("✅ Created new call_logs entry ID: " . $pdo->lastInsertId());
+        }
         
         echo json_encode([
             'success' => true,

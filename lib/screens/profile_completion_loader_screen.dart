@@ -38,7 +38,7 @@ class _ProfileCompletionLoaderScreenState
     try {
       final response = await http.get(
         Uri.parse(
-          '${ApiConfig.baseUrl}/profile_completion_api.php?action=get_profile_details&user_id=${widget.userId}',
+          '${ApiConfig.baseUrl}/profile_completion_api.php?action=get_profile_details&user_id=${widget.userId}&role=${widget.userType}',
         ),
       );
 
@@ -86,32 +86,57 @@ class _ProfileCompletionLoaderScreenState
   Map<String, dynamic> _mapProfileData(
       Map<String, dynamic> documentValues, Map<String, dynamic> profileData) {
     // Map the API response to the format expected by ProfileCompletionDetailsScreen
-    return {
-      'full_name': documentValues['name'],
-      'email': documentValues['email'],
-      'father_name': documentValues['father_name'],
-      'dob': documentValues['dob'],
-      'gender': documentValues['sex'],
-      'marital_status': documentValues['marital_status'],
-      'highest_education': documentValues['highest_education'],
-      'address': documentValues['address'],
-      'city': documentValues['city'],
-      'state': documentValues['state'],
-      'vehicle_type': documentValues['vehicle_type_display'] ?? documentValues['vehicle_type'],
-      'driving_experience': documentValues['driving_experience'],
-      'preferred_location': documentValues['preferred_location_display'] ?? documentValues['preferred_location'],
-      'current_monthly_income': documentValues['current_monthly_income'],
-      'expected_monthly_income': documentValues['expected_monthly_income'],
-      'type_of_license': documentValues['type_of_license'],
-      'previous_employer': documentValues['previous_employer'],
-      'job_placement': documentValues['job_placement'],
-      'aadhar_number': _formatAadhar(documentValues['aadhar_number']),
-      'aadhar_photo': _getDocumentUrl(documentValues['aadhar_photo']),
-      'license_number': documentValues['license_number'],
-      'expiry_date_of_license': documentValues['expiry_date_of_license'],
-      'driving_license_photo': _getDocumentUrl(documentValues['driving_license']),
-      'profile_photo': _getProfilePhotoUrl(documentValues['images']),
-    };
+    // Check if this is a transporter based on the userType passed
+    if (widget.userType == 'transporter') {
+      // Map transporter fields
+      return {
+        'full_name': documentValues['name'],
+        'email': documentValues['email'],
+        'mobile': documentValues['mobile'],
+        'transport_name': documentValues['transport_name'],
+        'year_of_establishment': documentValues['year_of_establishment'],
+        'fleet_size': documentValues['fleet_size'],
+        'operational_segment': documentValues['operational_segment'],
+        'average_km': documentValues['average_km'],
+        'city': documentValues['city'],
+        'state': documentValues['state'],
+        'address': documentValues['address'],
+        'pan_number': documentValues['pan_number'],
+        'pan_image': _getDocumentUrl(documentValues['pan_image']),
+        'gst_certificate': _getDocumentUrl(documentValues['gst_certificate']),
+        'profile_photo': _getProfilePhotoUrl(documentValues['images']),
+        'role': 'transporter',
+      };
+    } else {
+      // Map driver fields (default)
+      return {
+        'full_name': documentValues['name'],
+        'email': documentValues['email'],
+        'father_name': documentValues['father_name'],
+        'dob': documentValues['dob'],
+        'gender': documentValues['sex'],
+        'marital_status': documentValues['marital_status'],
+        'highest_education': documentValues['highest_education'],
+        'address': documentValues['address'],
+        'city': documentValues['city'],
+        'state': documentValues['state'],
+        'vehicle_type': documentValues['vehicle_type_display'] ?? documentValues['vehicle_type'],
+        'driving_experience': documentValues['driving_experience'],
+        'preferred_location': documentValues['preferred_location_display'] ?? documentValues['preferred_location'],
+        'current_monthly_income': documentValues['current_monthly_income'],
+        'expected_monthly_income': documentValues['expected_monthly_income'],
+        'type_of_license': documentValues['type_of_license'],
+        'previous_employer': documentValues['previous_employer'],
+        'job_placement': documentValues['job_placement'],
+        'aadhar_number': _formatAadhar(documentValues['aadhar_number']),
+        'aadhar_photo': _getDocumentUrl(documentValues['aadhar_photo']),
+        'license_number': documentValues['license_number'],
+        'expiry_date_of_license': documentValues['expiry_date_of_license'],
+        'driving_license_photo': _getDocumentUrl(documentValues['driving_license']),
+        'profile_photo': _getProfilePhotoUrl(documentValues['images']),
+        'role': 'driver',
+      };
+    }
   }
 
   String? _getProfilePhotoUrl(dynamic images) {

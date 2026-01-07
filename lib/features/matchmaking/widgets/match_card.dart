@@ -67,7 +67,7 @@ class MatchCard extends StatelessWidget {
                 radius: 30,
                 backgroundColor: scoreColor.withOpacity(0.1),
                 child: Text(
-                  match['driverName'].toString().substring(0, 1),
+                  (match['driverName']?.toString() ?? '').isNotEmpty ? match['driverName'].toString().substring(0, 1) : '?',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,

@@ -12,27 +12,67 @@ import '../../../core/services/phase2_auth_service.dart';
 void showJobBriefFeedbackModal({
   required BuildContext context,
   required JobModel job,
+  String? jobBriefId,
   VoidCallback? onSubmit,
+  bool hideCallStatusFields = false,
+  String? preSelectedCallStatus,
+  String? preSelectedCallFeedback,
+  String? preSelectedRemarks,
 }) {
+  print('🔵 showJobBriefFeedbackModal called');
+  print('🔵 Job ID: ${job.jobId}');
+  print('🔵 Job Brief ID: $jobBriefId');
+  print('🔵 Hide Call Status Fields: $hideCallStatusFields');
+  print('🔵 Pre-selected Call Status: $preSelectedCallStatus');
+  print('🔵 Pre-selected Call Feedback: $preSelectedCallFeedback');
+  print('🔵 Pre-selected Remarks: $preSelectedRemarks');
+  
+  print('🔵 About to show modal bottom sheet');
+  
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
+    isDismissible: false, // Cannot dismiss by tapping outside
+    enableDrag: false, // Cannot drag to close
     backgroundColor: Colors.transparent,
-    builder: (context) => JobBriefFeedbackModal(
-      job: job,
-      onSubmit: onSubmit,
-    ),
+    builder: (modalContext) {
+      print('🔵 Modal builder called');
+      return PopScope(
+        canPop: false, // Cannot close with back button
+        child: JobBriefFeedbackModal(
+          job: job,
+          jobBriefId: jobBriefId,
+          onSubmit: onSubmit,
+          hideCallStatusFields: hideCallStatusFields,
+          preSelectedCallStatus: preSelectedCallStatus,
+          preSelectedCallFeedback: preSelectedCallFeedback,
+          preSelectedRemarks: preSelectedRemarks,
+        ),
+      );
+    },
   );
+  
+  print('🔵 showModalBottomSheet called');
 }
 
 class JobBriefFeedbackModal extends StatefulWidget {
   final JobModel job;
+  final String? jobBriefId;
   final VoidCallback? onSubmit;
+  final bool hideCallStatusFields;
+  final String? preSelectedCallStatus;
+  final String? preSelectedCallFeedback;
+  final String? preSelectedRemarks;
 
   const JobBriefFeedbackModal({
     super.key,
     required this.job,
+    this.jobBriefId,
     this.onSubmit,
+    this.hideCallStatusFields = false,
+    this.preSelectedCallStatus,
+    this.preSelectedCallFeedback,
+    this.preSelectedRemarks,
   });
 
   @override
@@ -57,22 +97,40 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
   final _mileageController = TextEditingController();
   final _requiredDriversController = TextEditingController();
 
-  String _esiPf = 'No';
+  String _esiPf = 'Yes';
   String _rehneKiSuvidha = 'No';
-  String _fastTagRoadKharcha = 'Company';
-  String _callStatusFeedback = 'Connected: Details Received';
+  String _fastTagRoadKharcha = 'Company'; // Will convert to 0/1 when sending
+  String _callStatus = 'connected';
+  String _callFeedback = 'Match Making Done';
+  final _callRemarksController = TextEditingController();
 
-  // Call status options
-  final List<String> _callStatusOptions = [
-    'Connected: Details Received',
-    'Connected: Not Interested',
-    'Connected: Hire from other source',
-    'Connected: Not a Genuine Transporter',
-    'Connected: He is Driver, mistakenly registered as Transporter',
-    'Not Connected: Ringing / Call Busy',
-    'Not Connected: Switched Off / Not Reachable',
-    'Not Connected: Wrong Number',
-  ];
+  // Call status options (enum values)
+  final List<String> _callStatusOptions = ['connected', 'not_connected','callback_later'];
+  
+  // Call feedback options based on call status
+  final Map<String, List<String>> _callFeedbackOptions = {
+    'connected': [
+      'Match Making Done',
+      'Details Received',
+      'Not Interested',
+      'Hire from other source',
+      'Not a Genuine Transporter',
+      'He is Driver, mistakenly registered as Transporter',
+      'Hired from TruckMitr',
+      'Close Job',
+    ],
+    'not_connected': [
+      'Ringing / Call Busy',
+      'Switched Off / Not Reachable',
+      'Wrong Number',
+    ],
+    'callback_later':[
+      'Busy Right Now',
+      'Call Tomorrow Morning',
+      'Call in Evening',
+      'Call After 2 Days',
+    ]
+  };
 
   // Recording upload
   File? _selectedRecordingFile;
@@ -81,12 +139,32 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
   @override
   void initState() {
     super.initState();
+    print('🔵 JobBriefFeedbackModal initState called');
+    print('🔵 Job ID: ${widget.job.jobId}');
+    print('🔵 Job Brief ID: ${widget.jobBriefId}');
+    print('🔵 Hide Call Status Fields: ${widget.hideCallStatusFields}');
+    
     // Pre-fill with job data
     _nameController.text = widget.job.transporterName;
     _jobLocationController.text = widget.job.jobLocation;
     _vehicleTypeController.text = widget.job.vehicleType;
     _licenseTypeController.text = widget.job.typeOfLicense;
     _experienceController.text = widget.job.requiredExperience;
+    
+    // Use pre-selected call status if provided
+    if (widget.preSelectedCallStatus != null) {
+      _callStatus = widget.preSelectedCallStatus!;
+      print('🔵 Using pre-selected call status: $_callStatus');
+    }
+    if (widget.preSelectedCallFeedback != null) {
+      _callFeedback = widget.preSelectedCallFeedback!;
+      print('🔵 Using pre-selected call feedback: $_callFeedback');
+    }
+    // Use pre-selected remarks if provided
+    if (widget.preSelectedRemarks != null && widget.preSelectedRemarks!.isNotEmpty) {
+      _callRemarksController.text = widget.preSelectedRemarks!;
+      print('🔵 Using pre-selected remarks: ${widget.preSelectedRemarks}');
+    }
   }
 
   @override
@@ -103,6 +181,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
     _tripIncentiveController.dispose();
     _mileageController.dispose();
     _requiredDriversController.dispose();
+    _callRemarksController.dispose();
     super.dispose();
   }
 
@@ -188,45 +267,74 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
         }
       }
 
-      // Then save job brief with recording URL
-      await Phase2ApiService.saveJobBrief(
-        uniqueId: widget.job.transporterTmid,
-        jobId: widget.job.jobId,
-        name: _nameController.text,
-        jobLocation: _jobLocationController.text,
-        route: _routeController.text,
-        vehicleType: _vehicleTypeController.text,
-        licenseType: _licenseTypeController.text,
-        experience: _experienceController.text,
-        salaryFixed: _salaryFixedController.text.isEmpty
-            ? null
-            : double.tryParse(_salaryFixedController.text),
-        salaryVariable: _salaryVariableController.text.isEmpty
-            ? null
-            : double.tryParse(_salaryVariableController.text),
-        esiPf: _esiPf,
-        foodAllowance: _foodAllowanceController.text.isEmpty
-            ? null
-            : double.tryParse(_foodAllowanceController.text),
-        tripIncentive: _tripIncentiveController.text.isEmpty
-            ? null
-            : double.tryParse(_tripIncentiveController.text),
-        rehneKiSuvidha: _rehneKiSuvidha,
-        mileage: _mileageController.text,
-        fastTagRoadKharcha: _fastTagRoadKharcha,
-        callStatusFeedback: _callStatusFeedback,
-        callRecording: recordingUrl,
-        requiredDrivers: _requiredDriversController.text,
-      );
+      // If jobBriefId is available, use the job brief update API
+      String? successMessage;
+      if (widget.jobBriefId != null && widget.jobBriefId!.isNotEmpty) {
+        final response = await Phase2ApiService.updateIVRCallJobBriefFeedback(
+          jobBriefId: widget.jobBriefId!,
+          name: _nameController.text,
+          jobLocation: _jobLocationController.text,
+          route: _routeController.text,
+          vehicleType: _vehicleTypeController.text,
+          licenseType: _licenseTypeController.text,
+          experience: _experienceController.text,
+          salaryFixed: _salaryFixedController.text,
+          salaryVariable: _salaryVariableController.text,
+          esiPf: _esiPf.toLowerCase(),
+          foodAllowance: _foodAllowanceController.text,
+          tripIncentive: _tripIncentiveController.text,
+          rehneKiSuvidha: _rehneKiSuvidha.toLowerCase(),
+          mileage: _mileageController.text,
+          fastTagRoadKharcha: _fastTagRoadKharcha == 'Company' ? '0' : '1',
+          closedJob: '0',
+          callStatus: _callStatus,
+          callFeedback: _callFeedback,
+          callRecording: recordingUrl,
+          callRemarks: _callRemarksController.text,
+          requiredDrivers: _requiredDriversController.text,
+        );
+        successMessage = response['message'] ?? 'Job brief updated successfully';
+      } else {
+        // Then save job brief with recording URL (legacy method)
+        await Phase2ApiService.saveJobBrief(
+          uniqueId: widget.job.transporterTmid,
+          jobId: widget.job.jobId,
+          name: _nameController.text,
+          jobLocation: _jobLocationController.text,
+          route: _routeController.text,
+          vehicleType: _vehicleTypeController.text,
+          licenseType: _licenseTypeController.text,
+          experience: _experienceController.text,
+          salaryFixed: _salaryFixedController.text.isEmpty
+              ? null
+              : double.tryParse(_salaryFixedController.text),
+          salaryVariable: _salaryVariableController.text.isEmpty
+              ? null
+              : double.tryParse(_salaryVariableController.text),
+          esiPf: _esiPf,
+          foodAllowance: _foodAllowanceController.text.isEmpty
+              ? null
+              : double.tryParse(_foodAllowanceController.text),
+          tripIncentive: _tripIncentiveController.text.isEmpty
+              ? null
+              : double.tryParse(_tripIncentiveController.text),
+          rehneKiSuvidha: _rehneKiSuvidha,
+          mileage: _mileageController.text,
+          fastTagRoadKharcha: _fastTagRoadKharcha,
+          callStatusFeedback: '$_callStatus: $_callFeedback',
+          callRecording: recordingUrl,
+          requiredDrivers: _requiredDriversController.text,
+        );
+        successMessage = 'Job brief saved successfully';
+      }
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(recordingUrl != null 
-                ? 'Job brief and recording saved successfully'
-                : 'Job brief saved successfully'),
+            content: Text(successMessage ?? 'Job brief updated successfully'),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
           ),
         );
         widget.onSubmit?.call();
@@ -308,14 +416,27 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
                         (val) => setState(() => _fastTagRoadKharcha = val!)),
                   ]),
                   const SizedBox(height: 20),
-                  _buildSection('Call Status', [
-                    _buildDropdown(
-                        'Call Status Feedback',
-                        _callStatusFeedback,
-                        _callStatusOptions,
-                        (val) => setState(() => _callStatusFeedback = val!)),
-                  ]),
-                  const SizedBox(height: 20),
+                  // Only show call status fields if not hidden
+                  if (!widget.hideCallStatusFields) ...[
+                    _buildSection('Call Status & Feedback', [
+                      _buildDropdown(
+                          'Call Status',
+                          _callStatus,
+                          _callStatusOptions,
+                          (val) => setState(() {
+                            _callStatus = val!;
+                            // Reset feedback when status changes
+                            _callFeedback = _callFeedbackOptions[val]!.first;
+                          })),
+                      _buildDropdown(
+                          'Call Feedback',
+                          _callFeedback,
+                          _callFeedbackOptions[_callStatus]!,
+                          (val) => setState(() => _callFeedback = val!)),
+                      _buildTextField('Call Remarks', _callRemarksController, maxLines: 2),
+                    ]),
+                    const SizedBox(height: 20),
+                  ],
                   _buildRecordingUploadSection(),
                   const SizedBox(height: 30),
                   _buildSubmitButton(),
@@ -387,9 +508,21 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
+              // Required feedback indicator (no close button)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Required',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange,
+                  ),
+                ),
               ),
             ],
           ),

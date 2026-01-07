@@ -110,17 +110,42 @@ function getJobApplicants() {
                   AND cl1.created_at = cl2.max_created
         ) cl ON u.unique_id = cl.unique_id_driver AND cl.job_id = '$jobIdString'
         LEFT JOIN (
-            SELECT clm.unique_id_driver, 'Matchmaking Done' as global_match_status, u_caller.name as match_maker_name
+            SELECT 
+                clm.unique_id_driver, 
+                CASE 
+                    WHEN clm.feedback LIKE '%Match Making Done%' OR clm.feedback LIKE '%Matchmaking Done%' 
+                    THEN 'Matchmaking Done'
+                    ELSE NULL
+                END as global_match_status,
+                u_caller.name as match_maker_name
             FROM call_logs_match_making clm
             LEFT JOIN users u_caller ON clm.caller_id = u_caller.id
             INNER JOIN (
                 SELECT unique_id_driver, MAX(created_at) as max_created
                 FROM call_logs_match_making
-                WHERE match_status = 'Matchmaking Done'
-                AND unique_id_driver IS NOT NULL AND unique_id_driver != ''
+                WHERE unique_id_driver IS NOT NULL AND unique_id_driver != ''
+                AND (
+                    feedback LIKE 'Connected:%' 
+                    OR feedback LIKE '%Interview Done%'
+                    OR feedback LIKE '%Not Selected%'
+                    OR feedback LIKE '%Not Interested%'
+                    OR feedback LIKE '%Interview Fixed%'
+                    OR feedback LIKE '%Ready for Interview%'
+                    OR feedback LIKE '%Will Confirm Later%'
+                    OR feedback LIKE '%Match Making Done%'
+                )
                 GROUP BY unique_id_driver
             ) latest ON clm.unique_id_driver = latest.unique_id_driver AND clm.created_at = latest.max_created
-            WHERE clm.match_status = 'Matchmaking Done'
+            WHERE (
+                clm.feedback LIKE 'Connected:%' 
+                OR clm.feedback LIKE '%Interview Done%'
+                OR clm.feedback LIKE '%Not Selected%'
+                OR clm.feedback LIKE '%Not Interested%'
+                OR clm.feedback LIKE '%Interview Fixed%'
+                OR clm.feedback LIKE '%Ready for Interview%'
+                OR clm.feedback LIKE '%Will Confirm Later%'
+                OR clm.feedback LIKE '%Match Making Done%'
+            )
         ) gms ON u.unique_id = gms.unique_id_driver
         LEFT JOIN (
             SELECT driver_id, GROUP_CONCAT(DISTINCT j2.job_id SEPARATOR ', ') as applied_job_ids
@@ -151,11 +176,11 @@ function getJobApplicants() {
             // Use EXACT same fields and logic as phase2_profile_completion_api.php
             // Define required fields for driver role - using EXACT database column names (case-sensitive)
             $requiredFields = [
-                'name', 'email', 'city', 'Sex', 'vehicle_type', 'Father_Name', 'images', 
-                'address', 'DOB', 'Type_of_License', 'Driving_Experience', 'Highest_Education', 
-                'License_Number', 'Expiry_date_of_License', 'Expected_Monthly_Income', 
-                'Current_Monthly_Income', 'Marital_Status', 'Preferred_Location', 
-                'Aadhar_Number', 'Aadhar_Photo', 'Driving_License', 'previous_employer', 
+                'name', 'email', 'city', 'Sex', 'vehicle_type', 'Father_Name', 'images',
+                'address', 'DOB', 'Type_of_License', 'Driving_Experience', 'Highest_Education',
+                'License_Number', 'Expiry_date_of_License', 'Expected_Monthly_Income',
+                'Current_Monthly_Income', 'Marital_Status', 'Preferred_Location',
+                'Aadhar_Number', 'Aadhar_Photo', 'Driving_License', 'previous_employer',
                 'job_placement'
             ];
             
@@ -199,15 +224,22 @@ function getJobApplicants() {
                 }
             }
             
-            // Debug: Log the raw date from database
-            error_log("Raw applied_at from DB: " . ($row['applied_at'] ?? 'NULL'));
-            error_log("Raw subscription_start_date from DB: " . ($row['subscription_start_date'] ?? 'NULL'));
+            // Convert timestamps from IST to UTC for the app
+            // The database stores in IST format due to SET time_zone = '+05:30'
+            // We need to subtract 5:30 to get UTC
+            $appliedAt = '';
+            if (!empty($row['applied_at'])) {
+                $dt = new DateTime($row['applied_at'], new DateTimeZone('Asia/Kolkata'));
+                $dt->setTimezone(new DateTimeZone('UTC'));
+                $appliedAt = $dt->format('Y-m-d H:i:s');
+            }
             
-            // Return the actual database timestamp without modification
-            $appliedAt = $row['applied_at'] ?? '';
-            
-            // Return the actual database subscription timestamp without modification
-            $subscriptionStartDate = $row['subscription_start_date'] ?? null;
+            $subscriptionStartDate = null;
+            if (!empty($row['subscription_start_date'])) {
+                $dt = new DateTime($row['subscription_start_date'], new DateTimeZone('Asia/Kolkata'));
+                $dt->setTimezone(new DateTimeZone('UTC'));
+                $subscriptionStartDate = $dt->format('Y-m-d H:i:s');
+            }
 
             $applicants[] = [
                 'jobId' => (int)$row['job_id'],

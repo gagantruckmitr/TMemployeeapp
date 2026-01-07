@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../../../core/theme/app_theme.dart';
-import '../../../core/services/toll_free_service.dart';
-import '../../../core/services/toll_free_feedback_service.dart';
 import '../../../core/services/real_auth_service.dart';
-import '../../../core/services/easygo_ivr_service.dart';
-import '../../../models/toll_free_lead_model.dart';
+import '../../../core/services/smart_calling_service.dart';
 import '../../../models/smart_calling_models.dart';
-import '../../../core/utils/state_code_mapper.dart';
-import '../../../widgets/profile_completion_avatar.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/transporter_feedback_modal.dart';
+import '../widgets/driver_contact_card.dart';
+import '../widgets/ivr_call_waiting_overlay.dart';
+import '../widgets/search_filter_sheet.dart';
 import 'toll_free_history_screen.dart';
-import 'toll_free_profile_details_screen.dart';
 
 class TollFreeSearchScreen extends StatefulWidget {
   const TollFreeSearchScreen({super.key});
@@ -23,93 +22,117 @@ class TollFreeSearchScreen extends StatefulWidget {
 
 class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final TollFreeService _service = TollFreeService.instance;
+  final FocusNode _searchFocusNode = FocusNode();
 
-  TollFreeUser? _searchResult;
-  bool _isSearching = false;
-  String? _error;
-  
-  // Call history
-  List<Map<String, dynamic>> _callHistory = [];
-  bool _isLoadingHistory = false;
-  bool _showHistory = true;
+  List<DriverContact> _searchResults = [];
+  bool _isLoading = false;
+  bool _hasSearched = false;
+  String _errorMessage = '';
+  SearchFilters _filters = SearchFilters();
 
   @override
   void initState() {
     super.initState();
-    _loadCallHistory();
+    // Auto-focus search bar when screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _searchFocusNode.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
-  Future<void> _loadCallHistory() async {
-    setState(() {
-      _isLoadingHistory = true;
-    });
-
-    try {
-      final history = await TollFreeFeedbackService.instance.fetchCallHistory();
-      if (mounted) {
-        setState(() {
-          _callHistory = history;
-          _isLoadingHistory = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingHistory = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _performSearch() async {
-    final query = _searchController.text.trim();
-
-    if (query.isEmpty) {
+  Future<void> _performSearch(String query) async {
+    // Allow search with filters even if query is empty
+    if (query.trim().isEmpty && !_filters.hasActiveFilters) {
       setState(() {
-        _error = 'Please enter TMID or mobile number';
+        _searchResults = [];
+        _hasSearched = false;
+        _errorMessage = '';
       });
       return;
     }
 
     setState(() {
-      _isSearching = true;
-      _error = null;
-      _searchResult = null;
+      _isLoading = true;
+      _errorMessage = '';
+      _hasSearched = true;
     });
 
     try {
-      final result = await _service.searchUser(query);
-
-      if (!mounted) return;
-
-      if (result != null) {
+      // Get bearer token from login session
+      final token = await RealAuthService.instance.getAuthToken();
+      if (token == null || token.isEmpty) {
         setState(() {
-          _searchResult = TollFreeUser.fromJson(result);
-          _isSearching = false;
+          _errorMessage = 'Please login again to search users';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Build URL with search query - same API as search_users_screen
+      final uri = Uri.parse(
+        'https://truckmitr.com/api/telehead/payments/search',
+      ).replace(queryParameters: {'search': query.trim()});
+
+      debugPrint('🔍 [TollFree] Searching users: $uri');
+
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('📥 [TollFree] Response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> usersJson = data['users'] ?? [];
+
+          debugPrint('✅ [TollFree] Found ${usersJson.length} users');
+
+          setState(() {
+            _searchResults = usersJson
+                .map((json) => DriverContact.fromBacklogJson(json))
+                .toList();
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _errorMessage = data['message'] ?? 'Failed to search users';
+            _isLoading = false;
+          });
+        }
+      } else if (response.statusCode == 401) {
+        setState(() {
+          _errorMessage = 'Session expired. Please login again.';
+          _isLoading = false;
         });
       } else {
         setState(() {
-          _error = 'No user found with this TMID or mobile number';
-          _isSearching = false;
+          _errorMessage = 'Server error: ${response.statusCode}';
+          _isLoading = false;
         });
       }
     } catch (e) {
-      if (!mounted) return;
+      debugPrint('❌ [TollFree] Search error: $e');
       setState(() {
-        _error = 'Search failed: $e';
-        _isSearching = false;
+        _errorMessage = 'Connection error. Please try again.';
+        _isLoading = false;
       });
     }
   }
 
-  Future<void> _makeCall(TollFreeUser user) async {
+  Future<void> _makeCall(DriverContact contact) async {
     try {
       final currentUser = RealAuthService.instance.currentUser;
       if (currentUser == null) {
@@ -125,54 +148,112 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
       }
 
       HapticFeedback.mediumImpact();
-      
+
+      // Clean phone numbers
+      final telecallerPhone = currentUser.mobile.replaceAll(
+        RegExp(r'[^\d]'),
+        '',
+      );
+      final cleanUserMobile = contact.phoneNumber.replaceAll(
+        RegExp(r'[^\d]'),
+        '',
+      );
+
+      debugPrint(
+        '📞 [TollFree] Initiating Live IVR call - Telecaller: $telecallerPhone, User: ${contact.name}, Mobile: $cleanUserMobile',
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('📞 Initiating IVR call to ${user.name}...'),
+          content: Text('📞 Initiating Live IVR call to ${contact.name}...'),
           backgroundColor: AppTheme.primaryBlue,
           duration: const Duration(seconds: 2),
         ),
       );
 
-      // Use IVR calling instead of direct calling
-      final result = await EasyGoIVRService.initiateCall(
-        exten: currentUser.mobile,
-        number: user.mobile,
+      // Use Live IVR API via SmartCallingService
+      final result = await SmartCallingService.instance.initiateEasyGoIVR(
+        telecallerPhone: telecallerPhone,
+        clientPhone: cleanUserMobile,
         callerId: currentUser.id,
-        contactId: user.uniqueId,
-        contactType: user.role,
-        driverName: user.name,
+        contactId: contact.id,
+        tmid: contact.tmid,
+        contactType: contact.role == 'transporter' ? 'transporter' : 'driver',
+        driverName: contact.name,
         callSource: 'toll-free',
+        process:
+            'tollfree', // Set process to 'tollfree' for Toll Free Search screen
       );
+
+      debugPrint('🔔 [TollFree] Live IVR Result: $result');
 
       if (!mounted) return;
 
       if (result['success'] == true) {
+        final referenceId =
+            result['reference_id'] ??
+            result['call_id']?.toString() ??
+            result['data']?['call_id']?.toString() ??
+            DateTime.now().millisecondsSinceEpoch.toString();
+
+        debugPrint('✅ [TollFree] Live IVR initiated! Ref: $referenceId');
+
         HapticFeedback.lightImpact();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ IVR call initiated to ${user.name}'),
-            backgroundColor: AppTheme.success,
-            duration: const Duration(seconds: 2),
+          const SnackBar(
+            content: Text(
+              '✅ Live IVR call initiated! Both phones will ring.\n'
+              'Answer either phone to connect.',
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 5),
           ),
         );
 
-        await Future.delayed(const Duration(milliseconds: 500));
-        
-        if (mounted) {
-          _showFeedbackModal(user);
-        }
+        // Show IVR waiting overlay (same as smart_calling_page.dart)
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (overlayContext) => PopScope(
+              canPop: false,
+              child: IVRCallWaitingOverlay(
+                driverName: contact.name,
+                referenceId: referenceId,
+                onCallEnded: () {
+                  // NOTE: Do NOT pop here - the IVRCallWaitingOverlay button
+                  // already pops itself before calling this callback
+
+                  // Add a small delay to ensure the pop animation completes
+                  // before showing the feedback modal
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    if (mounted) {
+                      _showFeedbackModal(
+                        contact,
+                        referenceId: referenceId,
+                        callDuration: 0,
+                        isLiveEasyGo: true,
+                      );
+                    }
+                  });
+                },
+              ),
+            ),
+          ),
+        );
       } else {
         HapticFeedback.heavyImpact();
+        final errorMsg = result['error'] ?? 'Unknown error';
+        debugPrint('❌ [TollFree] Live IVR failed: $errorMsg');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Call failed: ${result['error'] ?? "Unknown error"}'),
+            content: Text('❌ Call failed: $errorMsg'),
             backgroundColor: AppTheme.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (error) {
+      debugPrint('❌ [TollFree] Live IVR error: $error');
       if (mounted) {
         HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -186,78 +267,231 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
     }
   }
 
-  void _showFeedbackModal(TollFreeUser user) {
-    final contact = DriverContact(
-      id: user.id.toString(),
-      tmid: user.uniqueId,
-      name: user.name,
-      company: user.role,
-      phoneNumber: user.mobile,
-      state: '',
-      subscriptionStatus: user.hasSubscription
-          ? SubscriptionStatus.active
-          : SubscriptionStatus.inactive,
-      status: CallStatus.pending,
-      lastFeedback: null,
-      lastCallTime: DateTime.now(),
-      remarks: null,
-      paymentInfo: PaymentInfo.none(),
-      registrationDate: DateTime.now(),
-      profileCompletion: null,
-    );
+  void _showFeedbackModal(
+    DriverContact contact, {
+    String? referenceId,
+    int? callDuration,
+    bool isLiveEasyGo = false,
+  }) {
+    // Check if user is a transporter
+    final isTransporter = contact.role?.toLowerCase() == 'transporter';
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => CallFeedbackModal(
-        contact: contact,
-        allowDismiss: true,
-        onFeedbackSubmitted: (feedback) {
-          Navigator.of(context).pop();
-          _handleFeedbackSubmitted(user, feedback);
-        },
-      ),
-    );
+    if (isTransporter) {
+      // Show transporter feedback modal
+      final transporterContact = TransporterContact(
+        id: contact.id,
+        tmid: contact.tmid,
+        name: contact.name,
+        company: contact.company,
+        phoneNumber: contact.phoneNumber,
+        state: contact.state,
+        subscriptionStatus: contact.subscriptionStatus,
+        status: contact.status,
+        lastFeedback: contact.lastFeedback,
+        lastCallTime: contact.lastCallTime,
+        remarks: contact.remarks,
+        paymentInfo: contact.paymentInfo,
+        registrationDate: contact.registrationDate,
+        profileCompletion: contact.profileCompletion,
+      );
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        isDismissible: true,
+        enableDrag: true,
+        builder: (modalContext) => TransporterFeedbackModal(
+          contact: transporterContact,
+          referenceId: referenceId,
+          callDuration: callDuration,
+          onFeedbackSubmitted: (feedback) async {
+            debugPrint(
+              '🔵 [TollFree] Transporter feedback modal callback triggered',
+            );
+
+            try {
+              await _handleFeedbackSubmitted(
+                contact,
+                feedback,
+                referenceId: referenceId,
+                isLiveEasyGo: isLiveEasyGo,
+              );
+              debugPrint('🔵 [TollFree] Transporter feedback update completed');
+            } catch (e) {
+              debugPrint(
+                '❌ [TollFree] Exception during transporter feedback update: $e',
+              );
+            } finally {
+              debugPrint(
+                '🔵 [TollFree] Closing transporter feedback modal (guaranteed)',
+              );
+              if (modalContext.mounted) {
+                Navigator.of(modalContext).pop();
+              }
+            }
+          },
+        ),
+      );
+    } else {
+      // Show driver feedback modal
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        isDismissible: true,
+        enableDrag: true,
+        builder: (modalContext) => CallFeedbackModal(
+          contact: contact,
+          referenceId: referenceId,
+          callDuration: callDuration,
+          allowDismiss: true,
+          onFeedbackSubmitted: (feedback) async {
+            debugPrint(
+              '🔵 [TollFree] Driver feedback modal callback triggered',
+            );
+
+            try {
+              await _handleFeedbackSubmitted(
+                contact,
+                feedback,
+                referenceId: referenceId,
+                isLiveEasyGo: isLiveEasyGo,
+              );
+              debugPrint('🔵 [TollFree] Driver feedback update completed');
+            } catch (e) {
+              debugPrint(
+                '❌ [TollFree] Exception during driver feedback update: $e',
+              );
+            } finally {
+              debugPrint(
+                '🔵 [TollFree] Closing driver feedback modal (guaranteed)',
+              );
+              if (modalContext.mounted) {
+                Navigator.of(modalContext).pop();
+              }
+            }
+          },
+        ),
+      );
+    }
+  }
+
+  // Map CallStatus enum to database format
+  String _mapCallStatusToDb(CallStatus status) {
+    switch (status) {
+      case CallStatus.connected:
+        return 'connected';
+      case CallStatus.callBack:
+        return 'not_connected';
+      case CallStatus.callBackLater:
+        return 'callback_later';
+      case CallStatus.notReachable:
+        return 'not_connected';
+      case CallStatus.notInterested:
+        return 'connected';
+      case CallStatus.invalid:
+        return 'not_connected';
+      case CallStatus.pending:
+        return 'not_connected';
+    }
   }
 
   Future<void> _handleFeedbackSubmitted(
-    TollFreeUser user,
-    CallFeedback feedback,
-  ) async {
+    DriverContact contact,
+    CallFeedback feedback, {
+    String? referenceId,
+    bool isLiveEasyGo = false,
+  }) async {
     if (!mounted) return;
 
-    final result = await TollFreeFeedbackService.instance.submitFeedback(
-      user: user,
-      feedback: feedback,
-    );
+    // Prepare feedback text
+    String feedbackText = '';
+    switch (feedback.status) {
+      case CallStatus.connected:
+        // Check for transporter feedback first, then driver feedback
+        if (feedback.transporterConnectedFeedback != null) {
+          feedbackText = feedback.transporterConnectedFeedback!.displayName;
+        } else if (feedback.connectedFeedback != null) {
+          feedbackText = feedback.connectedFeedback!.displayName;
+        } else {
+          feedbackText = 'Connected';
+        }
+        break;
+      case CallStatus.callBack:
+        feedbackText = feedback.callBackReason?.displayName ?? 'Call Back';
+        break;
+      case CallStatus.callBackLater:
+        feedbackText = feedback.callBackTime?.displayName ?? 'Call Back Later';
+        break;
+      case CallStatus.notReachable:
+        feedbackText = 'Not Reachable';
+        break;
+      case CallStatus.notInterested:
+        feedbackText = 'Not Interested';
+        break;
+      case CallStatus.invalid:
+        feedbackText = 'Invalid Number';
+        break;
+      case CallStatus.pending:
+        feedbackText = 'Pending';
+        break;
+    }
+
+    bool success = false;
+
+    // Use Live EasyGo IVR Feedback API if isLiveEasyGo is true
+    if (isLiveEasyGo && referenceId != null) {
+      debugPrint(
+        '🔵 [TollFree] Updating Live EasyGo Feedback: ref=$referenceId, status=${feedback.status}',
+      );
+
+      final callId = int.tryParse(referenceId);
+      if (callId != null) {
+        String dbStatus = _mapCallStatusToDb(feedback.status);
+
+        success = await SmartCallingService.instance.updateEasyGoCallFeedback(
+          callId: callId,
+          status: dbStatus,
+          feedback: feedbackText,
+          remarks: feedback.remarks,
+          recordingFile: feedback.recordingFile?.path,
+        );
+
+        debugPrint(
+          '🔵 [TollFree] Live EasyGo Feedback update result: ${success ? "SUCCESS" : "FAILED"}',
+        );
+      } else {
+        debugPrint(
+          '❌ [TollFree] Invalid call ID for EasyGo Update: $referenceId',
+        );
+      }
+    }
 
     if (!mounted) return;
 
     HapticFeedback.lightImpact();
 
-    if (result['success'] == true) {
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✅ Feedback saved for ${user.name}'),
+          content: Text('✅ Feedback saved for ${contact.name}'),
           backgroundColor: AppTheme.success,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
       );
 
-      // Clear search and refresh history after feedback
+      // Clear search after feedback
       setState(() {
-        _searchResult = null;
+        _searchResults = [];
         _searchController.clear();
+        _hasSearched = false;
       });
-      
-      // Refresh call history
-      _loadCallHistory();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ Failed to save feedback: ${result['message']}'),
+          content: Text('❌ Failed to save feedback for ${contact.name}'),
           backgroundColor: AppTheme.error,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 3),
@@ -269,63 +503,20 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.lightGray,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildSearchBar(),
-            if (_showHistory && _callHistory.isNotEmpty) _buildCallHistorySection(),
-            Expanded(child: _buildContent()),
-          ],
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false, // No back button for tab screens
+        title: Text(
+          'Search and Call',
+          style: AppTheme.headingMedium.copyWith(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryBlue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.search, color: AppTheme.primaryBlue, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Toll-Free Search',
-                  style: AppTheme.headingMedium.copyWith(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Search by TMID or Mobile',
-                  style: AppTheme.bodyMedium.copyWith(color: AppTheme.gray),
-                ),
-              ],
-            ),
-          ),
+        actions: [
           IconButton(
             onPressed: () {
               Navigator.push(
@@ -337,806 +528,297 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
             },
             icon: Icon(Icons.history, color: AppTheme.primaryBlue),
           ),
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.filter_list, color: Colors.black87),
+                onPressed: _showFilterSheet,
+              ),
+              if (_filters.hasActiveFilters)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      '${_filters.activeFilterCount}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: Colors.grey.shade200),
+        ),
       ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      color: Colors.white,
-      child: Row(
+      body: Column(
         children: [
-          Expanded(
+          // Search Bar
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(16),
             child: TextField(
               controller: _searchController,
+              focusNode: _searchFocusNode,
+              style: AppTheme.bodyLarge.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
               decoration: InputDecoration(
-                hintText: 'Enter TMID or Mobile Number',
-                prefixIcon: Icon(Icons.search, color: AppTheme.gray),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppTheme.gray.withOpacity(0.3)),
+                hintText: 'Search by phone, TMID, email, city...',
+                hintStyle: AppTheme.bodyLarge.copyWith(
+                  color: Colors.grey.shade500,
+                  fontSize: 15,
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppTheme.gray.withOpacity(0.3)),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  color: AppTheme.primaryBlue,
+                  size: 24,
+                ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(
+                          Icons.clear_rounded,
+                          color: Colors.grey.shade600,
+                        ),
+                        onPressed: () {
+                          _searchController.clear();
+                          _performSearch('');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide(color: AppTheme.primaryBlue, width: 2),
                 ),
-                filled: true,
-                fillColor: AppTheme.lightGray,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
               ),
-              onSubmitted: (_) => _performSearch(),
+              textInputAction: TextInputAction.search,
+              onChanged: (value) {
+                setState(() {}); // Update UI for clear button
+              },
+              onSubmitted: _performSearch,
             ),
           ),
-          const SizedBox(width: 12),
-          ElevatedButton(
-            onPressed: _isSearching ? null : _performSearch,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryBlue,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: _isSearching
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
+
+          // Results Count
+          if (_hasSearched && !_isLoading)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              color: Colors.white,
+              child: Row(
+                children: [
+                  Text(
+                    '${_searchResults.length} results found',
+                    style: AppTheme.bodyMedium.copyWith(
+                      color: Colors.grey.shade700,
+                      fontWeight: FontWeight.w600,
                     ),
-                  )
-                : const Text('Search'),
-          ),
+                  ),
+                  if (_searchResults.isNotEmpty) ...[
+                    const Spacer(),
+                    Text(
+                      'Tap to call',
+                      style: AppTheme.bodySmall.copyWith(
+                        color: Colors.grey.shade500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+          // Search Results
+          Expanded(child: _buildSearchResults()),
         ],
       ),
     );
   }
 
-  Widget _buildContent() {
-    if (_isSearching) {
+  Widget _buildSearchResults() {
+    if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_error != null) {
-      return _buildError();
-    }
-
-    if (_searchResult != null) {
-      return _buildUserCard(_searchResult!);
-    }
-
-    return _buildEmptyState();
-  }
-
-  Widget _buildError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: AppTheme.error),
-            const SizedBox(height: 16),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: AppTheme.bodyLarge.copyWith(color: AppTheme.gray),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.search, size: 64, color: AppTheme.gray),
-            const SizedBox(height: 16),
-            Text('Search for a user', style: AppTheme.headingMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Enter TMID or mobile number to find user details',
-              textAlign: TextAlign.center,
-              style: AppTheme.bodyMedium.copyWith(color: AppTheme.gray),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserCard(TollFreeUser user) {
-    // Get registration date
-    String registrationDate = 'N/A';
-    final payment = user.latestPayment;
-    if (payment != null && payment['created_at'] != null) {
-      try {
-        final createdAt = DateTime.parse(payment['created_at'].toString());
-        registrationDate = DateFormat('dd MMM yyyy').format(createdAt);
-      } catch (e) {
-        registrationDate = DateFormat('dd MMM yyyy').format(DateTime.now());
-      }
-    } else {
-      registrationDate = DateFormat('dd MMM yyyy').format(DateTime.now());
-    }
-
-    // Get state from TMID
-    String state = StateCodeMapper.getStateName(user.uniqueId);
-
-    // Parse profile completion percentage
-    int profileCompletionPercentage = 0;
-    if (user.profileCompletion != null) {
-      try {
-        profileCompletionPercentage = int.parse(
-          user.profileCompletion!.replaceAll('%', ''),
-        );
-      } catch (e) {
-        profileCompletionPercentage = 0;
-      }
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: GestureDetector(
-        onTap: () => _showFullDetails(user),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-            border: Border.all(color: Colors.grey.shade200, width: 1),
-          ),
-          child: Column(
-            children: [
-              // Top Row: Avatar, Name, Call Button
-              Row(
-                children: [
-                  // Avatar with profile completion
-                  ProfileCompletionAvatar(
-                    name: user.name,
-                    userId: user.id,
-                    userType: user.role,
-                    completionPercentage: profileCompletionPercentage,
-                    size: 54,
-                    profileImageUrl: user.profileImage,
-                    tmId: user.uniqueId,
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Name (Long press to copy)
-                  Expanded(
-                    child: GestureDetector(
-                      onLongPress: () {
-                        Clipboard.setData(ClipboardData(text: user.name));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Name copied: ${user.name}'),
-                            duration: const Duration(seconds: 1),
-                            behavior: SnackBarBehavior.floating,
-                            margin: const EdgeInsets.all(8),
-                          ),
-                        );
-                        HapticFeedback.mediumImpact();
-                      },
-                      child: Text(
-                        user.name,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1A1A1A),
-                          letterSpacing: -0.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(width: 12),
-
-                  // Call Button
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.mediumImpact();
-                      _makeCall(user);
-                    },
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2196F3),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF2196F3,
-                            ).withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.phone,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 14),
-
-              // Divider
-              Container(height: 1, color: Colors.grey.shade200),
-
-              const SizedBox(height: 14),
-
-              // Bottom Grid: Details in 2x2 layout
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildDetailItem(
-                      Icons.calendar_today_outlined,
-                      'Registration',
-                      registrationDate,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildDetailItem(
-                      Icons.location_on_outlined,
-                      'State',
-                      state,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Expanded(child: _buildSubscriptionItem(user)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildDetailItem(
-                      Icons.badge_outlined,
-                      'TMID',
-                      user.uniqueId,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailItem(IconData icon, String label, String value) {
-    return GestureDetector(
-      onLongPress: () {
-        Clipboard.setData(ClipboardData(text: value));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$label copied: $value'),
-            duration: const Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(8),
-          ),
-        );
-        HapticFeedback.mediumImpact();
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: Colors.grey.shade600),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF1A1A1A),
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Icon(Icons.copy, size: 12, color: Colors.grey.shade400),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubscriptionItem(TollFreeUser user) {
-    final payment = user.latestPayment;
-    bool hasSubscription = user.hasSubscription;
-    String subscriptionText = 'No Subscription';
-    Color subscriptionColor = Colors.grey.shade600;
-
-    if (hasSubscription && payment != null) {
-      try {
-        final startDate = DateTime.fromMillisecondsSinceEpoch(
-          (payment['start_at'] as int) * 1000,
-        );
-        final endDate = DateTime.fromMillisecondsSinceEpoch(
-          (payment['end_at'] as int) * 1000,
-        );
-        subscriptionText =
-            '${DateFormat('dd MMM yyyy').format(startDate)} - ${DateFormat('dd MMM yyyy').format(endDate)}';
-        subscriptionColor = const Color(0xFF4CAF50); // Green
-      } catch (e) {
-        subscriptionText = 'Active';
-        subscriptionColor = const Color(0xFF4CAF50); // Green
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              hasSubscription
-                  ? Icons.check_circle_outline
-                  : Icons.cancel_outlined,
-              size: 14,
-              color: subscriptionColor,
-            ),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                'Subscription',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: subscriptionColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: subscriptionColor.withValues(alpha: 0.3),
-              width: 1,
-            ),
-          ),
-          child: Text(
-            subscriptionText,
-            style: TextStyle(
-              fontSize: 11,
-              color: subscriptionColor,
-              fontWeight: FontWeight.w700,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showFullDetails(TollFreeUser user) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => TollFreeProfileDetailsScreen(user: user),
-      ),
-    );
-  }
-
-  Widget _buildCallHistorySection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryBlue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.history,
-                    color: AppTheme.primaryBlue,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Recent Calls',
-                        style: AppTheme.headingMedium.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        '${_callHistory.length} call${_callHistory.length != 1 ? 's' : ''}',
-                        style: AppTheme.bodySmall.copyWith(
-                          color: AppTheme.gray,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      _showHistory = !_showHistory;
-                    });
-                  },
-                  icon: Icon(
-                    _showHistory ? Icons.expand_less : Icons.expand_more,
-                    color: AppTheme.gray,
-                  ),
-                ),
-                IconButton(
-                  onPressed: _loadCallHistory,
-                  icon: Icon(
-                    Icons.refresh,
-                    color: AppTheme.primaryBlue,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Call History List
-          if (_isLoadingHistory)
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else
-            SizedBox(
-              height: 200,
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                itemCount: _callHistory.length > 5 ? 5 : _callHistory.length,
-                separatorBuilder: (context, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final call = _callHistory[index];
-                  return _buildCallHistoryItem(call);
-                },
-              ),
-            ),
-
-          // View All Button
-          if (_callHistory.length > 5)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const TollFreeHistoryScreen(),
-                    ),
-                  );
-                },
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'View All (${_callHistory.length})',
-                      style: TextStyle(
-                        color: AppTheme.primaryBlue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward,
-                      size: 16,
-                      color: AppTheme.primaryBlue,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCallHistoryItem(Map<String, dynamic> call) {
-    final name = call['user_name'] ?? call['driver_name'] ?? 'Unknown';
-    final mobile = call['user_mobile'] ?? call['user_number'] ?? '';
-    final tmid = call['tmid'] ?? '';
-    final feedback = call['feedback'] ?? 'No feedback';
-    final callTime = call['call_time'] ?? '';
-    final remarks = call['remarks'] ?? '';
-
-    String formattedTime = 'N/A';
-    if (callTime.isNotEmpty) {
-      try {
-        final date = DateTime.parse(callTime);
-        final now = DateTime.now();
-        final difference = now.difference(date);
-
-        if (difference.inDays == 0) {
-          formattedTime = DateFormat('hh:mm a').format(date);
-        } else if (difference.inDays == 1) {
-          formattedTime = 'Yesterday';
-        } else if (difference.inDays < 7) {
-          formattedTime = '${difference.inDays} days ago';
-        } else {
-          formattedTime = DateFormat('dd MMM').format(date);
-        }
-      } catch (e) {
-        formattedTime = callTime;
-      }
-    }
-
-    Color feedbackColor = AppTheme.gray;
-    IconData feedbackIcon = Icons.phone;
-
-    if (feedback.toLowerCase().contains('connected') ||
-        feedback.toLowerCase().contains('interested')) {
-      feedbackColor = AppTheme.success;
-      feedbackIcon = Icons.check_circle;
-    } else if (feedback.toLowerCase().contains('not interested')) {
-      feedbackColor = AppTheme.error;
-      feedbackIcon = Icons.cancel;
-    } else if (feedback.toLowerCase().contains('callback') ||
-        feedback.toLowerCase().contains('call back')) {
-      feedbackColor = AppTheme.warning;
-      feedbackIcon = Icons.schedule;
-    } else if (feedback.toLowerCase().contains('not reachable')) {
-      feedbackColor = AppTheme.gray;
-      feedbackIcon = Icons.phone_missed;
-    }
-
-    return InkWell(
-      onTap: () {
-        // Show call details dialog
-        _showCallDetailsDialog(call);
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            // Avatar
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: feedbackColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                feedbackIcon,
-                color: feedbackColor,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1F2937),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      if (tmid.isNotEmpty) ...[
-                        Text(
-                          tmid,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.gray,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Text(
-                          feedback,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: feedbackColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Time
-            Text(
-              formattedTime,
-              style: TextStyle(
-                fontSize: 11,
-                color: AppTheme.gray,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showCallDetailsDialog(Map<String, dynamic> call) {
-    final name = call['user_name'] ?? call['driver_name'] ?? 'Unknown';
-    final mobile = call['user_mobile'] ?? call['user_number'] ?? '';
-    final tmid = call['tmid'] ?? '';
-    final feedback = call['feedback'] ?? 'No feedback';
-    final callTime = call['call_time'] ?? '';
-    final remarks = call['remarks'] ?? '';
-    final callStatus = call['call_status'] ?? '';
-
-    String formattedTime = 'N/A';
-    if (callTime.isNotEmpty) {
-      try {
-        final date = DateTime.parse(callTime);
-        formattedTime = DateFormat('dd MMM yyyy, hh:mm a').format(date);
-      } catch (e) {
-        formattedTime = callTime;
-      }
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    if (_errorMessage.isNotEmpty) {
+      return Center(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.call, color: AppTheme.primaryBlue),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Call Details',
-                      style: AppTheme.headingMedium.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+              Icon(
+                Icons.error_outline_rounded,
+                size: 64,
+                color: Colors.red.shade300,
               ),
-              const SizedBox(height: 20),
-              _buildDetailRow('Name', name),
-              _buildDetailRow('TMID', tmid),
-              _buildDetailRow('Mobile', mobile),
-              _buildDetailRow('Feedback', feedback),
-              _buildDetailRow('Status', callStatus),
-              _buildDetailRow('Time', formattedTime),
-              if (remarks.isNotEmpty) _buildDetailRow('Remarks', remarks),
+              const SizedBox(height: 16),
+              Text(
+                'Error',
+                style: AppTheme.headingMedium.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage,
+                style: AppTheme.bodyMedium.copyWith(
+                  color: Colors.grey.shade600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => _performSearch(_searchController.text),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
-      ),
+      );
+    }
+
+    if (!_hasSearched) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.search_rounded, size: 80, color: Colors.grey.shade300),
+              const SizedBox(height: 16),
+              Text(
+                'Search & Call',
+                style: AppTheme.headingMedium.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Search for drivers and transporters\nby name, phone, email, city or TMID',
+                style: AppTheme.bodyMedium.copyWith(
+                  color: Colors.grey.shade500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.search_off_rounded,
+                size: 80,
+                color: Colors.grey.shade300,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No Results Found',
+                style: AppTheme.headingMedium.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Try searching with different keywords',
+                style: AppTheme.bodyMedium.copyWith(
+                  color: Colors.grey.shade500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        final contact = _searchResults[index];
+        return DriverContactCard(
+          contact: contact,
+          onCallPressed: () => _makeCall(contact),
+          isCallInProgress: false,
+          showPhoneNumber: true,
+        );
+      },
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppTheme.gray,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value.isNotEmpty ? value : 'N/A',
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF1F2937),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => SearchFilterSheet(
+          initialFilters: _filters,
+          onApply: (filters) {
+            setState(() {
+              _filters = filters;
+            });
+            // Re-run search with new filters (even if search query is empty)
+            if (filters.hasActiveFilters || _searchController.text.isNotEmpty) {
+              _performSearch(_searchController.text);
+            }
+          },
+        ),
       ),
     );
   }

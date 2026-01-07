@@ -93,7 +93,7 @@ class ProfileCompletionAvatar extends StatelessWidget {
                               color: const Color(0xFF2196F3),
                               child: Center(
                                 child: Text(
-                                  name.substring(0, 1).toUpperCase(),
+                                  name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 22,
@@ -126,7 +126,7 @@ class ProfileCompletionAvatar extends StatelessWidget {
                           color: const Color(0xFF2196F3),
                           child: Center(
                             child: Text(
-                              name.substring(0, 1).toUpperCase(),
+                              name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 22,

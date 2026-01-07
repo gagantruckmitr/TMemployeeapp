@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
+
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:flutter/services.dart';
-import '../../core/config/api_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
@@ -32,7 +30,8 @@ class JobApplicantsScreen extends StatefulWidget {
   State<JobApplicantsScreen> createState() => _JobApplicantsScreenState();
 }
 
-class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
+class _JobApplicantsScreenState extends State<JobApplicantsScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
@@ -40,53 +39,44 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
   List<DriverApplicant> _filteredApplicants = [];
   bool _isLoading = true;
   String _error = '';
-  String _selectedFeedbackFilter = 'All'; // Filter state
-  
-  // Available feedback filter options
-  final List<String> _feedbackFilterOptions = [
-    'All',
-    'No Feedback',
-    'Interview Done',
-    'Not Selected',
-    'Not Interested',
-    'Interview Fixed',
-    'Ready for Interview',
-    'Will Confirm Later',
-    'Match Making Done',
-    'Ringing',
-    'Call Busy',
-    'Switched Off',
-    'Not Reachable',
-    'Disconnected',
-    'Busy Right Now',
-    'Call Tomorrow Morning',
-    'Call in Evening',
-    'Call After 2 Days',
-  ];
+  String _selectedFeedbackFilter = 'All';
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
+  // Job details for IVR call
+  String _transporterTmid = '';
+  String _transporterName = '';
+  int _transporterUserId = 0;
+  int _assignedTo = 0;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutCubic,
+    );
     _loadApplicants();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
   void _sortApplicants() {
     _applicants.sort((a, b) {
-      // Sort by feedback status: no feedback first, then feedback submitted
       final aHasFeedback = a.callFeedback != null && a.callFeedback!.isNotEmpty;
       final bHasFeedback = b.callFeedback != null && b.callFeedback!.isNotEmpty;
-
-      if (aHasFeedback && !bHasFeedback) return 1; // a goes to bottom
-      if (!aHasFeedback && bHasFeedback) return -1; // b goes to bottom
-
-      // If both have same feedback status, sort by applied date (newest first)
+      if (aHasFeedback && !bHasFeedback) return 1;
+      if (!aHasFeedback && bHasFeedback) return -1;
       return b.appliedAt.compareTo(a.appliedAt);
     });
   }
@@ -95,22 +85,23 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     final query = _searchController.text.toLowerCase();
     setState(() {
       var filtered = _applicants;
-      
-      // Apply feedback filter first
       if (_selectedFeedbackFilter != 'All') {
         if (_selectedFeedbackFilter == 'No Feedback') {
           filtered = filtered.where((driver) {
-            final hasFeedback = driver.callFeedback == null || driver.callFeedback!.isEmpty;
-            return hasFeedback;
+            return driver.callFeedback == null || driver.callFeedback!.isEmpty;
+          }).toList();
+        } else if (_selectedFeedbackFilter == 'Rejected') {
+          // Filter by rejection status
+          filtered = filtered.where((driver) {
+            return driver.status.toLowerCase() == 'rejected';
           }).toList();
         } else {
           filtered = filtered.where((driver) {
-            return driver.callFeedback?.toLowerCase() == _selectedFeedbackFilter.toLowerCase();
+            return driver.callFeedback?.toLowerCase() ==
+                _selectedFeedbackFilter.toLowerCase();
           }).toList();
         }
       }
-      
-      // Then apply search filter
       if (query.isEmpty) {
         _filteredApplicants = filtered;
       } else {
@@ -132,6 +123,25 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
       _error = '';
     });
     try {
+      // First, fetch job details to get transporter info
+      final jobs = await Phase2ApiService.fetchJobs();
+      final job = jobs.firstWhere(
+        (j) => j.jobId == widget.jobId,
+        orElse: () => jobs.first,
+      );
+
+      // Store transporter info for IVR calls
+      _transporterTmid = job.transporterTmid;
+      _transporterName = job.transporterName;
+      _transporterUserId = int.tryParse(job.transporterId) ?? 0;
+      _assignedTo = job.assignedTo ?? (await Phase2AuthService.getUserId());
+
+      print('🔵 Job Details for IVR:');
+      print('   Transporter TMID: $_transporterTmid');
+      print('   Transporter Name: $_transporterName');
+      print('   Transporter User ID: $_transporterUserId');
+      print('   Assigned To: $_assignedTo');
+
       final applicants = await Phase2ApiService.fetchJobApplicants(
         widget.jobId,
       );
@@ -141,6 +151,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
         _filteredApplicants = _applicants;
         _isLoading = false;
       });
+      _animationController.forward(from: 0);
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -149,367 +160,465 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     }
   }
 
+  Future<void> _addToBucket(DriverApplicant driver) async {
+    // Show confirmation dialog first
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add to Bucket'),
+        content: Text('Do you want to add ${driver.name} to the bucket?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    if (_assignedTo == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error: Job assigned user ID not found'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final currentUserId = await Phase2AuthService.getUserId();
+      await Phase2ApiService.addToDriverBucket(
+        userId: driver.driverId, // Driver's ID from the card
+        uniqueId: driver.driverTmid,
+        assignedTo: currentUserId, // Current logged-in user (telecaller)
+        jobId: widget.jobId,
+      );
+
+      if (mounted) {
+        // Show success dialog
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Success'),
+            content: Text(
+              '${driver.name} has been added to the bucket successfully.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMessage = e.toString();
+        // Remove "Exception: " prefix for cleaner display
+        if (errorMessage.startsWith('Exception: ')) {
+          errorMessage = errorMessage.substring(11);
+        }
+
+        if (errorMessage.contains('already in the bucket')) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Already Added'),
+              content: Text('${driver.name} is already in the driver bucket.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage), // Show the clean message
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   String? _getProfileImageUrl(String imagePath) {
     if (imagePath.isEmpty || imagePath.toLowerCase() == 'null') return null;
-
-    // Try to parse as JSON array
     try {
       final decoded = json.decode(imagePath);
       if (decoded is List && decoded.isNotEmpty) {
         imagePath = decoded[0].toString();
       }
     } catch (e) {
-      // Not JSON, use as is
+      // Not JSON
     }
-
-    // If it's already a full URL
-    if (imagePath.startsWith('http')) {
-      return imagePath;
-    }
-
-    // If it's a relative path, prepend the correct base URL
+    if (imagePath.startsWith('http')) return imagePath;
     if (imagePath.isNotEmpty) {
-      // Remove leading slash if present
-      if (imagePath.startsWith('/')) {
-        imagePath = imagePath.substring(1);
-      }
-      return '${ApiConfig.publicUrl}/$imagePath';
+      if (imagePath.startsWith('/')) imagePath = imagePath.substring(1);
+      return 'https://truckmitr.com/public/$imagePath';
     }
-
     return null;
   }
 
   @override
   Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+    );
+
     return ScaffoldMessenger(
       key: _scaffoldMessengerKey,
       child: Scaffold(
-        backgroundColor: AppColors.background,
-        body: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 220,
-              floating: false,
-              pinned: true,
-              elevation: 0,
-              backgroundColor: const Color(0xFF007BFF),
-              leading: IconButton(
-                onPressed: () {
-                  if (Navigator.canPop(context)) {
-                    Navigator.pop(context);
-                  } else {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const main.MainContainer(),
-                      ),
-                    );
-                  }
-                },
-                icon: const Icon(
-                  Icons.arrow_back_ios_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-              title: const Text(
-                'Job Applicants',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-              actions: [
-                // Feedback Filter Button
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () => _showFilterBottomSheet(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _selectedFeedbackFilter != 'All'
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.filter_list_rounded,
-                            color: _selectedFeedbackFilter != 'All'
-                                ? const Color(0xFF007BFF)
-                                : Colors.white,
-                            size: 18,
-                          ),
-                          if (_selectedFeedbackFilter != 'All') ...[
-                            const SizedBox(width: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF007BFF),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                '1',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: GestureDetector(
-                    onTap: _applicants.isNotEmpty
-                        ? () {
-                            Navigator.push(
+        backgroundColor: const Color(0xFFF2F2F7),
+        body: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              // Pinned header
+              SliverAppBar(
+                pinned: true,
+                floating: false,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                backgroundColor: const Color(0xFFF2F2F7),
+                surfaceTintColor: Colors.transparent,
+                automaticallyImplyLeading: false,
+                toolbarHeight: 56,
+                titleSpacing: 0,
+                title: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          } else {
+                            Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    MatchMakingScreen(jobId: widget.jobId),
+                                builder: (_) => const main.MainContainer(),
                               ),
                             );
                           }
-                        : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          width: 1,
+                        },
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.chevron_left_rounded,
+                            color: Color(0xFF007AFF),
+                            size: 24,
+                          ),
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${_applicants.length}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.compare_arrows_rounded,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ],
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Applicants',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1C1C1E),
+                          letterSpacing: -0.5,
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                background: ClipPath(
-                  clipper: CurvedHeaderClipper(),
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF007BFF), Color(0xFF0056D2)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                      const Spacer(),
+                      // Filter button
+                      GestureDetector(
+                        onTap: () => _showFilterBottomSheet(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _selectedFeedbackFilter != 'All'
+                                ? const Color(0xFF007AFF)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.filter_list_rounded,
+                            color: _selectedFeedbackFilter != 'All'
+                                ? Colors.white
+                                : const Color(0xFF8E8E93),
+                            size: 18,
+                          ),
+                        ),
                       ),
-                    ),
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 80, 16, 40),
-                        child: SingleChildScrollView(
-                          physics: const NeverScrollableScrollPhysics(),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(width: 8),
+                      // Count + Match making
+                      GestureDetector(
+                        onTap: _applicants.isNotEmpty
+                            ? () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        MatchMakingScreen(jobId: widget.jobId),
+                                  ),
+                                );
+                              }
+                            : null,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF007AFF,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.1),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: TextField(
-                                  controller: _searchController,
-                                  style: const TextStyle(fontSize: 14),
-                                  decoration: InputDecoration(
-                                    hintText: 'Search applicants...',
-                                    hintStyle: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade500,
-                                    ),
-                                    prefixIcon: Icon(
-                                      Icons.search_rounded,
-                                      color: AppColors.primary,
-                                      size: 20,
-                                    ),
-                                    suffixIcon: _searchController.text.isNotEmpty
-                                        ? IconButton(
-                                            icon: Icon(
-                                              Icons.clear_rounded,
-                                              color: Colors.grey.shade600,
-                                              size: 18,
-                                            ),
-                                            onPressed: () {
-                                              _searchController.clear();
-                                            },
-                                          )
-                                        : null,
-                                    border: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                  ),
+                              Text(
+                                '${_filteredApplicants.length}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF007AFF),
                                 ),
                               ),
-                              // Show active filter chip below search
-                              if (_selectedFeedbackFilter != 'All') ...[
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.shade50,
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: Colors.blue.shade200,
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.filter_alt,
-                                        size: 13,
-                                        color: Colors.blue.shade700,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Flexible(
-                                        child: Text(
-                                          _selectedFeedbackFilter,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.blue.shade700,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            _selectedFeedbackFilter = 'All';
-                                            _onSearchChanged();
-                                          });
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.all(2),
-                                          child: Icon(
-                                            Icons.close,
-                                            size: 13,
-                                            color: Colors.blue.shade700,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                              const SizedBox(width: 4),
+                              const Icon(
+                                Icons.compare_arrows_rounded,
+                                size: 14,
+                                color: Color(0xFF007AFF),
+                              ),
                             ],
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
-              sliver: _buildContent(),
-            ),
-          ],
+              // Search bar
+              SliverToBoxAdapter(
+                child: Container(
+                  color: const Color(0xFFF2F2F7),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Column(
+                    children: [
+                      _buildSearchBar(),
+                      if (_selectedFeedbackFilter != 'All') ...[
+                        const SizedBox(height: 8),
+                        _buildActiveFilterChip(),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ];
+          },
+          body: RefreshIndicator(
+            onRefresh: _loadApplicants,
+            color: const Color(0xFF007AFF),
+            backgroundColor: Colors.white,
+            child: _buildContent(),
+          ),
         ),
       ),
     );
   }
 
+  Widget _buildSearchBar() {
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE5E5EA),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: TextField(
+        controller: _searchController,
+        style: const TextStyle(
+          fontSize: 15,
+          color: Color(0xFF1C1C1E),
+          letterSpacing: -0.3,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Search',
+          hintStyle: const TextStyle(
+            fontSize: 15,
+            color: Color(0xFF8E8E93),
+            letterSpacing: -0.3,
+          ),
+          prefixIcon: const Padding(
+            padding: EdgeInsets.only(left: 8, right: 4),
+            child: Icon(
+              Icons.search_rounded,
+              color: Color(0xFF8E8E93),
+              size: 18,
+            ),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 34),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _searchController.clear();
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8E8E93).withValues(alpha: 0.4),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 12,
+                    ),
+                  ),
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+        ),
+        onTap: () => HapticFeedback.selectionClick(),
+      ),
+    );
+  }
+
+  Widget _buildActiveFilterChip() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF007AFF).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.filter_alt, size: 13, color: Color(0xFF007AFF)),
+              const SizedBox(width: 4),
+              Text(
+                _selectedFeedbackFilter,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF007AFF),
+                ),
+              ),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    _selectedFeedbackFilter = 'All';
+                    _onSearchChanged();
+                  });
+                },
+                child: const Icon(
+                  Icons.close,
+                  size: 14,
+                  color: Color(0xFF007AFF),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildContent() {
     if (_isLoading) {
-      return SliverFillRemaining(
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
-      );
+      return _buildSkeletonLoading();
     }
+
     if (_error.isNotEmpty) {
-      return SliverFillRemaining(
-        child: Center(
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline_rounded,
-                size: 60,
-                color: Colors.red.shade300,
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF3B30).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.wifi_off_rounded,
+                  size: 30,
+                  color: Color(0xFFFF3B30),
+                ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Error loading applicants',
+              const Text(
+                'Unable to Load',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade700,
+                  color: Color(0xFF1C1C1E),
                 ),
               ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _loadApplicants,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Retry'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
+              const SizedBox(height: 4),
+              const Text(
+                'Check your connection',
+                style: TextStyle(fontSize: 13, color: Color(0xFF8E8E93)),
+              ),
+              const SizedBox(height: 18),
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  _loadApplicants();
+                },
+                child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,
-                    vertical: 10,
+                    vertical: 9,
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF007AFF),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Text(
+                    'Try Again',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -518,87 +627,140 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
         ),
       );
     }
+
     if (_applicants.isEmpty) {
-      return SliverFillRemaining(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5E5EA).withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
                 Icons.person_off_outlined,
-                size: 70,
-                color: Colors.grey.shade300,
+                size: 36,
+                color: Color(0xFFC7C7CC),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'No applicants yet',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade600,
-                ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No Applicants Yet',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1C1C1E),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
+
     if (_filteredApplicants.isEmpty) {
-      return SliverFillRemaining(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5E5EA).withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
                 Icons.search_off_rounded,
-                size: 70,
-                color: Colors.grey.shade300,
+                size: 36,
+                color: Color(0xFFC7C7CC),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'No results found',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade600,
-                ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No Results Found',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1C1C1E),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Try different search terms',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Try different search terms',
+              style: TextStyle(fontSize: 13, color: Color(0xFF8E8E93)),
+            ),
+          ],
         ),
       );
     }
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final isLast = index == _filteredApplicants.length - 1;
-        return Container(
-          width: double.infinity,
-          margin: EdgeInsets.only(bottom: isLast ? 24 : 12),
-          child: _buildDriverCard(_filteredApplicants[index]),
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      physics: const BouncingScrollPhysics(),
+      itemCount: _filteredApplicants.length,
+      itemBuilder: (context, index) {
+        return FadeTransition(
+          opacity: _fadeAnimation,
+          child: SlideTransition(
+            position:
+                Tween<Offset>(
+                  begin: const Offset(0, 0.08),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: _animationController,
+                    curve: Interval(
+                      (index / _filteredApplicants.length) * 0.4,
+                      ((index / _filteredApplicants.length) * 0.4) + 0.6,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
+                ),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildDriverCard(_filteredApplicants[index]),
+            ),
+          ),
         );
-      }, childCount: _filteredApplicants.length),
+      },
     );
   }
 
   Widget _buildDriverCard(DriverApplicant driver) {
+    final hasCallStatus =
+        driver.callStatus != null &&
+        driver.callStatus!.isNotEmpty &&
+        driver.callStatus!.toLowerCase() != 'null';
     final hasFeedback =
-        driver.callFeedback != null && driver.callFeedback!.isNotEmpty;
+        driver.callFeedback != null &&
+        driver.callFeedback!.isNotEmpty &&
+        driver.callFeedback!.toLowerCase() != 'null';
     final hasMatchStatus =
-        driver.matchStatus != null && driver.matchStatus!.isNotEmpty;
+        driver.matchStatus != null &&
+        driver.matchStatus!.isNotEmpty &&
+        driver.matchStatus!.toLowerCase() != 'null';
+    final isRejected = driver.status.toLowerCase() == 'rejected';
 
-    // Determine card color based on match status first, then feedback
     Color cardColor = Colors.white;
     Color borderColor = Colors.grey.shade200;
     int borderWidth = 1;
 
-    if (hasMatchStatus) {
+    // Rejected status takes priority
+    if (isRejected) {
+      cardColor = Colors.red.shade50;
+      borderColor = Colors.red.shade300;
+      borderWidth = 2;
+    } else if (hasMatchStatus) {
       cardColor = _getMatchStatusColor(driver.matchStatus);
       borderColor = _getMatchStatusBorderColor(driver.matchStatus);
+      borderWidth = 2;
+    } else if (hasCallStatus) {
+      // Use callStatus for color determination (connected, not_connected, callback_later)
+      cardColor = _getCallStatusColor(driver.callStatus);
+      borderColor = _getCallStatusBorderColor(driver.callStatus);
       borderWidth = 2;
     } else if (hasFeedback) {
       cardColor = _getFeedbackColor(driver.callFeedback);
@@ -625,20 +787,57 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Show Rejected Badge at top if rejected
+            if (isRejected) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade300),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.cancel, color: Colors.red.shade700, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'REJECTED',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.red.shade700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             Row(
               children: [
-                ProfileCompletionAvatar(
-                  name: driver.name,
-                  userId: driver.driverId,
-                  userType: 'driver',
-                  size: 56,
-                  completionPercentage: driver.profileCompletion,
-                  profileImageUrl:
-                      driver.profileImage != null &&
-                          driver.profileImage!.isNotEmpty
-                      ? _getProfileImageUrl(driver.profileImage!)
-                      : null,
-                  gender: driver.gender,
+                Builder(
+                  builder: (context) {
+                    final imageUrl =
+                        driver.profileImage != null &&
+                            driver.profileImage!.isNotEmpty
+                        ? _getProfileImageUrl(driver.profileImage!)
+                        : null;
+                    return ProfileCompletionAvatar(
+                      name: driver.name,
+                      userId: driver.driverId,
+                      userType: 'driver',
+                      size: 56,
+                      completionPercentage: driver.profileCompletion,
+                      profileImageUrl: imageUrl,
+                      gender: driver.gender,
+                    );
+                  },
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -657,7 +856,11 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${driver.city}, ${driver.state}',
+                        driver.city.isNotEmpty && driver.state.isNotEmpty
+                            ? '${driver.city}, ${driver.state}'
+                            : driver.city.isNotEmpty
+                            ? driver.city
+                            : driver.state,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,
@@ -705,59 +908,46 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                     ],
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Material(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => DriverDetailedInfoScreen(
-                                driverId: driver.driverId,
-                              ),
-                            ),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.all(9),
-                          child: Icon(
-                            Icons.info_outline_rounded,
-                            color: Colors.blue.shade700,
-                            size: 17,
-                          ),
-                        ),
+                Material(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    onTap: () => _initiateCall(driver),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.all(9),
+                      child: const Icon(
+                        Icons.call,
+                        color: Colors.white,
+                        size: 17,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Material(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        onTap: () => _initiateCall(driver),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.all(9),
-                          child: const Icon(
-                            Icons.call,
-                            color: Colors.white,
-                            size: 17,
-                          ),
-                        ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Material(
+                  color: const Color(0xFF007AFF),
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    onTap: () => _addToBucket(driver),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.all(9),
+                      child: const Icon(
+                        Icons.add_shopping_cart, // Bucket icon
+                        color: Colors.white,
+                        size: 17,
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            // Show match status first (higher priority)
+            // Show Match Status if available
             if (driver.matchStatus != null &&
-                driver.matchStatus!.isNotEmpty) ...[
+                driver.matchStatus!.isNotEmpty &&
+                driver.matchStatus!.toLowerCase() != 'null') ...[
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -772,87 +962,110 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                 child: Row(
                   children: [
                     Icon(
-                      Icons.assignment_turned_in_outlined,
+                      _getMatchStatusIcon(driver.matchStatus),
                       size: 16,
                       color: _getMatchStatusTextColor(driver.matchStatus),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: RichText(
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'Status: ${driver.matchStatus}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: _getMatchStatusTextColor(
-                                  driver.matchStatus,
-                                ),
-                                fontFamily: 'Inter', // Ensure font consistency
-                              ),
-                            ),
-                            if (driver.matchMakerName != null &&
-                                driver.matchMakerName!.isNotEmpty &&
-                                (driver.matchStatus!.toLowerCase() ==
-                                        'matchmaking done' ||
-                                    driver.matchStatus!.toLowerCase() ==
-                                        'match making done'))
-                              TextSpan(
-                                text: ' (by ${driver.matchMakerName})',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  fontStyle: FontStyle.italic,
-                                  color: _getMatchStatusTextColor(
-                                    driver.matchStatus,
-                                  ),
-                                  fontFamily: 'Inter',
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-            ] else if (driver.callFeedback != null &&
-                driver.callFeedback!.isNotEmpty) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: _getFeedbackBorderColor(
-                    driver.callFeedback,
-                  ).withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.feedback_outlined,
-                      size: 16,
-                      color: _getFeedbackTextColor(driver.callFeedback),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
                       child: Text(
-                        'Status: ${driver.callFeedback}',
+                        'Match: ${_formatMatchStatus(driver.matchStatus)}',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: _getFeedbackTextColor(driver.callFeedback),
+                          color: _getMatchStatusTextColor(driver.matchStatus),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+            ],
+            // Show Call Logs Details if any call data is available
+            if ((driver.callStatus != null && driver.callStatus!.isNotEmpty) ||
+                (driver.callFeedback != null &&
+                    driver.callFeedback!.isNotEmpty) ||
+                (driver.callRemarks != null &&
+                    driver.callRemarks!.isNotEmpty)) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _getFeedbackBorderColor(
+                    driver.callFeedback ?? driver.callStatus,
+                  ).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _getFeedbackBorderColor(
+                      driver.callFeedback ?? driver.callStatus,
+                    ).withValues(alpha: 0.5),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header with Call Logs title
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.history_rounded,
+                          size: 14,
+                          color: _getFeedbackTextColor(
+                            driver.callFeedback ?? driver.callStatus,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Call Logs',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: _getFeedbackTextColor(
+                              driver.callFeedback ?? driver.callStatus,
+                            ),
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Call Status Row
+                    if (driver.callStatus != null &&
+                        driver.callStatus!.isNotEmpty) ...[
+                      _buildCallLogRow(
+                        'Call Status',
+                        _formatCallStatus(driver.callStatus),
+                        _getCallStatusIcon(driver.callStatus),
+                        _getCallStatusTextColor(driver.callStatus),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    // Call Feedback Row
+                    if (driver.callFeedback != null &&
+                        driver.callFeedback!.isNotEmpty) ...[
+                      _buildCallLogRow(
+                        'Feedback',
+                        driver.callFeedback!,
+                        Icons.feedback_outlined,
+                        _getFeedbackTextColor(driver.callFeedback),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    // Call Remarks Row
+                    if (driver.callRemarks != null &&
+                        driver.callRemarks!.isNotEmpty) ...[
+                      _buildCallLogRow(
+                        'Remarks',
+                        driver.callRemarks!,
+                        Icons.note_outlined,
+                        Colors.grey.shade700,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
             ],
             Divider(height: 1, color: Colors.grey.shade200),
             const SizedBox(height: 12),
@@ -959,7 +1172,6 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
               ),
               const SizedBox(height: 12),
             ],
-
             SizedBox(
               width: double.infinity,
               child: Row(
@@ -995,7 +1207,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                               const SizedBox(width: 6),
                               Flexible(
                                 child: Text(
-                                  'Jobs (${driver.otherAppliedJobs?.split(',').length ?? 0})',
+                                  'Jobs (${driver.totalJobsApplied})',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -1014,10 +1226,10 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Material(
-                      color: Colors.green,
+                      color: Colors.red.shade50,
                       borderRadius: BorderRadius.circular(10),
                       child: InkWell(
-                        onTap: () => _initiateCall(driver),
+                        onTap: () => _showRejectConfirmation(driver),
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1025,16 +1237,59 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.call, color: Colors.white, size: 16),
-                              SizedBox(width: 6),
+                            children: [
+                              Icon(
+                                Icons.cancel_outlined,
+                                color: Colors.red.shade700,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
                               Flexible(
                                 child: Text(
-                                  'Call Driver',
+                                  'Reject',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.white,
+                                    color: Colors.red.shade700,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Material(
+                      color: Colors.purple.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: () => _addToBucket(driver),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.inventory_2_outlined,
+                                color: Colors.purple.shade700,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Bucket',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.purple.shade700,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
@@ -1086,477 +1341,507 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     );
   }
 
-  /// Parse datetime string from database and return the exact values
-  /// No timezone conversion - just display what's in the database
-  DateTime _parseISTDateTime(String dateStr) {
-    // Remove microseconds if present
-    final cleanStr = dateStr.split('.')[0];
+  Widget _buildCallLogRow(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 70,
+          child: Text(
+            '$label:',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
 
-    // Parse the components manually
+  DateTime _parseISTDateTime(String dateStr) {
+    final cleanStr = dateStr.split('.')[0];
     final parts = cleanStr.split(' ');
     final dateParts = parts[0].split('-');
     final timeParts = parts.length > 1 ? parts[1].split(':') : ['0', '0', '0'];
-
     final year = int.parse(dateParts[0]);
     final month = int.parse(dateParts[1]);
     final day = int.parse(dateParts[2]);
     final hour = int.parse(timeParts[0]);
     final minute = int.parse(timeParts[1]);
     final second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
-
-    // Return a DateTime with these EXACT values - no conversion
-    // Using DateTime() constructor (not .utc()) creates a local DateTime
-    // but we're just using it to hold the values for display
     return DateTime(year, month, day, hour, minute, second);
   }
 
   String _formatDate(String date) {
     if (date.isEmpty) return 'N/A';
-
     try {
       DateTime dt;
-
-      // Try different parsing approaches
       if (date.contains('-')) {
-        // Handle YYYY-MM-DD or YYYY-MM-DD HH:MM:SS format
-        // Database stores in IST, parse directly
         dt = _parseISTDateTime(date);
       } else if (date.contains('/')) {
-        // Handle DD/MM/YYYY format
-        final parts = date
-            .split(' ')[0]
-            .split('/'); // Take only date part if datetime
+        final parts = date.split(' ')[0].split('/');
         if (parts.length == 3) {
           final day = int.parse(parts[0]);
           final month = int.parse(parts[1]);
           var year = int.parse(parts[2]);
-
-          // Fix 2-digit year to 4-digit year
-          if (year < 100) {
-            if (year > 50) {
-              year += 1900; // 51-99 -> 1951-1999
-            } else {
-              year += 2000; // 00-50 -> 2000-2050
-            }
-          }
-
+          if (year < 100) year += (year > 50) ? 1900 : 2000;
           dt = DateTime(year, month, day);
         } else {
-          throw FormatException('Invalid date format');
+          throw const FormatException('Invalid date format');
         }
       } else {
-        // Try parsing as-is
         dt = DateTime.parse(date);
       }
-
-      // Ensure datetime is reasonable (not in future, not too old)
-      final now = DateTime.now();
-      final currentYear = now.year;
-
-      // Log if datetime is in future but display the actual database date
-      if (dt.isAfter(now)) {
-        print('ℹ️ Database contains future date: $dt (displaying original)');
-        // Keep and display the original database date
-      }
-
       var correctedYear = dt.year;
-
-      // Only correct year if it's unreasonably old (before 2020)
-      // Current year (2025) and future years are now valid
-      if (dt.year < 2020) {
-        // If year is too old (before 2020), use current year
-        correctedYear = currentYear;
-        print('⚠️ Old year detected: ${dt.year}, corrected to: $correctedYear');
-      }
-
+      if (dt.year < 2020) correctedYear = DateTime.now().year;
       return '${dt.day}/${dt.month}/$correctedYear';
     } catch (e) {
-      // Last resort: try to extract numbers and format them
-      try {
-        final numbers = RegExp(
-          r'\d+',
-        ).allMatches(date).map((m) => m.group(0)!).toList();
-        if (numbers.length >= 3) {
-          var day = int.parse(numbers[0]);
-          var month = int.parse(numbers[1]);
-          var year = int.parse(numbers[2]);
-
-          // Fix 2-digit year
-          if (year < 100) {
-            if (year > 50) {
-              year += 1900;
-            } else {
-              year += 2000;
-            }
-          }
-
-          // Only fix unreasonably old years (before 2020)
-          if (year < 2020) {
-            year = DateTime.now().year;
-          }
-
-          // Ensure valid day/month
-          if (day > 31) day = 1;
-          if (month > 12) month = 1;
-
-          return '$day/$month/$year';
-        }
-
-        return date; // Return original if can't parse
-      } catch (e2) {
-        return date; // Return original if all parsing fails
-      }
+      return date;
     }
   }
 
   String _formatTime(String date) {
     if (date.isEmpty) return 'N/A';
-
-    // Debug: Show original database time
-    print('📅 Original database time: $date');
-
     try {
       DateTime dt;
-
-      // Try parsing the full datetime string
       if (date.contains('-')) {
-        // Database stores in IST, parse directly
         dt = _parseISTDateTime(date);
       } else if (date.contains('/') && date.contains(' ')) {
-        // Handle DD/MM/YYYY HH:MM:SS format
         final parts = date.split(' ');
         if (parts.length >= 2) {
           final datePart = parts[0].split('/');
           final timePart = parts[1].split(':');
-
           if (datePart.length == 3 && timePart.length >= 2) {
             final day = int.parse(datePart[0]);
             final month = int.parse(datePart[1]);
             var year = int.parse(datePart[2]);
             final hour = int.parse(timePart[0]);
             final minute = int.parse(timePart[1]);
-
-            // Fix 2-digit year
-            if (year < 100) {
-              year += (year > 50) ? 1900 : 2000;
-            }
-
+            if (year < 100) year += (year > 50) ? 1900 : 2000;
             dt = DateTime(year, month, day, hour, minute);
           } else {
-            throw FormatException('Invalid datetime format');
+            throw const FormatException('Invalid datetime format');
           }
         } else {
-          throw FormatException('No time part found');
+          throw const FormatException('No time part found');
         }
       } else {
         dt = DateTime.parse(date);
       }
-
-      // Log if datetime is in the future but keep the original time from database
-      final now = DateTime.now();
-
-      if (dt.isAfter(now)) {
-        print(
-          'ℹ️ Database contains future datetime: $dt, current: $now (keeping original)',
-        );
-        // Keep the original database time - don't modify it
-      }
-
-      // Format time as HH:MM AM/PM
       final hour = dt.hour;
       final minute = dt.minute;
       final period = hour >= 12 ? 'PM' : 'AM';
       final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
       final formattedMinute = minute.toString().padLeft(2, '0');
-
       return '$displayHour:$formattedMinute $period';
     } catch (e) {
-      // Try to extract time manually
-      try {
-        final timeRegex = RegExp(r'(\d{1,2}):(\d{2})(?::(\d{2}))?');
-        final match = timeRegex.firstMatch(date);
-
-        if (match != null) {
-          final hour = int.parse(match.group(1)!);
-          final minute = int.parse(match.group(2)!);
-
-          final period = hour >= 12 ? 'PM' : 'AM';
-          final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-          final formattedMinute = minute.toString().padLeft(2, '0');
-
-          return '$displayHour:$formattedMinute $period';
-        }
-
-        return 'N/A';
-      } catch (e2) {
-        return 'N/A';
-      }
+      return 'N/A';
     }
   }
 
   Color _getFeedbackColor(String? feedback) {
     if (feedback == null || feedback.isEmpty) return Colors.white;
+    final feedbackLower = feedback.toLowerCase();
 
-    switch (feedback.toLowerCase()) {
-      // Green - Connected/Interview related
-      case 'interview done':
-      case 'interview fixed':
-      case 'ready for interview':
-      case 'will confirm later':
-      case 'match making done':
-        return Colors.green.shade50;
-
-      // Yellow - Call issues
-      case 'ringing':
-      case 'call busy':
-      case 'switched off':
-      case 'not reachable':
-      case 'disconnected':
-        return Colors.yellow.shade50;
-
-      // Blue - Call back later
-      case 'busy right now':
-      case 'call tomorrow morning':
-      case 'call in evening':
-      case 'call after 2 days':
-        return Colors.blue.shade50;
-
-      // Red - Not selected/interested
-      case 'not selected':
-      case 'not interested':
-        return Colors.red.shade50;
-
-      default:
-        return Colors.grey.shade50;
+    // Check for category prefix first (most reliable)
+    // IMPORTANT: Check "not connected" BEFORE "connected" because "not connected" contains "connected"
+    if (feedbackLower.startsWith('not connected:') ||
+        feedbackLower.contains('not connected:')) {
+      return Colors.red.shade50;
     }
+    if (feedbackLower.startsWith('connected:') ||
+        feedbackLower.contains('connected:')) {
+      return Colors.green.shade50;
+    }
+    if (feedbackLower.startsWith('call back later:') ||
+        feedbackLower.contains('call back later:')) {
+      return Colors.yellow.shade50;
+    }
+
+    // Fallback: Check for known option keywords
+    // Not Connected options
+    if (feedbackLower.contains('ringing') ||
+        feedbackLower.contains('switched off') ||
+        feedbackLower.contains('not reachable') ||
+        feedbackLower.contains('call disconnected') ||
+        feedbackLower.contains('number busy') ||
+        feedbackLower.contains('wrong number') ||
+        feedbackLower.contains('third person received')) {
+      return Colors.red.shade50;
+    }
+    // Call Back Later options
+    if (feedbackLower.contains('busy right now') ||
+        feedbackLower.contains('call tomorrow morning') ||
+        feedbackLower.contains('call in evening') ||
+        feedbackLower.contains('call after 2 days')) {
+      return Colors.yellow.shade50;
+    }
+    // Connected options (all driver-related feedback)
+    if (feedbackLower.contains('driver interested') ||
+        feedbackLower.contains('driver not interested') ||
+        feedbackLower.contains('driver already booked') ||
+        feedbackLower.contains('driver does not work on that route') ||
+        feedbackLower.contains('driver rate mismatch') ||
+        feedbackLower.contains('vehicle not available') ||
+        feedbackLower.contains('vehicle type not matching') ||
+        feedbackLower.contains('driver wants more details') ||
+        feedbackLower.contains('driver wants to speak to transporter') ||
+        feedbackLower.contains('driver wants call back later') ||
+        feedbackLower.contains('driver requested callback on whatsapp') ||
+        feedbackLower.contains('interview done')) {
+      return Colors.green.shade50;
+    }
+    return Colors.grey.shade50;
   }
 
   Color _getFeedbackBorderColor(String? feedback) {
     if (feedback == null || feedback.isEmpty) return Colors.grey.shade200;
+    final feedbackLower = feedback.toLowerCase();
 
-    switch (feedback.toLowerCase()) {
-      // Green - Connected/Interview related
-      case 'interview done':
-      case 'interview fixed':
-      case 'ready for interview':
-      case 'will confirm later':
-      case 'match making done':
-        return Colors.green.shade200;
-
-      // Yellow - Call issues
-      case 'ringing':
-      case 'call busy':
-      case 'switched off':
-      case 'not reachable':
-      case 'disconnected':
-        return Colors.yellow.shade200;
-
-      // Blue - Call back later
-      case 'busy right now':
-      case 'call tomorrow morning':
-      case 'call in evening':
-      case 'call after 2 days':
-        return Colors.blue.shade200;
-
-      // Red - Not selected/interested
-      case 'not selected':
-      case 'not interested':
-        return Colors.red.shade200;
-
-      default:
-        return Colors.grey.shade300;
+    // Check for category prefix first
+    // IMPORTANT: Check "not connected" BEFORE "connected"
+    if (feedbackLower.startsWith('not connected:') ||
+        feedbackLower.contains('not connected:')) {
+      return Colors.red.shade300;
     }
+    if (feedbackLower.startsWith('connected:') ||
+        feedbackLower.contains('connected:')) {
+      return Colors.green.shade300;
+    }
+    if (feedbackLower.startsWith('call back later:') ||
+        feedbackLower.contains('call back later:')) {
+      return Colors.yellow.shade600;
+    }
+
+    // Fallback: Check for known option keywords
+    // Not Connected options
+    if (feedbackLower.contains('ringing') ||
+        feedbackLower.contains('switched off') ||
+        feedbackLower.contains('not reachable') ||
+        feedbackLower.contains('call disconnected') ||
+        feedbackLower.contains('number busy') ||
+        feedbackLower.contains('wrong number') ||
+        feedbackLower.contains('third person received')) {
+      return Colors.red.shade300;
+    }
+    // Call Back Later options
+    if (feedbackLower.contains('busy right now') ||
+        feedbackLower.contains('call tomorrow morning') ||
+        feedbackLower.contains('call in evening') ||
+        feedbackLower.contains('call after 2 days')) {
+      return Colors.yellow.shade600;
+    }
+    // Connected options
+    if (feedbackLower.contains('driver interested') ||
+        feedbackLower.contains('driver not interested') ||
+        feedbackLower.contains('driver already booked') ||
+        feedbackLower.contains('driver does not work on that route') ||
+        feedbackLower.contains('driver rate mismatch') ||
+        feedbackLower.contains('vehicle not available') ||
+        feedbackLower.contains('vehicle type not matching') ||
+        feedbackLower.contains('driver wants more details') ||
+        feedbackLower.contains('driver wants to speak to transporter') ||
+        feedbackLower.contains('driver wants call back later') ||
+        feedbackLower.contains('driver requested callback on whatsapp') ||
+        feedbackLower.contains('interview done')) {
+      return Colors.green.shade300;
+    }
+    return Colors.grey.shade300;
   }
 
   Color _getFeedbackTextColor(String? feedback) {
     if (feedback == null || feedback.isEmpty) return Colors.grey.shade600;
+    final feedbackLower = feedback.toLowerCase();
 
-    switch (feedback.toLowerCase()) {
-      // Green - Connected/Interview related
-      case 'interview done':
-      case 'interview fixed':
-      case 'ready for interview':
-      case 'will confirm later':
-      case 'match making done':
-        return Colors.green.shade700;
-
-      // Yellow - Call issues
-      case 'ringing':
-      case 'call busy':
-      case 'switched off':
-      case 'not reachable':
-      case 'disconnected':
-        return Colors.yellow.shade700;
-
-      // Blue - Call back later
-      case 'busy right now':
-      case 'call tomorrow morning':
-      case 'call in evening':
-      case 'call after 2 days':
-        return Colors.blue.shade700;
-
-      // Red - Not selected/interested
-      case 'not selected':
-      case 'not interested':
-        return Colors.red.shade700;
-
-      default:
-        return Colors.grey.shade700;
+    // Check for category prefix first
+    // IMPORTANT: Check "not connected" BEFORE "connected"
+    if (feedbackLower.startsWith('not connected:') ||
+        feedbackLower.contains('not connected:')) {
+      return Colors.red.shade700;
     }
+    if (feedbackLower.startsWith('connected:') ||
+        feedbackLower.contains('connected:')) {
+      return Colors.green.shade700;
+    }
+    if (feedbackLower.startsWith('call back later:') ||
+        feedbackLower.contains('call back later:')) {
+      return Colors.yellow.shade800;
+    }
+
+    // Fallback: Check for known option keywords
+    // Not Connected options
+    if (feedbackLower.contains('ringing') ||
+        feedbackLower.contains('switched off') ||
+        feedbackLower.contains('not reachable') ||
+        feedbackLower.contains('call disconnected') ||
+        feedbackLower.contains('number busy') ||
+        feedbackLower.contains('wrong number') ||
+        feedbackLower.contains('third person received')) {
+      return Colors.red.shade700;
+    }
+    // Call Back Later options
+    if (feedbackLower.contains('busy right now') ||
+        feedbackLower.contains('call tomorrow morning') ||
+        feedbackLower.contains('call in evening') ||
+        feedbackLower.contains('call after 2 days')) {
+      return Colors.yellow.shade800;
+    }
+    // Connected options
+    if (feedbackLower.contains('driver interested') ||
+        feedbackLower.contains('driver not interested') ||
+        feedbackLower.contains('driver already booked') ||
+        feedbackLower.contains('driver does not work on that route') ||
+        feedbackLower.contains('driver rate mismatch') ||
+        feedbackLower.contains('vehicle not available') ||
+        feedbackLower.contains('vehicle type not matching') ||
+        feedbackLower.contains('driver wants more details') ||
+        feedbackLower.contains('driver wants to speak to transporter') ||
+        feedbackLower.contains('driver wants call back later') ||
+        feedbackLower.contains('driver requested callback on whatsapp') ||
+        feedbackLower.contains('interview done')) {
+      return Colors.green.shade700;
+    }
+    return Colors.grey.shade700;
+  }
+
+  // New functions to use callStatus field directly for card colors
+  Color _getCallStatusColor(String? callStatus) {
+    if (callStatus == null || callStatus.isEmpty) return Colors.white;
+    final statusLower = callStatus.toLowerCase();
+
+    if (statusLower == 'connected') {
+      return Colors.green.shade50;
+    } else if (statusLower == 'not_connected' ||
+        statusLower == 'not connected') {
+      return Colors.red.shade50;
+    } else if (statusLower == 'callback_later' ||
+        statusLower == 'callback' ||
+        statusLower == 'call back later') {
+      return Colors.yellow.shade50;
+    }
+    return Colors.grey.shade50;
+  }
+
+  Color _getCallStatusBorderColor(String? callStatus) {
+    if (callStatus == null || callStatus.isEmpty) return Colors.grey.shade200;
+    final statusLower = callStatus.toLowerCase();
+
+    if (statusLower == 'connected') {
+      return Colors.green.shade300;
+    } else if (statusLower == 'not_connected' ||
+        statusLower == 'not connected') {
+      return Colors.red.shade300;
+    } else if (statusLower == 'callback_later' ||
+        statusLower == 'callback' ||
+        statusLower == 'call back later') {
+      return Colors.yellow.shade600;
+    }
+    return Colors.grey.shade300;
   }
 
   Color _getMatchStatusColor(String? matchStatus) {
     if (matchStatus == null || matchStatus.isEmpty) return Colors.white;
-
-    switch (matchStatus.toLowerCase()) {
-      case 'selected':
-      case 'match making done':
-      case 'matchmaking done':
-        return Colors.green.shade50;
-      case 'not selected':
-        return Colors.red.shade50;
-      case 'pending':
-        return Colors.yellow.shade50;
-      default:
-        return Colors.grey.shade50;
+    final statusLower = matchStatus.toLowerCase();
+    if (statusLower == 'selected' ||
+        statusLower.contains('matchmaking done') ||
+        statusLower.contains('match making done')) {
+      return Colors.green.shade50;
     }
+    if (statusLower == 'not selected' ||
+        statusLower.contains('rejected') ||
+        statusLower.contains('not interested')) {
+      return Colors.red.shade50;
+    }
+    if (statusLower == 'pending' || statusLower.contains('in progress')) {
+      return Colors.orange.shade50;
+    }
+    return Colors.grey.shade50;
   }
 
   Color _getMatchStatusBorderColor(String? matchStatus) {
     if (matchStatus == null || matchStatus.isEmpty) return Colors.grey.shade200;
-
-    switch (matchStatus.toLowerCase()) {
-      case 'selected':
-      case 'match making done':
-      case 'matchmaking done':
-        return Colors.green.shade200;
-      case 'not selected':
-        return Colors.red.shade200;
-      case 'pending':
-        return Colors.yellow.shade200;
-      default:
-        return Colors.grey.shade300;
+    final statusLower = matchStatus.toLowerCase();
+    if (statusLower == 'selected' ||
+        statusLower.contains('matchmaking done') ||
+        statusLower.contains('match making done')) {
+      return Colors.green.shade300;
     }
+    if (statusLower == 'not selected' ||
+        statusLower.contains('rejected') ||
+        statusLower.contains('not interested')) {
+      return Colors.red.shade300;
+    }
+    if (statusLower == 'pending' || statusLower.contains('in progress')) {
+      return Colors.orange.shade300;
+    }
+    return Colors.grey.shade300;
   }
 
   Color _getMatchStatusTextColor(String? matchStatus) {
-    if (matchStatus == null || matchStatus.isEmpty) return Colors.grey.shade600;
+    if (matchStatus == null || matchStatus.isEmpty) return Colors.grey.shade700;
+    final statusLower = matchStatus.toLowerCase();
+    if (statusLower == 'selected' ||
+        statusLower.contains('matchmaking done') ||
+        statusLower.contains('match making done')) {
+      return Colors.green.shade700;
+    }
+    if (statusLower == 'not selected' ||
+        statusLower.contains('rejected') ||
+        statusLower.contains('not interested')) {
+      return Colors.red.shade700;
+    }
+    if (statusLower == 'pending' || statusLower.contains('in progress')) {
+      return Colors.orange.shade700;
+    }
+    return Colors.grey.shade700;
+  }
 
-    switch (matchStatus.toLowerCase()) {
+  // Format match status for display
+  String _formatMatchStatus(String? matchStatus) {
+    if (matchStatus == null || matchStatus.isEmpty) return 'Unknown';
+    final statusLower = matchStatus.toLowerCase();
+    switch (statusLower) {
       case 'selected':
-      case 'match making done':
-      case 'matchmaking done':
-        return Colors.green.shade700;
+        return 'Selected';
       case 'not selected':
-        return Colors.red.shade700;
+        return 'Not Selected';
       case 'pending':
-        return Colors.yellow.shade700;
+        return 'Pending';
       default:
-        return Colors.grey.shade700;
+        return matchStatus;
     }
   }
 
-  Future<void> _initiateCall(DriverApplicant driver) async {
-    print('🟢 _initiateCall called for driver: ${driver.name}');
-
-    if (driver.mobile.isEmpty) {
-      print('❌ Driver mobile is empty!');
-      return;
+  // Get icon for match status
+  IconData _getMatchStatusIcon(String? matchStatus) {
+    if (matchStatus == null || matchStatus.isEmpty) return Icons.help_outline;
+    final statusLower = matchStatus.toLowerCase();
+    if (statusLower == 'selected' ||
+        statusLower.contains('matchmaking done') ||
+        statusLower.contains('match making done')) {
+      return Icons.check_circle_outline;
     }
+    if (statusLower == 'not selected' ||
+        statusLower.contains('rejected') ||
+        statusLower.contains('not interested')) {
+      return Icons.cancel_outlined;
+    }
+    if (statusLower == 'pending' || statusLower.contains('in progress')) {
+      return Icons.hourglass_empty;
+    }
+    return Icons.help_outline;
+  }
 
-    try {
-      // Show call type selection dialog
-      final callType = await showDialog<String>(
-        context: context,
-        builder: (context) => CallTypeSelectionDialog(driverName: driver.name),
-      );
-
-      if (callType == null) return; // User cancelled
-
-      final callerId = await Phase2AuthService.getUserId();
-
-      if (callType == 'manual') {
-        await _handleManualCall(driver, callerId);
-      } else if (callType == 'easygo_ivr') {
-        await _handleEasyGoIVR(driver);
-      }
-    } catch (e) {
-      print('❌ Exception in _initiateCall: $e');
-      _scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(
-          content: Text('Error initiating call: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+  // Helper methods for call status display
+  String _formatCallStatus(String? callStatus) {
+    if (callStatus == null || callStatus.isEmpty) return 'Unknown';
+    switch (callStatus.toLowerCase()) {
+      case 'connected':
+        return 'Connected';
+      case 'not_connected':
+        return 'Not Connected';
+      case 'callback_later':
+        return 'Call Back Later';
+      default:
+        return callStatus;
     }
   }
 
-  Future<void> _handleManualCall(DriverApplicant driver, int callerId) async {
-    try {
-      final cleanMobile = driver.mobile.replaceAll(RegExp(r'[^\d]'), '');
-
-      // Log manual call
-      final result = await SmartCallingService.instance.initiateManualCall(
-        driverMobile: cleanMobile,
-        callerId: callerId,
-        driverId: driver.driverId.toString(),
-      );
-
-      if (result['success'] == true) {
-        final driverMobileRaw = result['data']?['driver_mobile_raw'];
-
-        _scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(
-            content: Text('📱 Calling ${driver.name}...'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
-        // Make direct call
-        await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        if (mounted) {
-          _showCallFeedbackModal(driver);
-        }
-      }
-    } catch (e) {
-      print('❌ Manual call error: $e');
+  IconData _getCallStatusIcon(String? callStatus) {
+    if (callStatus == null || callStatus.isEmpty) return Icons.phone_outlined;
+    switch (callStatus.toLowerCase()) {
+      case 'connected':
+        return Icons.check_circle_outline;
+      case 'not_connected':
+        return Icons.phone_disabled_outlined;
+      case 'callback_later':
+        return Icons.schedule_outlined;
+      default:
+        return Icons.phone_outlined;
     }
   }
 
-  Future<void> _handleEasyGoIVR(DriverApplicant driver) async {
-    await EasyGoIVRCallHelper.initiateCall(
-      context: context,
-      clientName: driver.name,
-      clientPhone: driver.mobile,
-      clientId: driver.driverId.toString(),
-      contactType: 'driver',
-      callSource: 'job_applicants',
-      onCallEnded: () => _showCallFeedbackModal(driver),
-    );
+  Color _getCallStatusTextColor(String? callStatus) {
+    if (callStatus == null || callStatus.isEmpty) return Colors.grey.shade700;
+    final statusLower = callStatus.toLowerCase();
+
+    if (statusLower == 'connected') {
+      return Colors.green.shade700;
+    } else if (statusLower == 'not_connected' ||
+        statusLower == 'not connected') {
+      return Colors.red.shade700;
+    } else if (statusLower == 'callback_later' ||
+        statusLower == 'callback' ||
+        statusLower == 'call back later') {
+      return Colors.yellow.shade800;
+    }
+    return Colors.grey.shade700;
   }
 
   void _showFilterBottomSheet(BuildContext context) {
+    final feedbackOptions = [
+      'All',
+      'No Feedback',
+      'Rejected', // Added rejection filter
+      'Driver Interested',
+      'Driver Not Interested',
+      'Driver Already Booked / Busy',
+      'Driver Does Not Work on That Route',
+      'Driver Rate Mismatch',
+      'Vehicle Not Available',
+      'Vehicle Type Not Matching',
+      'Driver Wants More Details',
+      'Driver Wants to Speak to Transporter',
+      'Driver Wants Call Back Later',
+      'Driver Requested Callback on WhatsApp',
+      'Ringing – No Answer',
+      'Switched Off',
+      'Not Reachable',
+      'Call Disconnected',
+      'Number Busy',
+      'Wrong Number',
+      'Third Person Received – Asked to Call Later',
+      'Busy Right Now',
+      'Call Tomorrow Morning',
+      'Call in Evening',
+      'Call After 2 Days',
+    ];
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
+        height: MediaQuery.of(context).size.height * 0.7,
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           children: [
-            // Drag handle
             Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              margin: const EdgeInsets.only(top: 12),
               width: 40,
               height: 4,
               decoration: BoxDecoration(
@@ -1564,29 +1849,22 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              padding: const EdgeInsets.all(16),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Icon(
-                    Icons.filter_list_rounded,
-                    color: Color(0xFF007BFF),
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
                   const Text(
-                    'Filter by Status',
+                    'Filter by Feedback',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.darkGray,
+                      color: Color(0xFF1C1C1E),
                     ),
                   ),
-                  const Spacer(),
                   if (_selectedFeedbackFilter != 'All')
-                    TextButton(
-                      onPressed: () {
+                    GestureDetector(
+                      onTap: () {
                         setState(() {
                           _selectedFeedbackFilter = 'All';
                           _onSearchChanged();
@@ -1596,142 +1874,74 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
                       child: const Text(
                         'Clear',
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF007BFF),
+                          color: Color(0xFF007AFF),
                         ),
                       ),
                     ),
                 ],
               ),
             ),
-            const Divider(height: 1),
-            // Scrollable filter options
             Expanded(
               child: ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: _feedbackFilterOptions.length,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: feedbackOptions.length,
                 itemBuilder: (context, index) {
-                  final option = _feedbackFilterOptions[index];
-                  final isSelected = option == _selectedFeedbackFilter;
-                  
-                  // Get category info
-                  String? category;
-                  Color categoryColor = Colors.grey;
-                  
-                  if (index == 0) {
-                    category = null; // "All" has no category
-                  } else if (index == 1) {
-                    category = null; // "No Feedback" has no category
-                  } else if (index <= 8) {
-                    category = 'Connected';
-                    categoryColor = Colors.green;
-                  } else if (index <= 13) {
-                    category = 'Not Connected';
-                    categoryColor = Colors.orange;
-                  } else {
-                    category = 'Call Back Later';
-                    categoryColor = Colors.blue;
-                  }
-                  
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Category header
-                      if (category != null && (
-                        (index == 2) || 
-                        (index == 9) || 
-                        (index == 14)
-                      ))
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                          child: Text(
-                            category,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: categoryColor,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      // Filter option
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            setState(() {
-                              _selectedFeedbackFilter = option;
-                              _onSearchChanged();
-                            });
-                            Navigator.pop(context);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 14,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFF007BFF).withValues(alpha: 0.08)
-                                  : Colors.transparent,
-                            ),
-                            child: Row(
-                              children: [
-                                // Icon
-                                Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? const Color(0xFF007BFF)
-                                          : Colors.grey.shade300,
-                                      width: 2,
-                                    ),
-                                    color: isSelected
-                                        ? const Color(0xFF007BFF)
-                                        : Colors.transparent,
-                                  ),
-                                  child: isSelected
-                                      ? const Icon(
-                                          Icons.check,
-                                          size: 16,
-                                          color: Colors.white,
-                                        )
-                                      : null,
-                                ),
-                                const SizedBox(width: 16),
-                                // Text
-                                Expanded(
-                                  child: Text(
-                                    option,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
-                                      color: isSelected
-                                          ? const Color(0xFF007BFF)
-                                          : AppColors.darkGray,
-                                    ),
-                                  ),
-                                ),
-                                // Count badge (optional - you can add counts later)
-                                if (isSelected)
-                                  const Icon(
-                                    Icons.check_circle,
-                                    size: 20,
-                                    color: Color(0xFF007BFF),
-                                  ),
-                              ],
-                            ),
-                          ),
+                  final option = feedbackOptions[index];
+                  final isSelected = _selectedFeedbackFilter == option;
+                  return GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _selectedFeedbackFilter = option;
+                        _onSearchChanged();
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 16,
+                      ),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF007AFF).withValues(alpha: 0.1)
+                            : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF007AFF)
+                              : Colors.grey.shade200,
+                          width: isSelected ? 2 : 1,
                         ),
                       ),
-                    ],
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              option,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? const Color(0xFF007AFF)
+                                    : const Color(0xFF1C1C1E),
+                              ),
+                            ),
+                          ),
+                          if (isSelected)
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              color: Color(0xFF007AFF),
+                              size: 20,
+                            ),
+                        ],
+                      ),
+                    ),
                   );
                 },
               ),
@@ -1742,16 +1952,66 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
     );
   }
 
-  void _showDriverDetails(BuildContext context, DriverApplicant driver) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _DriverDetailsSheet(
-        driver: driver,
-        onCall: () => _initiateCall(driver),
-      ),
+  Future<void> _initiateCall(DriverApplicant driver) async {
+    if (driver.mobile.isEmpty) return;
+
+    try {
+      final callType = await showDialog<String>(
+        context: context,
+        builder: (context) => CallTypeSelectionDialog(driverName: driver.name),
+      );
+
+      if (callType == null) return;
+
+      final callerId = await Phase2AuthService.getUserId();
+
+      if (callType == 'manual') {
+        await _handleManualCall(driver, callerId);
+      } else if (callType == 'easygo_ivr') {
+        // Use job matching IVR API for job applicants
+        // API: https://truckmitr.com/api/telehead/ivr-call-jobMatching
+        await EasyGoIVRCallHelper.initiateCall(
+          context: context,
+          clientName: driver.name,
+          clientPhone: driver.mobile,
+          clientId: driver.driverId.toString(),
+          tmid: driver.driverTmid,
+          contactType: 'driver',
+          callSource: 'job_applicants',
+          // Pass job matching parameters
+          transporterTmid: _transporterTmid,
+          transporterName: _transporterName,
+          transporterUserId: _transporterUserId,
+          driverUserId: driver.driverId,
+          jobId: widget.jobId,
+          assignedTo: _assignedTo,
+          onCallCompleted: (matchId) =>
+              _showCallFeedbackModalWithMatchId(driver, matchId),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleManualCall(DriverApplicant driver, int callerId) async {
+    final cleanMobile = driver.mobile.replaceAll(RegExp(r'[^\d]'), '');
+    final result = await SmartCallingService.instance.initiateManualCall(
+      driverMobile: cleanMobile,
+      callerId: callerId,
+      driverId: driver.driverId.toString(),
     );
+
+    if (result['success'] == true) {
+      final driverMobileRaw = result['data']?['driver_mobile_raw'];
+      await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) _showCallFeedbackModal(driver);
+    }
   }
 
   void _showCallFeedbackModal(DriverApplicant driver) {
@@ -1763,712 +2023,444 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen> {
         userType: 'driver',
         userName: driver.name,
         userTmid: driver.driverTmid,
-        transporterTmid: driver.transporterTmid.isNotEmpty
-            ? driver.transporterTmid
-            : null,
         jobId: widget.jobId,
         onSubmit: (feedback, matchStatus, notes) async {
           try {
             final callerId = await Phase2AuthService.getUserId();
-            // Debug: Print the data being sent
-            print('=== FEEDBACK SUBMISSION DEBUG ===');
-            print('Caller ID: $callerId');
-            print('Driver TMID: ${driver.driverTmid}');
-            print('Driver Name: ${driver.name}');
-            print('Transporter TMID: ${driver.transporterTmid}');
-            print('Transporter Name: ${driver.transporterName}');
-            print('Job ID: ${widget.jobId}');
-            print('Feedback: $feedback');
-            print('Match Status: $matchStatus');
-            print('================================');
 
             await Phase2ApiService.saveCallFeedback(
               callerId: callerId,
-              transporterTmid: driver.transporterTmid.isNotEmpty
-                  ? driver.transporterTmid
+              driverTmid: driver.driverTmid.isNotEmpty
+                  ? driver.driverTmid
                   : null,
-              driverTmid: driver.driverTmid,
+              driverId: driver.driverId,
               driverName: driver.name,
-              transporterName: driver.transporterName.isNotEmpty
-                  ? driver.transporterName
-                  : null,
               feedback: feedback,
               matchStatus: matchStatus,
               notes: notes,
               jobId: widget.jobId,
             );
-
-            // Update the driver's feedback status locally
-            setState(() {
-              final index = _applicants.indexWhere(
-                (d) => d.driverId == driver.driverId,
-              );
-              if (index != -1) {
-                _applicants[index] = DriverApplicant(
-                  jobId: driver.jobId,
-                  jobTitle: driver.jobTitle,
-                  contractorId: driver.contractorId,
-                  transporterTmid: driver.transporterTmid,
-                  transporterName: driver.transporterName,
-                  driverId: driver.driverId,
-                  driverTmid: driver.driverTmid,
-                  name: driver.name,
-                  mobile: driver.mobile,
-                  email: driver.email,
-                  city: driver.city,
-                  state: driver.state,
-                  vehicleType: driver.vehicleType,
-                  drivingExperience: driver.drivingExperience,
-                  licenseType: driver.licenseType,
-                  licenseNumber: driver.licenseNumber,
-                  preferredLocation: driver.preferredLocation,
-                  aadharNumber: driver.aadharNumber,
-                  panNumber: driver.panNumber,
-                  gstNumber: driver.gstNumber,
-                  status: driver.status,
-                  createdAt: driver.createdAt,
-                  updatedAt: driver.updatedAt,
-                  appliedAt: driver.appliedAt,
-                  profileCompletion: driver.profileCompletion,
-                  subscriptionAmount: driver.subscriptionAmount,
-                  subscriptionStartDate: driver.subscriptionStartDate,
-                  subscriptionEndDate: driver.subscriptionEndDate,
-                  subscriptionStatus: driver.subscriptionStatus,
-                  callFeedback: feedback,
-                  matchStatus: matchStatus,
-                  feedbackNotes: notes,
-                );
-              }
-              _sortApplicants();
-              _onSearchChanged(); // Refresh filtered list
-            });
-
-            // Show toast using global key - more reliable
-            _scaffoldMessengerKey.currentState?.showSnackBar(
-              const SnackBar(
-                content: Text('Feedback submitted successfully'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          } catch (e) {
-            // Show error toast using global key
-            _scaffoldMessengerKey.currentState?.showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Error: Exception: Failed to save call feedback: Exception: ${e.toString()}',
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Feedback saved successfully'),
+                  backgroundColor: Colors.green,
                 ),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 4),
-              ),
-            );
+              );
+              _loadApplicants();
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           }
         },
       ),
     );
   }
-}
 
-// Driver Details Sheet with Tab Navigation
-class _DriverDetailsSheet extends StatefulWidget {
-  final DriverApplicant driver;
-  final VoidCallback onCall;
+  // Show feedback modal with match_id for job matching IVR calls
+  // Uses API: https://truckmitr.com/api/telehead/ivr-call-update-jobMatching
+  void _showCallFeedbackModalWithMatchId(
+    DriverApplicant driver,
+    String? matchId,
+  ) {
+    print('🔵 _showCallFeedbackModalWithMatchId called with matchId: $matchId');
 
-  const _DriverDetailsSheet({required this.driver, required this.onCall});
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CallFeedbackModal(
+        userType: 'driver',
+        userName: driver.name,
+        userTmid: driver.driverTmid,
+        jobId: widget.jobId,
+        onSubmit: (feedback, matchStatus, notes) async {
+          try {
+            if (matchId != null && matchId.isNotEmpty) {
+              // Use the job matching update API with correct field names
+              print('🔵 Updating job matching call with matchId: $matchId');
+              print('🔵 Feedback: $feedback');
+              print('🔵 Match Status: $matchStatus');
+              print('🔵 Notes: $notes');
 
-  @override
-  State<_DriverDetailsSheet> createState() => _DriverDetailsSheetState();
-}
+              // Extract call_status from feedback string
+              String callStatus = 'not_connected'; // default
 
-class _DriverDetailsSheetState extends State<_DriverDetailsSheet> {
-  int _selectedTabIndex = 0;
-  final ScrollController _tabScrollController = ScrollController();
+              // Check for category prefix in feedback
+              // IMPORTANT: Check "Not Connected" BEFORE "Connected" because "not connected" contains "connected"
+              if (feedback.startsWith('Not Connected:') ||
+                  feedback.toLowerCase().contains('not connected:')) {
+                callStatus = 'not_connected';
+              } else if (feedback.startsWith('Call Back Later:') ||
+                  feedback.toLowerCase().contains('call back later:')) {
+                callStatus = 'callback_later';
+              } else if (feedback.startsWith('Connected:') ||
+                  feedback.toLowerCase().contains('connected:')) {
+                callStatus = 'connected';
+              } else {
+                // Fallback: check if feedback matches known options
+                final connectedOptions = [
+                  'Driver Interested',
+                  'Driver Not Interested',
+                  'Driver Already Booked / Busy',
+                  'Driver Does Not Work on That Route',
+                  'Driver Rate Mismatch',
+                  'Vehicle Not Available',
+                  'Vehicle Type Not Matching',
+                  'Driver Wants More Details',
+                  'Driver Wants to Speak to Transporter',
+                  'Driver Wants Call Back Later',
+                  'Driver Requested Callback on WhatsApp',
+                  'Interview Done',
+                ];
+                final notConnectedOptions = [
+                  'Ringing – No Answer',
+                  'Switched Off',
+                  'Not Reachable',
+                  'Call Disconnected',
+                  'Number Busy',
+                  'Wrong Number',
+                  'Third Person Received – Asked to Call Later',
+                ];
+                final callBackOptions = [
+                  'Busy Right Now',
+                  'Call Tomorrow Morning',
+                  'Call in Evening',
+                  'Call After 2 Days',
+                ];
 
-  final List<_TabData> _tabs = [
-    _TabData(
-      label: 'Contact Info',
-      icon: Icons.contact_phone_rounded,
-      color: Color(0xFF2196F3),
-    ),
-    _TabData(
-      label: 'Professional',
-      icon: Icons.work_rounded,
-      color: Color(0xFF4CAF50),
-    ),
-    _TabData(
-      label: 'Application',
-      icon: Icons.description_rounded,
-      color: Color(0xFFFF9800),
-    ),
-    _TabData(
-      label: 'Documents',
-      icon: Icons.folder_rounded,
-      color: Color(0xFF9C27B0),
-    ),
-  ];
+                if (connectedOptions.any(
+                  (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+                )) {
+                  callStatus = 'connected';
+                } else if (notConnectedOptions.any(
+                  (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+                )) {
+                  callStatus = 'not_connected';
+                } else if (callBackOptions.any(
+                  (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+                )) {
+                  callStatus = 'callback_later';
+                }
+              }
 
-  @override
-  void dispose() {
-    _tabScrollController.dispose();
-    super.dispose();
-  }
+              // Extract just the option name (e.g., "Driver Interested" from "Connected: Driver Interested")
+              String callFeedback = feedback;
+              if (feedback.contains(':')) {
+                callFeedback = feedback.split(':').last.trim();
+              }
 
-  void _onTabTapped(int index) {
-    setState(() {
-      _selectedTabIndex = index;
-    });
+              print('🔵 Extracted call_status: $callStatus');
+              print('🔵 Extracted call_feedback: $callFeedback');
 
-    // Auto-scroll selected tab into view
-    if (_tabScrollController.hasClients) {
-      final double tabWidth = 130.0;
-      final double targetScroll = (index * (tabWidth + 8)) - 50;
-      _tabScrollController.animateTo(
-        targetScroll.clamp(0.0, _tabScrollController.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
-  }
+              await Phase2ApiService.updateIVRCallJobMatchingFeedback(
+                matchId: matchId,
+                callStatus: callStatus,
+                callFeedback: callFeedback,
+                callRemarks: notes,
+                matchStatus: matchStatus,
+              );
+            } else {
+              // Fallback to regular feedback save
+              print('⚠️ No matchId, using regular feedback save');
+              final callerId = await Phase2AuthService.getUserId();
+              await Phase2ApiService.saveCallFeedback(
+                callerId: callerId,
+                driverTmid: driver.driverTmid.isNotEmpty
+                    ? driver.driverTmid
+                    : null,
+                driverId: driver.driverId,
+                driverName: driver.name,
+                feedback: feedback,
+                matchStatus: matchStatus,
+                notes: notes,
+                jobId: widget.jobId,
+              );
+            }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
-        ),
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Feedback saved successfully'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+              _loadApplicants();
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
       ),
-      child: Column(
-        children: [
-          // Drag handle
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
+    );
+  }
+
+  void _showRejectConfirmation(DriverApplicant driver) {
+    // Extract numeric job ID from widget.jobId (e.g., "TMJB00593" -> 593)
+    int numericJobId = 0;
+    String jobIdStr = widget.jobId;
+    if (jobIdStr.startsWith('TMJB')) {
+      final numStr = jobIdStr
+          .replaceFirst('TMJB', '')
+          .replaceFirst(RegExp(r'^0+'), '');
+      numericJobId = int.tryParse(numStr) ?? 0;
+    } else {
+      numericJobId = int.tryParse(jobIdStr) ?? 0;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Reject Applicant',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Are you sure you want to reject ${driver.name}\'s application?',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey.shade600),
             ),
           ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                final callerId = await Phase2AuthService.getUserId();
 
-          // Header with name
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.driver.name,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.darkGray,
-                        ),
-                      ),
-                      Text(
-                        widget.driver.driverTmid.isNotEmpty
-                            ? widget.driver.driverTmid
-                            : 'ID: ${widget.driver.driverId}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: AppColors.softGray,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-          ),
+                print('🔴 Rejection params:');
+                print('   driver_id: ${driver.driverId}');
+                print('   job_id: $numericJobId');
+                print('   contractor_id (transporter): $_transporterUserId');
+                print('   assigned_id: $callerId');
 
-          // Single card with tabs and content
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                await Phase2ApiService.rejectJobApplicant(
+                  callerId: callerId,
+                  driverId: driver.driverId,
+                  jobId: numericJobId,
+                  driverTmid: driver.driverTmid,
+                  jobIdString: widget.jobId,
+                  contractorId:
+                      _transporterUserId, // transporter_id from job data
+                  reason: 'Rejected from applicants screen',
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Applicant rejected successfully'),
+                      backgroundColor: Colors.green,
                     ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // Horizontal scrollable tabs
-                    Container(
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F5F5),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          topRight: Radius.circular(16),
-                        ),
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Colors.grey.shade200,
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                      child: ListView.builder(
-                        controller: _tabScrollController,
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        itemCount: _tabs.length,
-                        itemBuilder: (context, index) {
-                          final tab = _tabs[index];
-                          final isSelected = _selectedTabIndex == index;
-
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: _buildTabChip(
-                              label: tab.label,
-                              icon: tab.icon,
-                              color: tab.color,
-                              isSelected: isSelected,
-                              onTap: () => _onTabTapped(index),
-                            ),
-                          );
-                        },
-                      ),
+                  );
+                  _loadApplicants();
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
                     ),
-
-                    // Content area
-                    Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        switchInCurve: Curves.easeIn,
-                        switchOutCurve: Curves.easeOut,
-                        transitionBuilder: (child, animation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0.1, 0),
-                                end: Offset.zero,
-                              ).animate(animation),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: _buildContent(_selectedTabIndex),
-                      ),
-                    ),
-
-                    // Call button
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context); // Close the sheet first
-                            widget.onCall(); // Then initiate call
-                          },
-                          icon: const Icon(
-                            Icons.call_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                          label: const Text(
-                            'Call Driver',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4CAF50),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
+            child: const Text('Reject'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTabChip({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? color : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? Colors.white : Colors.grey.shade600,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? Colors.white : Colors.grey.shade700,
+  Widget _buildSkeletonLoading() {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 6,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _ApplicantSkeletonCard(delay: index * 80),
+        );
+      },
+    );
+  }
+}
+
+// Skeleton Card for Applicants
+class _ApplicantSkeletonCard extends StatefulWidget {
+  final int delay;
+
+  const _ApplicantSkeletonCard({this.delay = 0});
+
+  @override
+  State<_ApplicantSkeletonCard> createState() => _ApplicantSkeletonCardState();
+}
+
+class _ApplicantSkeletonCardState extends State<_ApplicantSkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _animation = Tween<double>(
+      begin: -1.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    Future.delayed(Duration(milliseconds: widget.delay), () {
+      if (mounted) {
+        _controller.repeat();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade200, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
-            ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  // Avatar skeleton
+                  _buildShimmerCircle(size: 56),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildShimmer(width: 120, height: 15),
+                        const SizedBox(height: 6),
+                        _buildShimmer(width: 90, height: 12),
+                        const SizedBox(height: 6),
+                        _buildShimmer(width: 70, height: 12),
+                      ],
+                    ),
+                  ),
+                  _buildShimmer(width: 35, height: 35, borderRadius: 10),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Info chips row
+              Row(
+                children: [
+                  _buildShimmer(width: 80, height: 24, borderRadius: 8),
+                  const SizedBox(width: 8),
+                  _buildShimmer(width: 100, height: 24, borderRadius: 8),
+                  const Spacer(),
+                  _buildShimmer(width: 60, height: 24, borderRadius: 8),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildShimmer({
+    required double width,
+    required double height,
+    double borderRadius = 4,
+  }) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: const [
+            Color(0xFFEEEEEE),
+            Color(0xFFF8F8F8),
+            Color(0xFFEEEEEE),
+          ],
+          stops: [
+            (_animation.value - 1).clamp(0.0, 1.0),
+            _animation.value.clamp(0.0, 1.0),
+            (_animation.value + 1).clamp(0.0, 1.0),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildContent(int tabIndex) {
-    return SingleChildScrollView(
-      key: ValueKey(tabIndex),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: _getFieldsForTab(tabIndex).map((field) {
-          // Special styling for Job ID field
-          final isJobId = field.label == 'Job ID';
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  field.label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Job ID gets special chip styling
-                if (isJobId)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF5F5F5),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300, width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.badge_outlined,
-                          size: 18,
-                          color: Colors.grey.shade700,
-                        ),
-                        const SizedBox(width: 8),
-                        SelectableText(
-                          field.value,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: const Color(0xFF212121),
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Text(
-                    field.value,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: Color(0xFF212121),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-
-                const SizedBox(height: 8),
-                Divider(height: 1, color: Colors.grey.shade200),
-              ],
-            ),
-          );
-        }).toList(),
+  Widget _buildShimmerCircle({required double size}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: const [
+            Color(0xFFEEEEEE),
+            Color(0xFFF8F8F8),
+            Color(0xFFEEEEEE),
+          ],
+          stops: [
+            (_animation.value - 1).clamp(0.0, 1.0),
+            _animation.value.clamp(0.0, 1.0),
+            (_animation.value + 1).clamp(0.0, 1.0),
+          ],
+        ),
       ),
     );
   }
-
-  List<_FieldData> _getFieldsForTab(int tabIndex) {
-    final driver = widget.driver;
-
-    switch (tabIndex) {
-      case 0: // Contact Info - Mobile removed for privacy
-        return [
-          _FieldData('Email', driver.email.isNotEmpty ? driver.email : 'N/A'),
-          _FieldData('City', driver.city),
-          _FieldData('State', driver.state),
-        ];
-
-      case 1: // Professional
-        return [
-          _FieldData(
-            'Vehicle Type',
-            driver.vehicleType.isNotEmpty ? driver.vehicleType : 'N/A',
-          ),
-          _FieldData(
-            'Experience',
-            driver.drivingExperience.isNotEmpty
-                ? driver.drivingExperience
-                : 'N/A',
-          ),
-          _FieldData(
-            'License Type',
-            driver.licenseType.isNotEmpty ? driver.licenseType : 'N/A',
-          ),
-          _FieldData(
-            'License Number',
-            driver.licenseNumber.isNotEmpty ? driver.licenseNumber : 'N/A',
-          ),
-          _FieldData(
-            'Preferred Location',
-            driver.preferredLocation.isNotEmpty
-                ? driver.preferredLocation
-                : 'N/A',
-          ),
-        ];
-
-      case 2: // Application - Full Job ID and Job Title added
-        return [
-          _FieldData(
-            'Job ID',
-            'TMJB${driver.jobId.toString().padLeft(5, '0')}',
-          ),
-          _FieldData(
-            'Applied For',
-            driver.jobTitle.isNotEmpty ? driver.jobTitle : 'N/A',
-          ),
-          _FieldData('Applied Date', _formatDate(driver.appliedAt)),
-          _FieldData('Applied Time', _formatTime(driver.appliedAt)),
-          _FieldData(
-            'Status',
-            driver.status.isNotEmpty ? driver.status : 'N/A',
-          ),
-          if (driver.subscriptionStartDate != null &&
-              driver.subscriptionStartDate!.isNotEmpty)
-            _FieldData(
-              'Subscription',
-              _formatDate(driver.subscriptionStartDate!),
-            ),
-        ];
-
-      case 3: // Documents
-        return [
-          _FieldData(
-            'Aadhar',
-            driver.aadharNumber.isNotEmpty ? driver.aadharNumber : 'N/A',
-          ),
-          _FieldData(
-            'PAN',
-            driver.panNumber.isNotEmpty ? driver.panNumber : 'N/A',
-          ),
-          _FieldData(
-            'GST',
-            driver.gstNumber.isNotEmpty ? driver.gstNumber : 'N/A',
-          ),
-          _FieldData(
-            'Driving License',
-            driver.licenseNumber.isNotEmpty ? driver.licenseNumber : 'N/A',
-          ),
-        ];
-
-      default:
-        return [];
-    }
-  }
-
-  String _formatDate(String date) {
-    if (date.isEmpty) return 'N/A';
-
-    try {
-      DateTime dt;
-
-      if (date.contains('-')) {
-        dt = DateTime.parse(date);
-      } else if (date.contains('/')) {
-        final parts = date.split(' ')[0].split('/');
-        if (parts.length == 3) {
-          final day = int.parse(parts[0]);
-          final month = int.parse(parts[1]);
-          var year = int.parse(parts[2]);
-
-          if (year < 100) {
-            if (year > 50) {
-              year += 1900;
-            } else {
-              year += 2000;
-            }
-          }
-
-          dt = DateTime(year, month, day);
-        } else {
-          throw FormatException('Invalid date format');
-        }
-      } else {
-        dt = DateTime.parse(date);
-      }
-
-      var correctedYear = dt.year;
-
-      if (dt.year < 2020) {
-        correctedYear = DateTime.now().year;
-      }
-
-      return '${dt.day}/${dt.month}/$correctedYear';
-    } catch (e) {
-      return date;
-    }
-  }
-
-  String _formatTime(String date) {
-    if (date.isEmpty) return 'N/A';
-
-    try {
-      DateTime dt;
-
-      if (date.contains('-')) {
-        dt = DateTime.parse(date);
-      } else if (date.contains('/') && date.contains(' ')) {
-        final parts = date.split(' ');
-        if (parts.length >= 2) {
-          final datePart = parts[0].split('/');
-          final timePart = parts[1].split(':');
-
-          if (datePart.length == 3 && timePart.length >= 2) {
-            final day = int.parse(datePart[0]);
-            final month = int.parse(datePart[1]);
-            var year = int.parse(datePart[2]);
-            final hour = int.parse(timePart[0]);
-            final minute = int.parse(timePart[1]);
-
-            if (year < 100) {
-              year += (year > 50) ? 1900 : 2000;
-            }
-
-            dt = DateTime(year, month, day, hour, minute);
-          } else {
-            throw FormatException('Invalid datetime format');
-          }
-        } else {
-          throw FormatException('No time part found');
-        }
-      } else {
-        dt = DateTime.parse(date);
-      }
-
-      final hour = dt.hour;
-      final minute = dt.minute;
-      final period = hour >= 12 ? 'PM' : 'AM';
-      final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-      final formattedMinute = minute.toString().padLeft(2, '0');
-
-      return '$displayHour:$formattedMinute $period';
-    } catch (e) {
-      return 'N/A';
-    }
-  }
-}
-
-class _TabData {
-  final String label;
-  final IconData icon;
-  final Color color;
-
-  _TabData({required this.label, required this.icon, required this.color});
-}
-
-class _FieldData {
-  final String label;
-  final String value;
-
-  _FieldData(this.label, this.value);
-}
-
-class CurvedHeaderClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-
-    // Start from top-left corner
-    path.lineTo(0, 0);
-
-    // Draw top edge
-    path.lineTo(size.width, 0);
-
-    // Draw right edge to the curve start point
-    path.lineTo(size.width, size.height - 50);
-
-    // Create a simple rounded bottom curve
-    path.quadraticBezierTo(
-      size.width * 0.5, // Control point X (center)
-      size.height, // Control point Y (bottom)
-      0, // End point X (left edge)
-      size.height - 50, // End point Y
-    );
-
-    // Draw left edge back to start
-    path.lineTo(0, 0);
-
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

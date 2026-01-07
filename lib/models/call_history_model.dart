@@ -4,6 +4,8 @@ class CallHistoryLog {
   final String callerName;
   final String uniqueIdTransporter;
   final String uniqueIdDriver;
+  final int userIdTransporter;
+  final int userIdDriver;
   final String driverName;
   final String transporterName;
   final String driverMobile;
@@ -22,6 +24,8 @@ class CallHistoryLog {
     required this.callerName,
     required this.uniqueIdTransporter,
     required this.uniqueIdDriver,
+    required this.userIdTransporter,
+    required this.userIdDriver,
     required this.driverName,
     required this.transporterName,
     required this.driverMobile,
@@ -42,6 +46,8 @@ class CallHistoryLog {
       callerName: json['callerName'] ?? '',
       uniqueIdTransporter: json['uniqueIdTransporter'] ?? '',
       uniqueIdDriver: json['uniqueIdDriver'] ?? '',
+      userIdTransporter: json['userIdTransporter'] ?? 0,
+      userIdDriver: json['userIdDriver'] ?? 0,
       driverName: json['driverName'] ?? '',
       transporterName: json['transporterName'] ?? '',
       driverMobile: json['driverMobile'] ?? '',
@@ -51,13 +57,21 @@ class CallHistoryLog {
       remark: json['remark'] ?? '',
       jobId: json['jobId'] ?? '',
       callRecording: json['callRecording'] ?? '',
-      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.parse(
+        json['createdAt'] ?? DateTime.now().toIso8601String(),
+      ),
+      updatedAt: DateTime.parse(
+        json['updatedAt'] ?? DateTime.now().toIso8601String(),
+      ),
     );
   }
 
-  String get contactName => driverName.isNotEmpty ? driverName : transporterName;
-  String get contactId => uniqueIdDriver.isNotEmpty ? uniqueIdDriver : uniqueIdTransporter;
-  String get contactType => uniqueIdDriver.isNotEmpty ? 'Driver' : 'Transporter';
-  String get contactMobile => driverMobile.isNotEmpty ? driverMobile : transporterMobile;
+  String get contactName =>
+      driverName.isNotEmpty ? driverName : transporterName;
+  String get contactId =>
+      uniqueIdDriver.isNotEmpty ? uniqueIdDriver : uniqueIdTransporter;
+  String get contactType =>
+      uniqueIdDriver.isNotEmpty ? 'Driver' : 'Transporter';
+  String get contactMobile =>
+      driverMobile.isNotEmpty ? driverMobile : transporterMobile;
 }

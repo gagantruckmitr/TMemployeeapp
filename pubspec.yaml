@@ -48,6 +48,7 @@ dependencies:
   
   # Icons
   cupertino_icons: ^1.0.8
+  flutter_svg: ^2.0.10+1
   
   # File Picker
   file_picker: ^8.0.0+1
@@ -74,6 +75,16 @@ dependencies:
   
   # Image caching
   cached_network_image: ^3.3.1
+  
+  # State Management for Attendance
+  flutter_riverpod: ^2.4.9
+  
+  # Location services for Attendance
+  geolocator: ^12.0.0
+  geocoding: ^3.0.0
+  
+  # Camera for Attendance Selfie
+  image_picker: ^1.0.7
 
 dev_dependencies:
   flutter_test:
@@ -102,6 +113,7 @@ flutter:
   assets:
     - assets/lottie/
     - assets/images/
+    - assets/sounds/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

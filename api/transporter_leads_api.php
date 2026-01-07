@@ -552,9 +552,9 @@ function calculateTransporterProfileCompletion($pdo, $userId) {
         // CRITICAL: MUST MATCH profile_completion_helper.php for consistency
         // Avatar shows this %, profile details page shows helper.php %
         $requiredFields = [
-            'name', 'email', 'mobile', 'transport_name', 'year_of_establishment',
-            'fleet_size', 'operational_segment', 'average_km', 'city', 'states',
-            'images', 'address', 'pan_number', 'pan_image', 'gst_certificate'
+            'name', 'email', 'transport_name', 'year_of_establishment',
+            'fleet_size', 'operational_segment', 'average_km', 'city', 'images', 'address',
+            'pan_number', 'pan_image', 'gst_certificate'
         ];
         
         $filledFields = 0;

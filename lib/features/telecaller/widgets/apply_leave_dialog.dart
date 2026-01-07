@@ -20,7 +20,6 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now();
   final TextEditingController _reasonController = TextEditingController();
-  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -96,10 +95,8 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
-
+    // Call onSubmit immediately - no loading state needed
+    // The parent handles optimistic UI
     widget.onSubmit(
       _selectedLeaveType,
       _startDate,
@@ -438,7 +435,7 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _submit,
+                        onPressed: _submit,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryBlue,
                           disabledBackgroundColor: const Color(0xFFCBD5E1),
@@ -448,28 +445,19 @@ class _ApplyLeaveDialogState extends State<ApplyLeaveDialog> {
                           ),
                           elevation: 0,
                         ),
-                        child: _isSubmitting
-                            ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              )
-                            : const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.send_rounded, size: 18, color: Colors.white),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Submit Application',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.3,
-                                    ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                            SizedBox(width: 8),
+                            Text(
+                              'Submit Application',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.3,
+                              ),
                                   ),
                                 ],
                               ),

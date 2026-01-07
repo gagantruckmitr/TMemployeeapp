@@ -121,7 +121,7 @@ class _DriversScreenState extends State<DriversScreen> {
                 radius: 30,
                 backgroundColor: AppColors.primary.withOpacity(0.1),
                 child: Text(
-                  driver['name'].toString().substring(0, 1),
+                  (driver['name']?.toString() ?? '').isNotEmpty ? driver['name'].toString().substring(0, 1) : '?',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,

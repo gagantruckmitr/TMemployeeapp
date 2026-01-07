@@ -1,6 +1,7 @@
 import '../../models/smart_calling_models.dart';
 import 'api_service.dart';
 import 'easygo_ivr_service.dart';
+import 'today_leads_service.dart';
 
 class SmartCallingService {
   static SmartCallingService? _instance;
@@ -13,6 +14,7 @@ class SmartCallingService {
 
   // Cache variables for drivers
   List<DriverContact>? _cachedDrivers;
+  String? _cachedUserType;
   DateTime? _lastFetchTime;
 
   // Cache variables for transporters
@@ -46,23 +48,72 @@ class SmartCallingService {
     int offset = 0,
     String? search,
     String? status,
+    String? userType, // 'driver' or 'transporter' for match-making
+    bool useElechamps = false, // Use elechamps API
+    String? adminId, // Admin ID for elechamps API
   }) async {
     // Check if we need to refresh cache
+    final targetUserType = userType ?? 'driver';
     final now = DateTime.now();
     final shouldRefresh =
         forceRefresh ||
         _cachedDrivers == null ||
         _lastFetchTime == null ||
+        _cachedUserType != targetUserType ||
         now.difference(_lastFetchTime!) > cacheTimeout;
 
     if (shouldRefresh) {
-      // Get fresh leads (uncalled drivers only)
-      _cachedDrivers = await ApiService.getFreshLeads(limit: limit);
+      // NOTE: ApiService.getFreshLeads has been removed (API deleted)
+      // Now using TodayLeadsService as the primary data source
+
+      // Get today's leads from new API (primary source)
+      final todayLeads = await _getTodayLeadsAsDriverContacts(targetUserType);
+
+      // Get elechamps leads if requested
+      List<DriverContact> elechampsLeads = [];
+      if (useElechamps && adminId != null) {
+        try {
+          elechampsLeads = await ApiService.getElechampsLeads(
+            adminId: adminId,
+            limit: limit,
+          );
+          print('📊 Fetched ${elechampsLeads.length} leads from elechamps API');
+        } catch (e) {
+          print('⚠️ Failed to fetch elechamps leads: $e');
+        }
+      }
+
+      // Merge all lists, removing duplicates by ID
+      final allLeads = <String, DriverContact>{};
+
+      // Add today's leads first (primary source)
+      for (final lead in todayLeads) {
+        allLeads[lead.id] = lead;
+      }
+
+      // Add elechamps leads (will override if same ID)
+      for (final lead in elechampsLeads) {
+        allLeads[lead.id] = lead;
+      }
+
+      _cachedDrivers = allLeads.values.toList();
+      _cachedUserType = targetUserType;
       _lastFetchTime = now;
+
+      print(
+        '📊 Merged leads: ${todayLeads.length} from today + ${elechampsLeads.length} from elechamps = ${_cachedDrivers!.length} total',
+      );
     }
 
     // Apply local filters if needed
     var filteredDrivers = _cachedDrivers ?? [];
+
+    // Extra safety: Filter out transporters from driver list based on TMID
+    // This catches any that might have slipped through API service filtering
+    filteredDrivers = filteredDrivers.where((d) {
+      final tmid = d.tmid.toUpperCase();
+      return !(tmid.contains('TR') && !tmid.contains('DR'));
+    }).toList();
 
     if (search != null && search.isNotEmpty) {
       filteredDrivers = filteredDrivers.where((driver) {
@@ -73,6 +124,70 @@ class SmartCallingService {
     }
 
     return filteredDrivers;
+  }
+
+  // Get elechamps leads directly (convenience method)
+  Future<List<DriverContact>> getElechampsLeads({
+    required String adminId,
+    int limit = 50,
+  }) async {
+    try {
+      return await ApiService.getElechampsLeads(adminId: adminId, limit: limit);
+    } catch (e) {
+      print('Failed to fetch elechamps leads: $e');
+      return [];
+    }
+  }
+
+  // Helper method to get today's leads as DriverContact objects
+  Future<List<DriverContact>> _getTodayLeadsAsDriverContacts(
+    String userType,
+  ) async {
+    try {
+      final todayLeadsService = TodayLeadsService.instance;
+      final leads = await todayLeadsService.getTodayLeads();
+
+      // Filter by user type (driver or transporter)
+      final filteredLeads = leads
+          .where((lead) => lead.role == userType)
+          .toList();
+
+      // Convert to DriverContact
+      return filteredLeads.map((lead) {
+        // Convert UTC to IST (UTC+5:30)
+        DateTime? registrationDate;
+        if (lead.createdAt.isNotEmpty) {
+          final utcDate = DateTime.tryParse(lead.createdAt);
+          if (utcDate != null) {
+            // Convert to IST by adding 5 hours and 30 minutes
+            registrationDate = utcDate.add(
+              const Duration(hours: 5, minutes: 30),
+            );
+          }
+        }
+
+        return DriverContact(
+          id: lead.id.toString(),
+          tmid: lead.uniqueId,
+          name: lead.nameEng,
+          company: lead.role == 'driver' ? 'Driver' : 'Transporter',
+          phoneNumber: lead.mobile,
+          state: lead.states ?? '0',
+          subscriptionStatus: SubscriptionStatus.inactive,
+          status: CallStatus.pending,
+          role: lead.role,
+          registrationDate: registrationDate,
+          profileCompletion: ProfileCompletion(
+            percentage: lead.driverCompletion,
+            documentStatus: {},
+          ),
+          assignedTelecaller: lead.assignedAdmin?.name,
+        );
+      }).toList();
+    } catch (e) {
+      print('⚠️ Error fetching today\'s leads: $e');
+      return [];
+    }
   }
 
   // Get drivers by category
@@ -113,6 +228,13 @@ class SmartCallingService {
         return [];
 
       case NavigationSection.profile:
+      case NavigationSection.welcomeCall:
+      case NavigationSection.tollFree:
+      case NavigationSection.jobMatching:
+      case NavigationSection.callbackRequest:
+      case NavigationSection.socialMediaLeads:
+      case NavigationSection.settings:
+        // These are navigation-only sections, no driver data
         return [];
     }
   }
@@ -122,13 +244,23 @@ class SmartCallingService {
     final allDrivers = await getDrivers();
     final counts = <NavigationSection, int>{};
 
+    // Only count for sections that have driver data
+    final countableSections = [
+      NavigationSection.home,
+      NavigationSection.interested,
+      NavigationSection.connectedCalls,
+      NavigationSection.callBacks,
+      NavigationSection.callBackLater,
+      NavigationSection.pendingCalls,
+    ];
+
     for (final section in NavigationSection.values) {
-      if (section == NavigationSection.profile) {
-        counts[section] = 0; // Profile has no count
-      } else {
+      if (countableSections.contains(section)) {
         counts[section] = allDrivers.where((contact) {
           return ContactCategorizer.getCategoryForContact(contact) == section;
         }).length;
+      } else {
+        counts[section] = 0; // Navigation-only sections have no count
       }
     }
 
@@ -226,16 +358,20 @@ class SmartCallingService {
     }
   }
 
-  // Initiate EasyGo IVR call (New Integration)
+  // Initiate EasyGo IVR call (New Integration - Live API)
   Future<Map<String, dynamic>> initiateEasyGoIVR({
     required String telecallerPhone,
     required String clientPhone,
     required String callerId,
     required String contactId,
-    String contactType = 'driver',
+    required String tmid, // Added TMID requirement
+    String contactType =
+        'driver', // Kept for backward compat in signature, but unused in new service if not needed
     String? driverName,
     String duration = '',
     String? callSource,
+    String process =
+        'welcome', // Process type: 'welcome', 'tollfree', 'transporter', etc.
   }) async {
     try {
       return await EasyGoIVRService.initiateCall(
@@ -243,13 +379,45 @@ class SmartCallingService {
         number: clientPhone,
         callerId: callerId,
         contactId: contactId,
-        contactType: contactType,
+        tmid: tmid,
         driverName: driverName,
-        duration: duration,
         callSource: callSource,
+        process: process,
       );
     } catch (e) {
       print('Failed to initiate EasyGo IVR: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // Initiate Job Matching IVR call (for job applicants)
+  Future<Map<String, dynamic>> initiateJobMatchingCall({
+    required String uniqueIdTransporter,
+    required String uniqueIdDriver,
+    required int userIdTransporter,
+    required int userIdDriver,
+    required int assignedTo,
+    required String jobId,
+    required String transporterName,
+    required String driverName,
+    required String exten,
+    required String number,
+  }) async {
+    try {
+      return await EasyGoIVRService.initiateJobMatchingCall(
+        uniqueIdTransporter: uniqueIdTransporter,
+        uniqueIdDriver: uniqueIdDriver,
+        userIdTransporter: userIdTransporter,
+        userIdDriver: userIdDriver,
+        assignedTo: assignedTo,
+        jobId: jobId,
+        transporterName: transporterName,
+        driverName: driverName,
+        exten: exten,
+        number: number,
+      );
+    } catch (e) {
+      print('Failed to initiate job matching call: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
@@ -286,7 +454,30 @@ class SmartCallingService {
     }
   }
 
-  // Update call feedback after completion
+  // Update EasyGo Call Feedback (New Live API)
+  Future<bool> updateEasyGoCallFeedback({
+    required int callId,
+    required String status,
+    required String feedback,
+    String? remarks,
+    String? recordingFile,
+  }) async {
+    try {
+      final result = await EasyGoIVRService.updateCall(
+        callId: callId,
+        status: status,
+        feedback: feedback,
+        remarks: remarks,
+        recordingFile: recordingFile,
+      );
+      return result['success'] == true;
+    } catch (e) {
+      print('Failed to update EasyGo call feedback: $e');
+      return false;
+    }
+  }
+
+  // Update call feedback after completion (Legacy/Click2Call)
   Future<bool> updateCallFeedback({
     required String referenceId,
     required String callStatus,
@@ -325,6 +516,7 @@ class SmartCallingService {
   Future<List<TransporterContact>> getTransporters({
     bool forceRefresh = false,
     int limit = 50,
+    String? userType, // 'transporter' for match-making
   }) async {
     final now = DateTime.now();
     final shouldRefresh =
@@ -335,8 +527,40 @@ class SmartCallingService {
 
     if (shouldRefresh) {
       try {
-        _cachedTransporters = await ApiService.getTransporters(limit: limit);
+        final apiTransporters = await ApiService.getTransporters(
+          limit: limit,
+          userType: userType,
+        );
+
+        // Get today's transporter leads
+        final todayTransporters = await _getTodayLeadsAsTransporterContacts();
+
+        // Merge both lists, removing duplicates by ID
+        final allTransporters = <String, TransporterContact>{};
+
+        // Add API transporters first
+        for (final transporter in apiTransporters) {
+          allTransporters[transporter.id] = transporter;
+        }
+
+        // Add today's transporters (will override if same ID)
+        for (final transporter in todayTransporters) {
+          allTransporters[transporter.id] = transporter;
+        }
+
+        _cachedTransporters = allTransporters.values.toList();
+
+        // Extra safety: Filter out drivers from transporter list based on TMID
+        _cachedTransporters = _cachedTransporters?.where((t) {
+          final tmid = t.tmid.toUpperCase();
+          return !(tmid.contains('DR') && !tmid.contains('TR'));
+        }).toList();
+
         _lastTransporterFetchTime = now;
+
+        print(
+          '📊 Merged transporters: ${apiTransporters.length} from API + ${todayTransporters.length} from today = ${_cachedTransporters!.length} total',
+        );
       } catch (e) {
         print('Failed to fetch transporters: $e');
         _cachedTransporters = [];
@@ -344,6 +568,53 @@ class SmartCallingService {
     }
 
     return _cachedTransporters ?? [];
+  }
+
+  // Helper method to get today's transporter leads as TransporterContact objects
+  Future<List<TransporterContact>> _getTodayLeadsAsTransporterContacts() async {
+    try {
+      final todayLeadsService = TodayLeadsService.instance;
+      final leads = await todayLeadsService.getTodayLeads();
+
+      // Filter only transporters
+      final transporterLeads = leads
+          .where((lead) => lead.role == 'transporter')
+          .toList();
+
+      // Convert to TransporterContact
+      return transporterLeads.map((lead) {
+        // Convert UTC to IST (UTC+5:30)
+        DateTime? registrationDate;
+        if (lead.createdAt.isNotEmpty) {
+          final utcDate = DateTime.tryParse(lead.createdAt);
+          if (utcDate != null) {
+            // Convert to IST by adding 5 hours and 30 minutes
+            registrationDate = utcDate.add(
+              const Duration(hours: 5, minutes: 30),
+            );
+          }
+        }
+
+        return TransporterContact(
+          id: lead.id.toString(),
+          tmid: lead.uniqueId,
+          name: lead.nameEng,
+          company: 'Transporter',
+          phoneNumber: lead.mobile,
+          state: lead.states ?? '0',
+          subscriptionStatus: SubscriptionStatus.inactive,
+          status: CallStatus.pending,
+          registrationDate: registrationDate,
+          profileCompletion: ProfileCompletion(
+            percentage: lead.driverCompletion,
+            documentStatus: {},
+          ),
+        );
+      }).toList();
+    } catch (e) {
+      print('⚠️ Error fetching today\'s transporter leads: $e');
+      return [];
+    }
   }
 
   // Update transporter call status
@@ -388,6 +659,7 @@ class SmartCallingService {
   void clearCache() {
     _cachedDrivers = null;
     _cachedTransporters = null;
+    _cachedUserType = null;
     _lastFetchTime = null;
     _lastTransporterFetchTime = null;
   }
@@ -407,17 +679,17 @@ class SmartCallingService {
       case CallStatus.connected:
         return 'connected';
       case CallStatus.callBack:
-        return 'callback';
+        return 'callback_later';
       case CallStatus.callBackLater:
         return 'callback_later';
       case CallStatus.notReachable:
-        return 'not_reachable';
+        return 'not_connected';
       case CallStatus.notInterested:
-        return 'not_interested';
+        return 'connected';
       case CallStatus.invalid:
-        return 'invalid';
+        return 'not_connected';
       case CallStatus.pending:
-        return 'pending';
+        return 'not_connected';
     }
   }
 
@@ -452,6 +724,8 @@ class SmartCallingService {
     String? feedback,
     String? remarks,
     String? search,
+    DateTime? dateFrom,
+    DateTime? dateTo,
     int limit = 1000,
   }) async {
     try {
@@ -460,6 +734,8 @@ class SmartCallingService {
         feedback: feedback,
         remarks: remarks,
         search: search,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
         limit: limit,
       );
     } catch (e) {
@@ -485,6 +761,29 @@ class SmartCallingService {
       );
     } catch (e) {
       print('Failed to update call history feedback: $e');
+      return false;
+    }
+  }
+
+  // Update call history feedback by user ID (finds most recent call log)
+  Future<bool> updateCallHistoryFeedbackByUserId({
+    required String userId,
+    required String callerId,
+    required CallStatus status,
+    String? feedback,
+    String? remarks,
+  }) async {
+    try {
+      final statusString = _mapCallStatusToString(status);
+      return await ApiService.updateCallHistoryFeedbackByUserId(
+        userId: userId,
+        callerId: callerId,
+        callStatus: statusString,
+        feedback: feedback,
+        remarks: remarks,
+      );
+    } catch (e) {
+      print('Failed to update call history feedback by user ID: $e');
       return false;
     }
   }

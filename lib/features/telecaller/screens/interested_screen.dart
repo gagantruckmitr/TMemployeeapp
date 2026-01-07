@@ -6,6 +6,7 @@ import '../../../core/services/smart_calling_service.dart';
 import '../widgets/driver_contact_card.dart';
 import '../widgets/call_feedback_modal.dart';
 import '../widgets/tab_page_header.dart';
+import '../../../widgets/error_handler.dart';
 
 class InterestedScreen extends StatefulWidget {
   const InterestedScreen({super.key});
@@ -47,13 +48,15 @@ class _InterestedScreenState extends State<InterestedScreen>
 
   Future<void> _loadInterestedContactsAsync() async {
     if (!mounted) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       // Force refresh to get latest data
-      final contacts = await SmartCallingService.instance.getDriversByCategory(NavigationSection.interested);
-      
+      final contacts = await SmartCallingService.instance.getDriversByCategory(
+        NavigationSection.interested,
+      );
+
       if (mounted) {
         setState(() {
           _interestedContacts = contacts;
@@ -72,14 +75,16 @@ class _InterestedScreenState extends State<InterestedScreen>
 
   Future<void> _refreshData() async {
     if (_isRefreshing) return;
-    
+
     setState(() => _isRefreshing = true);
-    
+
     try {
       // Clear cache and fetch fresh data
       SmartCallingService.instance.clearCache();
-      final contacts = await SmartCallingService.instance.getDriversByCategory(NavigationSection.interested);
-      
+      final contacts = await SmartCallingService.instance.getDriversByCategory(
+        NavigationSection.interested,
+      );
+
       if (mounted) {
         setState(() {
           _interestedContacts = contacts;
@@ -89,13 +94,7 @@ class _InterestedScreenState extends State<InterestedScreen>
     } catch (e) {
       if (mounted) {
         setState(() => _isRefreshing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to refresh: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ErrorHandler.showError(context, e, onRetry: _refreshData);
       }
     }
   }
@@ -112,17 +111,20 @@ class _InterestedScreenState extends State<InterestedScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => CallFeedbackModal(
         contact: contact,
-        onFeedbackSubmitted: (feedback) {
-          _handleFeedbackSubmitted(contact, feedback);
+        onFeedbackSubmitted: (feedback) async {
+          await _handleFeedbackSubmitted(contact, feedback);
           Navigator.of(context).pop();
         },
       ),
     );
   }
 
-  Future<void> _handleFeedbackSubmitted(DriverContact contact, CallFeedback feedback) async {
+  Future<void> _handleFeedbackSubmitted(
+    DriverContact contact,
+    CallFeedback feedback,
+  ) async {
     if (_interestedContacts == null) return;
-    
+
     // Show loading indicator
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -150,7 +152,7 @@ class _InterestedScreenState extends State<InterestedScreen>
 
     // Build complete feedback text with all details
     final feedbackText = _buildCompleteFeedbackText(feedback);
-    
+
     // Update via API with complete feedback
     final success = await SmartCallingService.instance.updateCallStatus(
       driverId: contact.id,
@@ -162,14 +164,16 @@ class _InterestedScreenState extends State<InterestedScreen>
     if (success) {
       // Update local state
       setState(() {
-        final index = _interestedContacts!.indexWhere((c) => c.id == contact.id);
+        final index = _interestedContacts!.indexWhere(
+          (c) => c.id == contact.id,
+        );
         if (index != -1) {
           _interestedContacts![index] = contact.copyWith(
             status: feedback.status,
             lastFeedback: feedbackText,
             lastCallTime: DateTime.now(),
           );
-          
+
           // Remove from interested if status changed
           if (feedback.status != CallStatus.connected ||
               !_isInterestedFeedback(feedback)) {
@@ -177,7 +181,7 @@ class _InterestedScreenState extends State<InterestedScreen>
           }
         }
       });
-      
+
       if (mounted) {
         HapticFeedback.lightImpact();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -186,9 +190,7 @@ class _InterestedScreenState extends State<InterestedScreen>
               children: [
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Text('Updated ${contact.name}\n$feedbackText'),
-                ),
+                Expanded(child: Text('Updated ${contact.name}\n$feedbackText')),
               ],
             ),
             backgroundColor: Colors.green,
@@ -216,19 +218,19 @@ class _InterestedScreenState extends State<InterestedScreen>
 
   bool _isInterestedFeedback(CallFeedback feedback) {
     if (feedback.connectedFeedback == null) return false;
-    
+
     final feedbackText = feedback.connectedFeedback!.displayName;
     return feedbackText.contains('Agree') ||
-           feedbackText.contains('Demo') ||
-           feedbackText.contains('Subscribe');
+        feedbackText.contains('Demo') ||
+        feedbackText.contains('Subscribe');
   }
 
   String _buildCompleteFeedbackText(CallFeedback feedback) {
     final parts = <String>[];
-    
+
     // Add status
     parts.add('Status: ${feedback.status.name}');
-    
+
     // Add specific feedback based on status
     if (feedback.connectedFeedback != null) {
       parts.add('Feedback: ${feedback.connectedFeedback!.displayName}');
@@ -237,19 +239,19 @@ class _InterestedScreenState extends State<InterestedScreen>
     } else if (feedback.callBackTime != null) {
       parts.add('Time: ${feedback.callBackTime!.displayName}');
     }
-    
+
     // Add remarks if present
     if (feedback.remarks != null && feedback.remarks!.isNotEmpty) {
       parts.add('Notes: ${feedback.remarks}');
     }
-    
+
     return parts.join(' | ');
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     final totalInterested = _interestedContacts?.length ?? 0;
 
     return Scaffold(
@@ -286,7 +288,6 @@ class _InterestedScreenState extends State<InterestedScreen>
       ),
     );
   }
-
 }
 
 // Optimized separate widgets to prevent unnecessary rebuilds
@@ -357,9 +358,7 @@ class _EmptyStateWidget extends StatelessWidget {
           Text(
             'Contacts showing interest in subscription\nwill appear here',
             textAlign: TextAlign.center,
-            style: AppTheme.bodyLarge.copyWith(
-              color: Colors.grey.shade500,
-            ),
+            style: AppTheme.bodyLarge.copyWith(color: Colors.grey.shade500),
           ),
         ],
       ),
@@ -372,8 +371,6 @@ class _LoadingWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(),
-    );
+    return const Center(child: CircularProgressIndicator());
   }
 }

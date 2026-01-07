@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,12 +7,14 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:http/http.dart' as http;
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/constants.dart';
+import '../../core/config/api_config.dart';
 import '../../models/dummy_models.dart';
 import '../../models/smart_calling_models.dart';
 import '../../routes/app_router.dart';
-import 'widgets/smart_call_button.dart';
 import 'widgets/call_type_selection_dialog.dart';
 import 'widgets/ivr_call_waiting_overlay.dart';
 import '../../core/services/real_auth_service.dart';
@@ -19,10 +22,14 @@ import '../../core/services/telecaller_service.dart';
 import '../../core/services/activity_tracker_service.dart';
 import '../../core/services/smart_calling_service.dart';
 import 'screens/search_users_screen.dart';
-import 'screens/pending_calls_screen.dart';
+
 import 'performance_analytics_page.dart';
 import '../../core/services/subscription_service.dart';
 import 'subscriptions/subscriptions_screen.dart';
+import '../../core/services/today_leads_service.dart';
+import 'screens/fresh_leads_screen.dart';
+import 'screens/backlog_screen.dart';
+import 'screens/profile_completion_screen.dart';
 
 class DashboardPage extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
@@ -50,6 +57,12 @@ class _DashboardPageState extends State<DashboardPage>
   // Dynamic data
   Map<String, int> _dashboardStats = {};
   int _totalSubscriptions = 0;
+  double _totalRevenue = 0.0;
+  String _selectedPeriod = 'today'; // today, week, month, all
+  List<TodayLead> _todayLeads = [];
+  bool _isLoadingLeads = false;
+  bool _isLoadingKPIs = true; // For skeleton loading
+  int _realBacklogCount = 0;
 
   @override
   bool get wantKeepAlive => true;
@@ -80,23 +93,43 @@ class _DashboardPageState extends State<DashboardPage>
   Future<void> _loadDashboardData() async {
     if (!mounted) return;
 
-    // Loading dashboard data
+    // Set loading state for skeleton
+    setState(() {
+      _isLoadingKPIs = true;
+    });
 
     try {
-      // Load stats from telecaller service
-      final stats = await TelecallerService.instance.getDashboardStats();
-      print('📊 Dashboard Stats Loaded: $stats');
+      // Load stats from telecaller service with period filter
+      final stats = await TelecallerService.instance.getDashboardStats(
+        period: _selectedPeriod,
+      );
+      print('📊 Dashboard Stats Loaded ($_selectedPeriod): $stats');
 
       // Load subscription stats
-      final subscriptionStats = await SubscriptionService.instance.getSubscriptionStats();
-      print('💳 Subscription Stats Loaded: ${subscriptionStats?.totalSubscriptions ?? 0}');
+      final subscriptionStats = await SubscriptionService.instance
+          .getSubscriptionStats();
+      print(
+        '💳 Subscription Stats Loaded: ${subscriptionStats?.totalSubscriptions ?? 0}',
+      );
+      print('💰 Total Revenue: ₹${subscriptionStats?.totalRevenue ?? 0}');
+
+      // Load today's leads (await to ensure leads are loaded before UI update)
+      await _loadTodayLeads();
+
+      // Load real backlog count
+      await _loadBacklogCount();
 
       if (mounted) {
         setState(() {
           _dashboardStats = stats;
-          _totalSubscriptions = subscriptionStats?.totalSubscriptions ?? 0;
+          // Always show TODAY's subscriptions in the KPI card
+          _totalSubscriptions = subscriptionStats?.todaySubscriptions ?? 0;
+          _totalRevenue = subscriptionStats?.todayRevenue ?? 0.0;
+          _isLoadingKPIs = false; // Done loading
         });
         print('✅ Dashboard UI Updated with stats');
+        print('💳 Today Subscriptions: $_totalSubscriptions');
+        print('💰 Today Revenue: ₹$_totalRevenue');
 
         // Show message if no data
         if (stats['total_calls'] == 0) {
@@ -112,11 +145,14 @@ class _DashboardPageState extends State<DashboardPage>
     } catch (e) {
       print('❌ Error loading dashboard stats: $e');
       if (mounted) {
+        setState(() {
+          _isLoadingKPIs = false; // Stop loading on error
+        });
         // Get user-friendly error message
         String errorMessage = 'Unable to load dashboard';
         final errorString = e.toString().toLowerCase();
-        
-        if (errorString.contains('socket') || 
+
+        if (errorString.contains('socket') ||
             errorString.contains('failed host lookup') ||
             errorString.contains('network')) {
           errorMessage = 'No internet connection';
@@ -152,6 +188,84 @@ class _DashboardPageState extends State<DashboardPage>
     }
   }
 
+  Future<void> _loadTodayLeads() async {
+    if (!mounted) return;
+
+    _isLoadingLeads = true;
+
+    try {
+      final leads = await TodayLeadsService.instance.getTodayLeads();
+      print('📋 Today Leads Loaded: ${leads.length} leads');
+
+      if (mounted) {
+        _todayLeads = leads;
+        _isLoadingLeads = false;
+      }
+    } catch (e) {
+      print('❌ Error loading today leads: $e');
+      if (mounted) {
+        _isLoadingLeads = false;
+      }
+    }
+  }
+
+  Future<void> _loadBacklogCount() async {
+    if (!mounted) return;
+
+    try {
+      final currentUser = RealAuthService.instance.currentUser;
+      final token = await RealAuthService.instance.getAuthToken();
+
+      if (currentUser == null || token == null) {
+        print('❌ Cannot load backlog: User not logged in or no token');
+        return;
+      }
+
+      final callerId = int.tryParse(currentUser.id) ?? 1;
+
+      // Use Laravel API - same as backlog_screen.dart
+      final url =
+          'https://truckmitr.com/api/telehead/withoutCallHistory?admin_id=$callerId';
+
+      print('🔍 Loading backlog count from Laravel API: $url');
+
+      final response = await http
+          .get(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(ApiConfig.timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        // Laravel API returns: {"success": true, "total": 477, "data": [...]}
+        if (data is Map && data['success'] == true) {
+          final backlogCount = data['total'] ?? 0;
+          print('✅ Backlog count from Laravel API: $backlogCount');
+
+          if (mounted) {
+            setState(() {
+              _realBacklogCount = backlogCount;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Error loading backlog count: $e');
+      // Don't show error to user, just use 0 as fallback
+      if (mounted) {
+        setState(() {
+          _realBacklogCount = 0;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
@@ -179,6 +293,62 @@ class _DashboardPageState extends State<DashboardPage>
       return nameParts.first;
     }
     return 'User';
+  }
+
+  // Build profile avatar with photo or initials
+  Widget _buildProfileAvatar() {
+    final user = RealAuthService.instance.currentUser;
+    final photoUrl = user?.photoUrl;
+    final userName = _getUserName();
+
+    if (photoUrl != null && photoUrl.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: photoUrl,
+        fit: BoxFit.cover,
+        width: 36,
+        height: 36,
+        placeholder: (context, url) => Container(
+          color: AppTheme.primaryColor,
+          child: Center(
+            child: Text(
+              userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        errorWidget: (context, url, error) => Container(
+          color: AppTheme.primaryColor,
+          child: Center(
+            child: Text(
+              userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: AppTheme.primaryColor,
+      child: Center(
+        child: Text(
+          userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
   }
 
   // Calculate success rate
@@ -263,6 +433,20 @@ class _DashboardPageState extends State<DashboardPage>
 
                       const SizedBox(height: 20),
 
+                      // Today's Workflow Heading
+                      Center(
+                        child: Text(
+                          "Today's Workflow",
+                          style: AppTheme.headingMedium.copyWith(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.black,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
                       // KPI Cards in horizontal scroll
                       _buildKPICardsSection(),
 
@@ -270,6 +454,11 @@ class _DashboardPageState extends State<DashboardPage>
 
                       // Smart Calling Card
                       _buildSmartCallingCard(),
+
+                      const SizedBox(height: 16),
+
+                      // Profile Completion Card
+                      _buildProfileCompletionCard(),
 
                       const SizedBox(height: 20),
 
@@ -283,13 +472,11 @@ class _DashboardPageState extends State<DashboardPage>
 
                       const SizedBox(height: 20),
 
-                      // Performance Section
-                      _buildPerformanceSection(),
-
+                      // // Performance Section
+                      // _buildPerformanceSection(),
                       const SizedBox(height: 20),
 
                       // Follow-ups Section
-                      _buildFollowupsSection(),
                     ],
                   ),
                 ),
@@ -306,12 +493,11 @@ class _DashboardPageState extends State<DashboardPage>
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        // Add minimal shadow to ensure it appears above scrollable content
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -319,18 +505,16 @@ class _DashboardPageState extends State<DashboardPage>
         bottom: false,
         child: Column(
           children: [
-            // Top navigation bar with menu, title, and profile
+            // Slim top navigation bar
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  // Menu button - flat design, no shadow
+                  // Menu button
                   Container(
-                        width: 40,
-                        height: 40,
-                        decoration: const BoxDecoration(
-                          color: Colors.white, // Flat white background
-                        ),
+                        width: 36,
+                        height: 36,
+                        decoration: const BoxDecoration(color: Colors.white),
                         child: IconButton(
                           icon: Icon(
                             Icons.menu_rounded,
@@ -345,18 +529,35 @@ class _DashboardPageState extends State<DashboardPage>
                       .fadeIn(duration: 600.ms)
                       .scale(begin: const Offset(0.8, 0.8)),
 
-                  // Expanded center section for "Home" title
+                  const SizedBox(width: 12),
+
+                  // User name and greeting stacked
                   Expanded(
-                    child: Center(
-                      child: Text(
-                        'Home',
-                        style: AppTheme.headingMedium.copyWith(
-                          color: Colors.grey.shade800,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                        ),
-                      ).animate().fadeIn(duration: 600.ms, delay: 200.ms),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Hi ${_getUserName()}!',
+                          style: AppTheme.headingMedium.copyWith(
+                            color: AppTheme.primaryColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                            height: 1.2,
+                          ),
+                        ).animate().fadeIn(duration: 600.ms, delay: 200.ms),
+                        const SizedBox(height: 2),
+                        Text(
+                          _getGreeting(),
+                          style: AppTheme.bodyMedium.copyWith(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            height: 1.2,
+                          ),
+                        ).animate().fadeIn(duration: 600.ms, delay: 400.ms),
+                      ],
                     ),
                   ),
 
@@ -364,32 +565,23 @@ class _DashboardPageState extends State<DashboardPage>
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Notification bell - flat design
+                      // Notification bell
                       Container(
-                            width: 40,
-                            height: 40,
+                            width: 36,
+                            height: 36,
                             decoration: const BoxDecoration(
-                              color: Colors.white, // Flat white background
+                              color: Colors.white,
                             ),
                             child: Stack(
                               children: [
-                                Center(
-                                  child: Icon(
-                                    Icons.notifications_none_rounded,
-                                    color: Colors.grey.shade700,
-                                    size: 20,
-                                  ),
-                                ),
-                                // Red notification dot
-                                Positioned(
-                                  top: 10,
-                                  right: 10,
-                                  child: Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
+                                const Center(child: Text('')),
+                                const SizedBox(height: 4),
+                                const Center(
+                                  child: Text(
+                                    'V. 06',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Color.fromARGB(255, 0, 0, 0),
                                     ),
                                   ),
                                 ),
@@ -400,31 +592,21 @@ class _DashboardPageState extends State<DashboardPage>
                           .fadeIn(duration: 600.ms, delay: 400.ms)
                           .scale(begin: const Offset(0.8, 0.8)),
 
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
 
-                      // Profile avatar
+                      // Profile avatar with photo
                       GestureDetector(
                             onTap: _navigateToProfile,
                             child: Container(
-                              width: 40,
-                              height: 40,
+                              width: 36,
+                              height: 36,
                               decoration: BoxDecoration(
                                 color: AppTheme.primaryColor,
-                                borderRadius: BorderRadius.circular(
-                                  20,
-                                ), // Circular avatar
+                                borderRadius: BorderRadius.circular(18),
                               ),
-                              child: Center(
-                                child: Text(
-                                  _getUserName().isNotEmpty
-                                      ? _getUserName()[0].toUpperCase()
-                                      : 'U',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(18),
+                                child: _buildProfileAvatar(),
                               ),
                             ),
                           )
@@ -437,61 +619,76 @@ class _DashboardPageState extends State<DashboardPage>
               ),
             ),
 
-            // Greeting section - left aligned below menu button
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                24,
-                8,
-                16,
-                16,
-              ), // Left padding for alignment below menu
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _buildGreetingSection(),
-              ),
-            ),
+            // Period filter chips
+            // Padding(
+            //   padding: const EdgeInsets.fromLTRB(20, 8, 16, 16),
+            //   child: _buildPeriodFilter(),
+            // ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGreetingSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-              'Hi ${_getUserName()}!',
-              style: AppTheme.headingLarge.copyWith(
-                color: AppTheme.primaryColor, // Blue color as requested
-                fontSize: 26, // Increased font size for wider look
-                fontWeight: FontWeight.w800, // Made it bolder
-                letterSpacing:
-                    -0.3, // Slightly reduced letter spacing for better width
-                height: 1.1,
-              ),
-            )
-            .animate()
-            .fadeIn(duration: 600.ms, delay: 200.ms)
-            .slideY(begin: 0.3, end: 0),
+  // Widget _buildPeriodFilter() {
+  //   final periods = [
+  //     {'value': 'today', 'label': 'Today'},
+  //     {'value': 'week', 'label': 'Week'},
+  //     {'value': 'month', 'label': 'Month'},
+  //     {'value': 'all', 'label': 'All'},
+  //   ];
 
-        const SizedBox(height: 4),
-
-        Text(
-              _getGreeting(),
-              style: AppTheme.bodyLarge.copyWith(
-                color: Colors.grey.shade600, // Grey color as requested
-                fontSize: 14, // Smaller font size
-                fontWeight: FontWeight.w500,
-              ),
-            )
-            .animate()
-            .fadeIn(duration: 600.ms, delay: 400.ms)
-            .slideY(begin: 0.3, end: 0),
-      ],
-    );
-  }
+  //   return SingleChildScrollView(
+  //     scrollDirection: Axis.horizontal,
+  //     child: Row(
+  //       children: periods.map((period) {
+  //         final isSelected = _selectedPeriod == period['value'];
+  //         return Padding(
+  //           padding: const EdgeInsets.only(right: 6),
+  //           child: Material(
+  //             color: Colors.transparent,
+  //             child: InkWell(
+  //               onTap: () {
+  //                 HapticFeedback.lightImpact();
+  //                 setState(() {
+  //                   _selectedPeriod = period['value']!;
+  //                 });
+  //                 _loadDashboardData();
+  //               },
+  //               borderRadius: BorderRadius.circular(16),
+  //               child: Container(
+  //                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+  //                 decoration: BoxDecoration(
+  //                   color: isSelected ? AppTheme.primaryBlue : Colors.white,
+  //                   borderRadius: BorderRadius.circular(16),
+  //                   border: Border.all(
+  //                     color: isSelected ? AppTheme.primaryBlue : Colors.grey.shade300,
+  //                     width: 1.5,
+  //                   ),
+  //                   boxShadow: isSelected ? [
+  //                     BoxShadow(
+  //                       color: AppTheme.primaryBlue.withOpacity(0.2),
+  //                       blurRadius: 8,
+  //                       offset: const Offset(0, 2),
+  //                     ),
+  //                   ] : [],
+  //                 ),
+  //                 child: Text(
+  //                   period['label']!,
+  //                   style: AppTheme.bodyMedium.copyWith(
+  //                     color: isSelected ? Colors.white : Colors.grey.shade700,
+  //                     fontSize: 13,
+  //                     fontWeight: FontWeight.w600,
+  //                   ),
+  //                 ),
+  //               ),
+  //             ),
+  //           ),
+  //         );
+  //       }).toList(),
+  //     ),
+  //   );
+  // }
 
   Widget _buildSearchBar() {
     return GestureDetector(
@@ -540,76 +737,252 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Widget _buildKPICardsSection() {
+    // Show skeleton loading while data is being fetched
+    if (_isLoadingKPIs) {
+      return _buildKPISkeletonSection();
+    }
+
     final kpiData = _getDynamicKPIData();
 
-    return SizedBox(
-      height: 120,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Row(
-          children:
-              kpiData.map((kpi) {
-                final index = kpiData.indexOf(kpi);
-                return Padding(
-                  padding: EdgeInsets.only(
-                    left: index == 0 ? 0 : 8,
-                    right: index == kpiData.length - 1 ? 0 : 8,
-                  ),
-                  child: SizedBox(
-                    width: 100, // Reduced width to prevent overflow
-                    child: _buildKPICard(kpi),
-                  ),
-                );
-              }).toList(),
+    return Column(
+      children: [
+        // First row - 3 KPIs (Total, Connected, Not Connected)
+        Row(
+          children: [
+            Expanded(child: _buildKPICard(kpiData[0])),
+            const SizedBox(width: 8),
+            Expanded(child: _buildKPICard(kpiData[1])),
+            const SizedBox(width: 8),
+            Expanded(child: _buildKPICard(kpiData[2])),
+          ],
         ),
+        const SizedBox(height: 8),
+        // Second row - 2 KPIs (Callbacks, Pending)
+        Row(
+          children: [
+            Expanded(child: _buildKPICard(kpiData[3])),
+            const SizedBox(width: 8),
+            Expanded(child: _buildKPICard(kpiData[4])),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Subscription KPI (full width for better visibility)
+        _buildSubscriptionKPICard(),
+      ],
+    );
+  }
+
+  Widget _buildKPISkeletonSection() {
+    return Column(
+      children: [
+        // First row - 3 skeleton KPIs
+        Row(
+          children: [
+            Expanded(child: _buildKPISkeletonCard()),
+            const SizedBox(width: 8),
+            Expanded(child: _buildKPISkeletonCard()),
+            const SizedBox(width: 8),
+            Expanded(child: _buildKPISkeletonCard()),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Second row - 2 skeleton KPIs
+        Row(
+          children: [
+            Expanded(child: _buildKPISkeletonCard()),
+            const SizedBox(width: 8),
+            Expanded(child: _buildKPISkeletonCard()),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Subscription skeleton
+        _buildSubscriptionSkeletonCard(),
+      ],
+    );
+  }
+
+  Widget _buildKPISkeletonCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Icon skeleton
+          Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              )
+              .animate(onPlay: (c) => c.repeat())
+              .shimmer(duration: 1200.ms, color: Colors.grey.shade100),
+          const SizedBox(height: 4),
+          // Number skeleton
+          Container(
+                width: 40,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              )
+              .animate(onPlay: (c) => c.repeat())
+              .shimmer(
+                duration: 1200.ms,
+                color: Colors.grey.shade100,
+                delay: 100.ms,
+              ),
+          const SizedBox(height: 4),
+          // Title skeleton
+          Container(
+                width: 50,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              )
+              .animate(onPlay: (c) => c.repeat())
+              .shimmer(
+                duration: 1200.ms,
+                color: Colors.grey.shade100,
+                delay: 200.ms,
+              ),
+        ],
       ),
     );
   }
 
+  Widget _buildSubscriptionSkeletonCard() {
+    return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              // Left icon skeleton
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(width: 14),
+              // Middle content skeleton
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 50,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Right content skeleton
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    width: 70,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: 60,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        )
+        .animate(onPlay: (c) => c.repeat())
+        .shimmer(duration: 1200.ms, color: Colors.grey.shade100);
+  }
+
   List<KPIData> _getDynamicKPIData() {
-    final totalCalls = _dashboardStats['total_calls'] ?? 0;
+    // Use remaining fresh leads count (uncalled leads) for Fresh Leads KPI
+    final remainingFreshLeads = TodayLeadsService.instance.remainingFreshLeads;
     final connectedCalls = _dashboardStats['connected_calls'] ?? 0;
-    final pendingCalls = _dashboardStats['pending_calls'] ?? 0;
-    final freshLeads = _dashboardStats['fresh_leads'] ?? 0;
+    final notConnectedCalls =
+        _dashboardStats['not_connected_calls'] ?? 0; // From API
     final callbacksScheduled = _dashboardStats['callbacks_scheduled'] ?? 0;
+    // Use real backlog count from backlog API instead of pending_calls
+    final backlogCount = _realBacklogCount;
 
     return [
       KPIData(
-        title: 'Total Calls',
-        value: totalCalls.toString(),
+        title: 'Fresh Leads',
+        value: remainingFreshLeads.toString(),
         icon: '📞',
         color: 0xFF4F46E5,
       ),
       KPIData(
-        title: 'Connected',
+        title: 'Connected Calls',
         value: connectedCalls.toString(),
         icon: '✅',
         color: 0xFF10B981,
       ),
       KPIData(
-        title: 'Subscriptions',
-        value: _totalSubscriptions.toString(),
-        icon: '💳',
-        color: 0xFF10B981,
-      ),
-      KPIData(
-        title: 'Pending Calls',
-        value: pendingCalls.toString(),
-        icon: '⏳',
-        color: 0xFFF59E0B,
-      ),
-      KPIData(
-        title: 'Fresh Leads',
-        value: freshLeads.toString(),
-        icon: '🆕',
-        color: 0xFF8B5CF6,
+        title: 'Not Connected',
+        value: notConnectedCalls.toString(),
+        icon: '❌',
+        color: 0xFFEF4444,
       ),
       KPIData(
         title: 'Callbacks',
         value: callbacksScheduled.toString(),
         icon: '🔔',
-        color: 0xFFEF4444,
+        color: 0xFFF59E0B,
+      ),
+      KPIData(
+        title: 'Backlog',
+        value: backlogCount.toString(),
+        icon: '⏳',
+        color: 0xFF8B5CF6,
       ),
     ];
   }
@@ -619,68 +992,64 @@ class _DashboardPageState extends State<DashboardPage>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(10),
           onTap: () {
             HapticFeedback.lightImpact();
             _showKPIDetails(kpi);
           },
           child: Container(
-            height: 120,
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Color(kpi.color).withOpacity(0.15),
+                width: 1,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3),
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(12), // Reduced padding
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Icon at top
-                  Container(
-                    padding: const EdgeInsets.all(6), // Reduced padding
-                    decoration: BoxDecoration(
-                      color: Color(kpi.color).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      kpi.icon,
-                      style: const TextStyle(fontSize: 16), // Reduced size
-                    ),
-                  ),
-
-                  const Spacer(),
-
-                  // Bold number
-                  Text(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon at top
+                Text(kpi.icon, style: const TextStyle(fontSize: 18)),
+                const SizedBox(height: 4),
+                // Bold number
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
                     kpi.value,
                     style: AppTheme.headingMedium.copyWith(
-                      color: AppTheme.black,
-                      fontSize: 20, // Reduced size
-                      fontWeight: FontWeight.w800,
+                      color: Color(kpi.color),
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      height: 1.0,
                     ),
                   ),
-
-                  const SizedBox(height: 2), // Reduced spacing
-                  // Small title below number
-                  Text(
-                    kpi.title,
-                    style: AppTheme.bodyMedium.copyWith(
-                      color: AppTheme.gray,
-                      fontSize: 9, // Reduced size
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                // Small title below number
+                Text(
+                  kpi.title,
+                  style: AppTheme.bodyMedium.copyWith(
+                    color: Colors.grey.shade600,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w500,
+                    height: 1.1,
                   ),
-                ],
-              ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
         ),
@@ -688,55 +1057,332 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
+  Widget _buildSubscriptionKPICard() {
+    return RepaintBoundary(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            // Navigate to subscriptions screen
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SubscriptionsScreen(),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF10B981).withOpacity(0.95),
+                  const Color(0xFF059669),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF10B981).withOpacity(0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Left side - Icon
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text('💳', style: TextStyle(fontSize: 22)),
+                ),
+                const SizedBox(width: 14),
+                // Middle - Subscription info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Subscriptions',
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            _totalSubscriptions.toString(),
+                            style: AppTheme.headingLarge.copyWith(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Today',
+                            style: AppTheme.bodyMedium.copyWith(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Right side - Today's Revenue
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Today's Revenue",
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '₹${_formatRevenue(_totalRevenue)}',
+                      style: AppTheme.headingMedium.copyWith(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatRevenue(double revenue) {
+    // Show exact amount with comma separators
+    final amount = revenue.toStringAsFixed(0);
+    // Add comma separators for thousands
+    return amount.replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
+  }
+
   Widget _buildSmartCallingCard() {
     return RepaintBoundary(
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: AppTheme.primaryBlue.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-              spreadRadius: -5,
+              color: AppTheme.primaryBlue.withOpacity(0.25),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+              spreadRadius: -4,
             ),
           ],
         ),
-        child: Column(
+        child: Row(
           children: [
-            Text(
-              'Smart Calling',
-              style: AppTheme.headingMedium.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
+            // Left side - Text content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Welcome Calling',
+                    style: AppTheme.headingMedium.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.2),
+                  const SizedBox(height: 4),
+                  Text(
+                        'Start IVR call for your next best lead',
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 12,
+                        ),
+                      )
+                      .animate()
+                      .fadeIn(duration: 400.ms, delay: 100.ms)
+                      .slideX(begin: -0.2),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Start automated IVR call sequence for your next best lead.',
-              style: AppTheme.bodyMedium.copyWith(
-                color: Colors.white.withOpacity(0.8),
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            SmartCallButton(
-              onPressed: () {
+            const SizedBox(width: 12),
+            // Right side - Compact call button
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
                 _startSmartCalling();
               },
+              child:
+                  Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.3),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.phone_rounded,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                      )
+                      .animate(
+                        onPlay: (controller) =>
+                            controller.repeat(reverse: true),
+                      )
+                      .scale(
+                        begin: const Offset(1.0, 1.0),
+                        end: const Offset(1.08, 1.08),
+                        duration: 1200.ms,
+                        curve: Curves.easeInOut,
+                      ),
             ),
           ],
         ),
       ),
-    );
+    ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1);
+  }
+
+  Widget _buildProfileCompletionCard() {
+    // Simple card that navigates to profile completion screen with sample contact cards
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _navigateToProfileCompletion();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFF3B82F6).withOpacity(0.3),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Icon
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF3B82F6), Color(0xFF6366F1)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF3B82F6).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.person_search_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              // Text content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Profile Completion',
+                      style: AppTheme.titleMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'View driver/transporter profile fields',
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Arrow icon
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: Color(0xFF3B82F6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).animate().fadeIn(duration: 500.ms, delay: 150.ms).slideY(begin: 0.1);
   }
 
   Widget _buildCallHistorySection() {
@@ -984,10 +1630,9 @@ class _DashboardPageState extends State<DashboardPage>
                   horizontal: 8,
                   vertical: 16,
                 ),
-                child:
-                    _hasPerformanceData()
-                        ? _buildPerformanceChart()
-                        : _buildNoPerformanceState(),
+                child: _hasPerformanceData()
+                    ? _buildPerformanceChart()
+                    : _buildNoPerformanceState(),
               ),
             ),
             const SizedBox(height: 20),
@@ -1271,314 +1916,6 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  Widget _buildFollowupsSection() {
-    final followups = DummyData.upcomingFollowUps;
-
-    return RepaintBoundary(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppTheme.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.black.withOpacity(0.05),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-              spreadRadius: -5,
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Follow-ups',
-                        style: AppTheme.headingMedium.copyWith(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Container(
-                        width: 40,
-                        height: 3,
-                        margin: const EdgeInsets.only(top: 4),
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.primaryGradient,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    // Navigate to pending calls screen to show all follow-ups
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const PendingCallsScreen(),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    'View All →',
-                    style: AppTheme.bodyLarge.copyWith(
-                      color: AppTheme.primaryBlue,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            ...followups.take(3).map((followup) {
-              return RepaintBoundary(
-                key: Key('followup_${followup.id}'),
-                child: Dismissible(
-                  key: Key(followup.id),
-                  background: Container(
-                    margin: const EdgeInsets.only(bottom: 8), // Reduced from 12
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4CAF50),
-                      borderRadius: BorderRadius.circular(
-                        12,
-                      ), // Reduced from 16
-                    ),
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.check_circle_outline_rounded,
-                          color: Colors.white,
-                          size: 18, // Reduced from 20
-                        ),
-                        const SizedBox(width: 6), // Reduced from 8
-                        Text(
-                          'Complete',
-                          style: AppTheme.bodyMedium.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11, // Reduced from 12
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  secondaryBackground: Container(
-                    margin: const EdgeInsets.only(bottom: 8), // Reduced from 12
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentPurple,
-                      borderRadius: BorderRadius.circular(
-                        12,
-                      ), // Reduced from 16
-                    ),
-                    alignment: Alignment.centerRight,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Reschedule',
-                          style: AppTheme.bodyMedium.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 11, // Reduced from 12
-                          ),
-                        ),
-                        const SizedBox(width: 6), // Reduced from 8
-                        const Icon(
-                          Icons.schedule_rounded,
-                          color: Colors.white,
-                          size: 18, // Reduced from 20
-                        ),
-                      ],
-                    ),
-                  ),
-                  onDismissed: (direction) {
-                    if (direction == DismissDirection.startToEnd) {
-                      _markFollowupComplete(followup);
-                    } else {
-                      _rescheduleFollowup(followup);
-                    }
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    constraints: const BoxConstraints(
-                      minHeight: 75, // Minimum height to prevent overflow
-                    ),
-                    decoration: BoxDecoration(
-                      color: _getStatusColor(followup.status).withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(
-                        12,
-                      ), // Reduced from 16
-                      border: Border.all(
-                        color: _getStatusColor(
-                          followup.status,
-                        ).withOpacity(0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(
-                          12,
-                        ), // Reduced from 16
-                        onTap: () => _initiateCall(followup),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ), // Reduced padding
-                          child: Row(
-                            children: [
-                              // Left side - Icon
-                              Container(
-                                padding: const EdgeInsets.all(
-                                  6,
-                                ), // Reduced from 8
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(
-                                    followup.status,
-                                  ).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(
-                                    8,
-                                  ), // Reduced from 10
-                                ),
-                                child: Icon(
-                                  Icons.business_center_rounded,
-                                  color: _getStatusColor(followup.status),
-                                  size: 14, // Reduced from 16
-                                ),
-                              ),
-                              const SizedBox(width: 10), // Reduced from 12
-                              // Middle - Company info (expanded to take available space)
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      followup.companyName,
-                                      style: AppTheme.titleMedium.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13, // Reduced from 14
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 1), // Reduced from 2
-                                    Text(
-                                      followup.contactPerson,
-                                      style: AppTheme.bodyMedium.copyWith(
-                                        color: AppTheme.gray,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 11, // Reduced from 12
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2), // Reduced from 3
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.access_time_rounded,
-                                          size: 10, // Reduced from 12
-                                          color: AppTheme.gray.withOpacity(0.7),
-                                        ),
-                                        const SizedBox(
-                                          width: 3,
-                                        ), // Reduced from 4
-                                        Flexible(
-                                          child: Text(
-                                            _formatFollowupTime(
-                                              followup.followUpDate!,
-                                            ),
-                                            style: AppTheme.bodyMedium.copyWith(
-                                              color: AppTheme.gray.withOpacity(
-                                                0.8,
-                                              ),
-                                              fontSize: 10, // Reduced from 11
-                                              fontWeight: FontWeight.w400,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Right side - Status badge (top) and Call button (bottom)
-                              Column(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  // Status badge - top right corner
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _getStatusColor(followup.status),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      _getStatusText(followup.status),
-                                      style: AppTheme.bodyMedium.copyWith(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  // Call button - bottom right
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.accentPurple.withOpacity(
-                                        0.15,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      Icons.phone_rounded,
-                                      color: AppTheme.accentPurple,
-                                      size: 18,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-
   // --- Helper Methods ---
 
   void _navigateToProfile() {
@@ -1588,6 +1925,13 @@ class _DashboardPageState extends State<DashboardPage>
       // Fallback to GoRouter if callback is not available
       context.go(AppRouter.profile);
     }
+  }
+
+  void _navigateToProfileCompletion() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ProfileCompletionScreen()),
+    );
   }
 
   void _navigateToSearch() {
@@ -1655,42 +1999,54 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   void _showKPIDetails(KPIData kpi) {
+    print('📊 KPI Tapped: ${kpi.title}');
+
+    // Handle Fresh Leads KPI separately
+    if (kpi.title.toLowerCase() == 'fresh leads') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const FreshLeadsScreen()),
+      );
+      return;
+    }
+
+    // Handle Backlog KPI separately - navigate to backlog screen
+    if (kpi.title.toLowerCase() == 'backlog') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const BacklogScreen()),
+      );
+      return;
+    }
+
     // Navigate to appropriate screen based on KPI
     if (widget.onNavigateToSection != null) {
       NavigationSection? targetSection;
       String? filter;
 
-      print('📊 KPI Tapped: ${kpi.title}');
-
       switch (kpi.title.toLowerCase()) {
-        case 'total calls':
+        case 'total':
           targetSection = NavigationSection.callHistory;
           filter = 'all';
           break;
         case 'connected':
+        case 'connected calls':
           targetSection = NavigationSection.callHistory;
           filter = 'connected';
           break;
-        case 'subscriptions':
-          // Navigate to subscriptions screen
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const SubscriptionsScreen(),
-            ),
-          );
-          return;
-        case 'pending calls':
-          // Navigate to dedicated pending calls screen
-          targetSection = NavigationSection.pendingCalls;
-          break;
-        case 'fresh leads':
-          // Navigate to dedicated pending calls screen (same as pending)
-          targetSection = NavigationSection.pendingCalls;
-          break;
-        case 'callbacks':
+        case 'not connected':
+          // Use 'callback' filter value which maps to "Not Connected" in Call History
           targetSection = NavigationSection.callHistory;
           filter = 'callback';
+          break;
+        case 'callbacks':
+          // Use 'callback_later' filter value which maps to "Call Back" in Call History
+          targetSection = NavigationSection.callHistory;
+          filter = 'callback_later';
+          break;
+        case 'pending':
+          // Navigate to pending calls screen
+          targetSection = NavigationSection.pendingCalls;
           break;
         default:
           targetSection = NavigationSection.callHistory;
@@ -1724,14 +2080,23 @@ class _DashboardPageState extends State<DashboardPage>
     context.push(AppRouter.smartCalling);
   }
 
+  // void _navigateToModernDashboard() {
+  //   HapticFeedback.lightImpact();
+  //   Navigator.push(
+  //     context,
+  //     MaterialPageRoute(
+  //       builder: (context) => const ModernDashboardPage(),
+  //     ),
+  //   );
+  // }
+
   Future<void> _initiateCall(Lead lead) async {
     try {
       // Show call type selection dialog
       final callType = await showDialog<String>(
         context: context,
-        builder: (context) => CallTypeSelectionDialog(
-          driverName: lead.contactPerson,
-        ),
+        builder: (context) =>
+            CallTypeSelectionDialog(driverName: lead.contactPerson),
       );
 
       if (callType == null) return;
@@ -1749,11 +2114,11 @@ class _DashboardPageState extends State<DashboardPage>
       }
 
       final callerId = int.tryParse(currentUser.id) ?? 1;
-      
+
       // For demo purposes, using a placeholder phone number
       // In production, you should fetch the actual phone number from the lead data
       final phoneNumber = lead.phoneNumber ?? '';
-      
+
       if (phoneNumber.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1779,7 +2144,11 @@ class _DashboardPageState extends State<DashboardPage>
     }
   }
 
-  Future<void> _handleManualCall(Lead lead, String phoneNumber, int callerId) async {
+  Future<void> _handleManualCall(
+    Lead lead,
+    String phoneNumber,
+    int callerId,
+  ) async {
     try {
       final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
 
@@ -1826,15 +2195,16 @@ class _DashboardPageState extends State<DashboardPage>
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     }
   }
 
-  Future<void> _handleIVRCall(Lead lead, String phoneNumber, int callerId) async {
+  Future<void> _handleIVRCall(
+    Lead lead,
+    String phoneNumber,
+    int callerId,
+  ) async {
     try {
       final cleanMobile = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
 
@@ -1877,7 +2247,9 @@ class _DashboardPageState extends State<DashboardPage>
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Call completed with ${lead.contactPerson}'),
+                        content: Text(
+                          'Call completed with ${lead.contactPerson}',
+                        ),
                         backgroundColor: Colors.green,
                       ),
                     );
@@ -1899,10 +2271,7 @@ class _DashboardPageState extends State<DashboardPage>
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     }
   }

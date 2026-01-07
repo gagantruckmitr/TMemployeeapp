@@ -22,20 +22,26 @@ class AppTheme {
   static Color get warning => const Color(0xFFF59E0B);
   static Color get textPrimary => AppColors.darkGray;
   static Color get textSecondary => AppColors.softGray;
-  
+
+  // Additional colors for attendance feature
+  static Color get primaryGreen => const Color(0xFF10B981);
+  static Color get lightBackground => const Color(0xFFF8F9FD);
+  static Color get darkBackground => const Color(0xFF1A1A2E);
+  static Color get cardBackground => Colors.white;
+
   // Gradient getters
   static LinearGradient get primaryGradient => LinearGradient(
     colors: [AppColors.primary, AppColors.primary.withValues(alpha: 0.8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-  
+
   static LinearGradient get backgroundGradient => const LinearGradient(
     colors: [Color(0xFFF8F9FD), Colors.white],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
-  
+
   // Shadow getters
   static List<BoxShadow> get cardShadow => [
     BoxShadow(
@@ -44,7 +50,7 @@ class AppTheme {
       offset: const Offset(0, 2),
     ),
   ];
-  
+
   static List<BoxShadow> get buttonShadow => [
     BoxShadow(
       color: AppColors.primary.withValues(alpha: 0.3),
@@ -52,46 +58,40 @@ class AppTheme {
       offset: const Offset(0, 4),
     ),
   ];
-  
+
   // Border radius getters
   static double get radiusSmall => 8.0;
   static double get radiusMedium => 12.0;
   static double get radiusLarge => 16.0;
-  
+
   // Text style getters for backward compatibility
   static TextStyle get headingLarge => TextStyle(
     fontSize: 32,
     fontWeight: FontWeight.bold,
     color: AppColors.darkGray,
   );
-  
+
   static TextStyle get headingMedium => TextStyle(
     fontSize: 20,
     fontWeight: FontWeight.w600,
     color: AppColors.darkGray,
   );
-  
+
   static TextStyle get titleMedium => TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w500,
     color: AppColors.darkGray,
   );
-  
-  static TextStyle get bodyLarge => TextStyle(
-    fontSize: 16,
-    color: AppColors.darkGray,
-  );
-  
-  static TextStyle get bodyMedium => TextStyle(
-    fontSize: 14,
-    color: AppColors.softGray,
-  );
-  
-  static TextStyle get bodySmall => TextStyle(
-    fontSize: 12,
-    color: AppColors.softGray,
-  );
-  
+
+  static TextStyle get bodyLarge =>
+      TextStyle(fontSize: 16, color: AppColors.darkGray);
+
+  static TextStyle get bodyMedium =>
+      TextStyle(fontSize: 14, color: AppColors.softGray);
+
+  static TextStyle get bodySmall =>
+      TextStyle(fontSize: 12, color: AppColors.softGray);
+
   static TextStyle get headlineSmall => TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.w600,
@@ -123,9 +123,7 @@ class AppTheme {
         color: Colors.white,
         elevation: 2,
         shadowColor: Colors.black.withOpacity(0.08),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -136,10 +134,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
       textTheme: TextTheme(
@@ -173,14 +168,8 @@ class AppTheme {
           fontWeight: FontWeight.w500,
           color: AppColors.darkGray,
         ),
-        bodyLarge: TextStyle(
-          fontSize: 16,
-          color: AppColors.darkGray,
-        ),
-        bodyMedium: TextStyle(
-          fontSize: 14,
-          color: AppColors.softGray,
-        ),
+        bodyLarge: TextStyle(fontSize: 16, color: AppColors.darkGray),
+        bodyMedium: TextStyle(fontSize: 14, color: AppColors.softGray),
         labelLarge: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,

@@ -24,7 +24,7 @@ class _TollFreeProfileDetailsScreenState
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isCallInProgress = false;
-  String? _callLogId;
+  // String? _callLogId; // Removed as unused
 
   @override
   void initState() {
@@ -150,13 +150,12 @@ class _TollFreeProfileDetailsScreenState
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Color(0xFF3B82F6),
+                      ),
                     ),
                   )
-                : const Icon(
-                    Icons.phone,
-                    color: Color(0xFF3B82F6),
-                  ),
+                : const Icon(Icons.phone, color: Color(0xFF3B82F6)),
             tooltip: 'Call via IVR',
           ),
         ],
@@ -353,42 +352,83 @@ class _TollFreeProfileDetailsScreenState
     // Calculate based on role - EXACT same logic as profile completion calculation
     final role = widget.user.role;
     int count = 0;
-    
+
     if (role == 'driver') {
       // Driver fields (23 total)
       if (widget.user.name.isNotEmpty) count++;
       if (widget.user.email != null && widget.user.email!.isNotEmpty) count++;
       if (widget.user.city != null && widget.user.city!.isNotEmpty) count++;
       if (widget.user.sex != null && widget.user.sex!.isNotEmpty) count++;
-      if (widget.user.vehicleType != null && widget.user.vehicleType!.isNotEmpty) count++;
-      if (widget.user.fatherName != null && widget.user.fatherName!.isNotEmpty) count++;
-      if (widget.user.profileImage != null && widget.user.profileImage!.isNotEmpty) count++;
-      if (widget.user.address != null && widget.user.address!.isNotEmpty) count++;
-      if (widget.user.dob != null && widget.user.dob!.isNotEmpty && widget.user.dob != '0000-00-00') count++;
-      if (widget.user.typeOfLicense != null && widget.user.typeOfLicense!.isNotEmpty) count++;
-      if (widget.user.drivingExperience != null && widget.user.drivingExperience!.isNotEmpty) count++;
-      if (widget.user.highestEducation != null && widget.user.highestEducation!.isNotEmpty) count++;
-      if (widget.user.licenseNumber != null && widget.user.licenseNumber!.isNotEmpty) count++;
-      if (widget.user.expiryDateOfLicense != null && widget.user.expiryDateOfLicense!.isNotEmpty && widget.user.expiryDateOfLicense != '0000-00-00') count++;
-      if (widget.user.expectedMonthlyIncome != null && widget.user.expectedMonthlyIncome!.isNotEmpty) count++;
-      if (widget.user.currentMonthlyIncome != null && widget.user.currentMonthlyIncome!.isNotEmpty) count++;
-      if (widget.user.maritalStatus != null && widget.user.maritalStatus!.isNotEmpty) count++;
-      if (widget.user.preferredLocation != null && widget.user.preferredLocation!.isNotEmpty) count++;
-      if (widget.user.aadharNumber != null && widget.user.aadharNumber!.isNotEmpty) count++;
-      if (widget.user.aadharPhoto != null && widget.user.aadharPhoto!.isNotEmpty) count++;
-      if (widget.user.drivingLicense != null && widget.user.drivingLicense!.isNotEmpty) count++;
-      if (widget.user.previousEmployer != null && widget.user.previousEmployer!.isNotEmpty) count++;
-      if (widget.user.jobPlacement != null && widget.user.jobPlacement!.isNotEmpty) count++;
+      if (widget.user.vehicleType != null &&
+          widget.user.vehicleType!.isNotEmpty)
+        count++;
+      if (widget.user.fatherName != null && widget.user.fatherName!.isNotEmpty)
+        count++;
+      if (widget.user.profileImage != null &&
+          widget.user.profileImage!.isNotEmpty)
+        count++;
+      if (widget.user.address != null && widget.user.address!.isNotEmpty)
+        count++;
+      if (widget.user.dob != null &&
+          widget.user.dob!.isNotEmpty &&
+          widget.user.dob != '0000-00-00')
+        count++;
+      if (widget.user.typeOfLicense != null &&
+          widget.user.typeOfLicense!.isNotEmpty)
+        count++;
+      if (widget.user.drivingExperience != null &&
+          widget.user.drivingExperience!.isNotEmpty)
+        count++;
+      if (widget.user.highestEducation != null &&
+          widget.user.highestEducation!.isNotEmpty)
+        count++;
+      if (widget.user.licenseNumber != null &&
+          widget.user.licenseNumber!.isNotEmpty)
+        count++;
+      if (widget.user.expiryDateOfLicense != null &&
+          widget.user.expiryDateOfLicense!.isNotEmpty &&
+          widget.user.expiryDateOfLicense != '0000-00-00')
+        count++;
+      if (widget.user.expectedMonthlyIncome != null &&
+          widget.user.expectedMonthlyIncome!.isNotEmpty)
+        count++;
+      if (widget.user.currentMonthlyIncome != null &&
+          widget.user.currentMonthlyIncome!.isNotEmpty)
+        count++;
+      if (widget.user.maritalStatus != null &&
+          widget.user.maritalStatus!.isNotEmpty)
+        count++;
+      if (widget.user.preferredLocation != null &&
+          widget.user.preferredLocation!.isNotEmpty)
+        count++;
+      if (widget.user.aadharNumber != null &&
+          widget.user.aadharNumber!.isNotEmpty)
+        count++;
+      if (widget.user.aadharPhoto != null &&
+          widget.user.aadharPhoto!.isNotEmpty)
+        count++;
+      if (widget.user.drivingLicense != null &&
+          widget.user.drivingLicense!.isNotEmpty)
+        count++;
+      if (widget.user.previousEmployer != null &&
+          widget.user.previousEmployer!.isNotEmpty)
+        count++;
+      if (widget.user.jobPlacement != null &&
+          widget.user.jobPlacement!.isNotEmpty)
+        count++;
     } else if (role == 'transporter') {
       // Transporter fields (13 total) - would need to add these fields to model
       if (widget.user.name.isNotEmpty) count++;
       if (widget.user.email != null && widget.user.email!.isNotEmpty) count++;
       if (widget.user.city != null && widget.user.city!.isNotEmpty) count++;
-      if (widget.user.address != null && widget.user.address!.isNotEmpty) count++;
-      if (widget.user.profileImage != null && widget.user.profileImage!.isNotEmpty) count++;
+      if (widget.user.address != null && widget.user.address!.isNotEmpty)
+        count++;
+      if (widget.user.profileImage != null &&
+          widget.user.profileImage!.isNotEmpty)
+        count++;
       // Add more transporter-specific fields when available
     }
-    
+
     return count;
   }
 
@@ -1414,8 +1454,9 @@ class _TollFreeProfileDetailsScreenState
         exten: currentUser.mobile,
         number: widget.user.mobile,
         callerId: currentUser.id,
-        contactId: widget.user.uniqueId,
-        contactType: widget.user.role,
+        contactId: widget.user.id.toString(),
+        tmid: widget.user.uniqueId,
+        process: widget.user.role == 'transporter' ? 'transporter' : 'welcome',
         driverName: widget.user.name,
         callSource: 'toll-free',
       );
@@ -1423,14 +1464,14 @@ class _TollFreeProfileDetailsScreenState
       if (!mounted) return;
 
       if (result['success'] == true) {
-        _callLogId = result['call_log_id']?.toString();
-        
+        // Call log ID is available in result['call_log_id'] if needed
+
         HapticFeedback.lightImpact();
         _showSnackBar('✅ IVR call initiated successfully!', isError: false);
 
         // Wait a moment then show feedback modal
         await Future.delayed(const Duration(milliseconds: 500));
-        
+
         if (mounted) {
           _showFeedbackModal();
         }
@@ -1484,9 +1525,9 @@ class _TollFreeProfileDetailsScreenState
       builder: (context) => CallFeedbackModal(
         contact: contact,
         allowDismiss: false,
-        onFeedbackSubmitted: (feedback) {
+        onFeedbackSubmitted: (feedback) async {
           Navigator.of(context).pop();
-          _handleFeedbackSubmitted(feedback);
+          await _handleFeedbackSubmitted(feedback);
         },
       ),
     );
@@ -1512,7 +1553,7 @@ class _TollFreeProfileDetailsScreenState
           '✅ Feedback saved successfully for ${widget.user.name}',
           isError: false,
         );
-        
+
         // Pop back to refresh the search screen
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) {
@@ -1533,7 +1574,7 @@ class _TollFreeProfileDetailsScreenState
 
   void _showSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -1554,11 +1595,7 @@ class _TollFreeProfileDetailsScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.work_outline,
-                size: 64,
-                color: Colors.grey.shade400,
-              ),
+              Icon(Icons.work_outline, size: 64, color: Colors.grey.shade400),
               const SizedBox(height: 16),
               Text(
                 'No Applied Jobs',
@@ -1572,10 +1609,7 @@ class _TollFreeProfileDetailsScreenState
               Text(
                 'This user has not applied to any jobs yet',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade500,
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
               ),
             ],
           ),
@@ -1604,11 +1638,7 @@ class _TollFreeProfileDetailsScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.info_outline,
-                size: 64,
-                color: Colors.grey.shade400,
-              ),
+              Icon(Icons.info_outline, size: 64, color: Colors.grey.shade400),
               const SizedBox(height: 16),
               Text(
                 'Not Applicable',
@@ -1622,10 +1652,7 @@ class _TollFreeProfileDetailsScreenState
               Text(
                 'Drivers cannot post jobs',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade500,
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
               ),
             ],
           ),
@@ -1643,11 +1670,7 @@ class _TollFreeProfileDetailsScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.post_add,
-                size: 64,
-                color: Colors.grey.shade400,
-              ),
+              Icon(Icons.post_add, size: 64, color: Colors.grey.shade400),
               const SizedBox(height: 16),
               Text(
                 'No Posted Jobs',
@@ -1661,10 +1684,7 @@ class _TollFreeProfileDetailsScreenState
               Text(
                 'This transporter has not posted any jobs yet',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade500,
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
               ),
             ],
           ),
@@ -1684,11 +1704,13 @@ class _TollFreeProfileDetailsScreenState
   }
 
   Widget _buildPostedJobCard(Map<String, dynamic> job) {
-    final jobId = job['job_code']?.toString() ?? job['job_id']?.toString() ?? 'N/A';
+    final jobId =
+        job['job_code']?.toString() ?? job['job_id']?.toString() ?? 'N/A';
     final jobTitle = job['job_title']?.toString() ?? 'Job Title Not Available';
-    final companyName = job['transport_name']?.toString() ?? 
-                        job['company_name']?.toString() ?? 
-                        'Company Not Available';
+    final companyName =
+        job['transport_name']?.toString() ??
+        job['company_name']?.toString() ??
+        'Company Not Available';
     final location = job['location']?.toString() ?? 'Location Not Available';
     final salary = job['salary']?.toString() ?? 'N/A';
     final createdDate = job['created_at']?.toString();
@@ -1708,7 +1730,7 @@ class _TollFreeProfileDetailsScreenState
     Color statusColor;
     IconData statusIcon;
     String statusText;
-    
+
     // Status: '1' = approved/active, '0' = pending
     if (status == '1') {
       statusColor = const Color(0xFF34D399);
@@ -1759,7 +1781,10 @@ class _TollFreeProfileDetailsScreenState
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -1792,19 +1817,12 @@ class _TollFreeProfileDetailsScreenState
           // Company Name
           Row(
             children: [
-              Icon(
-                Icons.business,
-                size: 16,
-                color: Colors.grey.shade600,
-              ),
+              Icon(Icons.business, size: 16, color: Colors.grey.shade600),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   companyName,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade700,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1817,19 +1835,12 @@ class _TollFreeProfileDetailsScreenState
           // Location
           Row(
             children: [
-              Icon(
-                Icons.location_on,
-                size: 16,
-                color: Colors.grey.shade600,
-              ),
+              Icon(Icons.location_on, size: 16, color: Colors.grey.shade600),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   location,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade700,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1896,18 +1907,11 @@ class _TollFreeProfileDetailsScreenState
           // Posted Date
           Row(
             children: [
-              Icon(
-                Icons.calendar_today,
-                size: 14,
-                color: Colors.grey.shade600,
-              ),
+              Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade600),
               const SizedBox(width: 6),
               Text(
                 'Posted: $formattedDate',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             ],
           ),
@@ -1930,14 +1934,17 @@ class _TollFreeProfileDetailsScreenState
   }
 
   Widget _buildJobCard(Map<String, dynamic> job) {
-    final jobId = job['job_code']?.toString() ?? job['job_id']?.toString() ?? 'N/A';
+    final jobId =
+        job['job_code']?.toString() ?? job['job_id']?.toString() ?? 'N/A';
     final jobTitle = job['job_title']?.toString() ?? 'Job Title Not Available';
-    final companyName = job['transport_name']?.toString() ?? 
-                        job['company_name']?.toString() ?? 
-                        'Company Not Available';
+    final companyName =
+        job['transport_name']?.toString() ??
+        job['company_name']?.toString() ??
+        'Company Not Available';
     final location = job['location']?.toString() ?? 'Location Not Available';
     final salary = job['salary']?.toString() ?? 'N/A';
-    final appliedDate = job['applied_date']?.toString() ?? job['created_at']?.toString();
+    final appliedDate =
+        job['applied_date']?.toString() ?? job['created_at']?.toString();
     final status = job['status']?.toString() ?? '0';
 
     String formattedDate = 'N/A';
@@ -2004,7 +2011,10 @@ class _TollFreeProfileDetailsScreenState
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -2037,19 +2047,12 @@ class _TollFreeProfileDetailsScreenState
           // Company Name
           Row(
             children: [
-              Icon(
-                Icons.business,
-                size: 16,
-                color: Colors.grey.shade600,
-              ),
+              Icon(Icons.business, size: 16, color: Colors.grey.shade600),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   companyName,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade700,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -2062,19 +2065,12 @@ class _TollFreeProfileDetailsScreenState
           // Location
           Row(
             children: [
-              Icon(
-                Icons.location_on,
-                size: 16,
-                color: Colors.grey.shade600,
-              ),
+              Icon(Icons.location_on, size: 16, color: Colors.grey.shade600),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   location,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade700,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -2117,10 +2113,7 @@ class _TollFreeProfileDetailsScreenState
                   const SizedBox(width: 6),
                   Text(
                     formattedDate,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],
               ),

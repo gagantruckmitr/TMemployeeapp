@@ -26,14 +26,27 @@ class ProfileCompletionAvatar extends StatelessWidget {
     this.profileData,
   });
 
+  // Get ring color based on profile completion percentage
+  Color _getRingColorByPercentage(int percentage) {
+    if (percentage <= 50) {
+      return const Color(0xFFE53935); // Red for 1-50%
+    } else if (percentage <= 80) {
+      return const Color(0xFFFFA726); // Orange for 51-80%
+    } else {
+      return const Color(0xFF43A047); // Green for 81-100%
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final percentage = completionPercentage ?? 0;
     return ProgressRingAvatar(
       profileImageUrl: profileImageUrl,
       userName: name,
       gender: gender,
       size: size,
-      profileCompletion: completionPercentage ?? 0,
+      profileCompletion: percentage,
+      ringColor: _getRingColorByPercentage(percentage),
       onTap: () {
         Navigator.push(
           context,

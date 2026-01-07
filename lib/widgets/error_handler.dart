@@ -1,244 +1,384 @@
 import 'package:flutter/material.dart';
-import '../core/theme/app_theme.dart';
+import 'package:flutter/services.dart';
+import '../core/exceptions/app_exceptions.dart';
+import 'error_widgets.dart';
 
+/// Professional Error Handler - Amazon/Flipkart Style
+/// Never shows raw technical errors to users
 class ErrorHandler {
-  /// Show user-friendly error message (never show server errors)
-  static void showError(BuildContext context, dynamic error, {String? customMessage}) {
-    String userMessage = customMessage ?? _getUserFriendlyMessage(error);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                userMessage,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.red.shade600,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        action: SnackBarAction(
-          label: 'Dismiss',
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
-      ),
+  /// Show user-friendly error message as a premium snackbar
+  /// Automatically converts technical errors to user-friendly messages
+  static void showError(
+    BuildContext context,
+    dynamic error, {
+    String? customMessage,
+    VoidCallback? onRetry,
+  }) {
+    final exception = ExceptionParser.parse(error);
+    final message = customMessage ?? exception.userMessage;
+
+    PremiumSnackbar.showError(
+      context,
+      message,
+      onRetry: exception.isRetryable ? onRetry : null,
     );
   }
 
-  /// Show success message
+  /// Show error as a beautiful bottom sheet (for important errors)
+  static Future<void> showErrorSheet(
+    BuildContext context,
+    dynamic error, {
+    String? customTitle,
+    String? customMessage,
+    VoidCallback? onRetry,
+    VoidCallback? onClose,
+  }) async {
+    final exception = ExceptionParser.parse(error);
+
+    await ErrorBottomSheet.show(
+      context,
+      exception: exception,
+      customTitle: customTitle,
+      customMessage: customMessage,
+      onRetry: onRetry,
+      onClose: onClose,
+    );
+  }
+
+  /// Show success message with premium snackbar
   static void showSuccess(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: AppTheme.success,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
+    PremiumSnackbar.showSuccess(context, message);
   }
 
-  /// Show info message
+  /// Show info message with premium snackbar
   static void showInfo(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.info_outline, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: AppTheme.primaryBlue,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
+    PremiumSnackbar.showInfo(context, message);
+  }
+
+  /// Show warning message with premium snackbar
+  static void showWarning(BuildContext context, String message) {
+    PremiumSnackbar.showWarning(context, message);
+  }
+
+  /// Get an inline error widget for embedding in screens
+  static Widget getInlineError(
+    dynamic error, {
+    VoidCallback? onRetry,
+    bool compact = false,
+  }) {
+    final exception = ExceptionParser.parse(error);
+    return InlineErrorWidget.fromException(
+      exception,
+      onRetry: onRetry,
+      compact: compact,
     );
   }
 
-  /// Convert technical errors to user-friendly messages
-  static String _getUserFriendlyMessage(dynamic error) {
-    String errorString = error.toString().toLowerCase();
-    
-    // Network/Connection errors - Most common when offline
-    if (errorString.contains('socketexception') ||
-        errorString.contains('failed host lookup') ||
-        errorString.contains('network is unreachable') ||
-        errorString.contains('no address associated') ||
-        errorString.contains('os error: no address') ||
-        errorString.contains('clientexception')) {
-      return 'No internet connection. Please check your network and try again.';
-    }
-    
-    // Timeout errors
-    if (errorString.contains('timeout') || errorString.contains('timed out')) {
-      return 'Connection timeout. Please check your internet and try again.';
-    }
-    
-    // Connection refused
-    if (errorString.contains('connection refused')) {
-      return 'Unable to connect to server. Please try again later.';
-    }
-    
-    // Authentication errors
-    if (errorString.contains('unauthorized') || 
-        errorString.contains('401') ||
-        errorString.contains('authentication')) {
-      return 'Session expired. Please login again.';
-    }
-    
-    // Permission errors
-    if (errorString.contains('forbidden') || 
-        errorString.contains('403') ||
-        errorString.contains('permission')) {
-      return 'You don\'t have permission to access this feature.';
-    }
-    
-    // Not found errors
-    if (errorString.contains('not found') || errorString.contains('404')) {
-      return 'The requested information could not be found.';
-    }
-    
-    // Server errors
-    if (errorString.contains('500') || 
-        errorString.contains('server error') ||
-        errorString.contains('internal')) {
-      return 'Something went wrong. Please try again later.';
-    }
-    
-    // Database errors
-    if (errorString.contains('database') || errorString.contains('sql')) {
-      return 'Unable to process your request. Please try again.';
-    }
-    
-    // Default friendly message
-    return 'Unable to connect. Please check your internet connection.';
+  /// Get a full screen error widget
+  static Widget getFullScreenError(
+    dynamic error, {
+    VoidCallback? onRetry,
+    VoidCallback? onGoBack,
+    String? customTitle,
+    String? customMessage,
+  }) {
+    final exception = ExceptionParser.parse(error);
+    return FullScreenErrorWidget(
+      exception: exception,
+      onRetry: onRetry,
+      onGoBack: onGoBack,
+      customTitle: customTitle,
+      customMessage: customMessage,
+    );
+  }
+
+  /// Handle network errors specifically
+  static void showNetworkError(BuildContext context, {VoidCallback? onRetry}) {
+    showErrorSheet(context, const NetworkException(), onRetry: onRetry);
+  }
+
+  /// Handle server errors specifically
+  static void showServerError(BuildContext context, {VoidCallback? onRetry}) {
+    showErrorSheet(context, const ServerException(), onRetry: onRetry);
+  }
+
+  /// Handle timeout errors specifically
+  static void showTimeoutError(BuildContext context, {VoidCallback? onRetry}) {
+    showError(context, const TimeoutException(), onRetry: onRetry);
+  }
+
+  /// Handle auth errors - typically requires re-login
+  static void showAuthError(BuildContext context, {VoidCallback? onLogin}) {
+    showErrorSheet(
+      context,
+      const AuthException(),
+      onRetry: onLogin,
+      customTitle: 'Session Expired',
+      customMessage:
+          'Your session has expired for security. Please login again to continue.',
+    );
+  }
+
+  /// Convert technical errors to user-friendly messages (legacy support)
+  static String getUserFriendlyMessage(dynamic error) {
+    final exception = ExceptionParser.parse(error);
+    return exception.userMessage;
+  }
+
+  /// Check if an error is retryable
+  static bool isRetryable(dynamic error) {
+    final exception = ExceptionParser.parse(error);
+    return exception.isRetryable;
+  }
+
+  /// Get exception type for custom handling
+  static AppExceptionType getErrorType(dynamic error) {
+    final exception = ExceptionParser.parse(error);
+    return exception.type;
   }
 }
 
-/// Error screen widget for full-page errors
+/// Error screen widget for full-page errors (legacy support + enhanced)
 class ErrorScreen extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
   final VoidCallback? onGoBack;
+  final dynamic error;
 
   const ErrorScreen({
     super.key,
     this.message = 'Something went wrong',
     this.onRetry,
     this.onGoBack,
+    this.error,
   });
 
   @override
   Widget build(BuildContext context) {
+    // If error is provided, use the new FullScreenErrorWidget
+    if (error != null) {
+      final exception = ExceptionParser.parse(error);
+      return FullScreenErrorWidget(
+        exception: exception,
+        onRetry: onRetry,
+        onGoBack: onGoBack,
+      );
+    }
+
+    // Legacy behavior for backward compatibility
     return Container(
-      decoration: BoxDecoration(
-        gradient: AppTheme.backgroundGradient,
-      ),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 80,
-                color: AppTheme.white.withOpacity(0.8),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Oops!',
-                style: AppTheme.headingLarge.copyWith(
-                  color: AppTheme.white,
-                  fontWeight: FontWeight.bold,
+      color: Colors.white,
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Modern error illustration
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFFFF6B6B).withOpacity(0.15),
+                        const Color(0xFFFF6B6B).withOpacity(0.05),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6B6B).withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.cloud_off_rounded,
+                        size: 40,
+                        color: Color(0xFFFF6B6B),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppTheme.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(16),
+                const SizedBox(height: 32),
+                const Text(
+                  'Oops!',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A1A2E),
+                  ),
                 ),
-                child: Text(
+                const SizedBox(height: 16),
+                Text(
                   message,
-                  style: AppTheme.bodyLarge.copyWith(
-                    color: AppTheme.gray,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey.shade600,
+                    height: 1.5,
                   ),
                   textAlign: TextAlign.center,
                 ),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (onGoBack != null)
-                    ElevatedButton.icon(
-                      onPressed: onGoBack,
-                      icon: const Icon(Icons.arrow_back),
-                      label: const Text('Go Back'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.white,
-                        foregroundColor: AppTheme.primaryBlue,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                      ),
-                    ),
-                  if (onGoBack != null && onRetry != null)
-                    const SizedBox(width: 16),
-                  if (onRetry != null)
-                    ElevatedButton.icon(
+                const SizedBox(height: 40),
+                if (onRetry != null)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
                       onPressed: onRetry,
-                      icon: const Icon(Icons.refresh),
+                      icon: const Icon(Icons.refresh_rounded),
                       label: const Text('Try Again'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryBlue,
-                        foregroundColor: AppTheme.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
+                        backgroundColor: const Color(0xFF667EEA),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
+                        elevation: 0,
                       ),
                     ),
+                  ),
+                if (onGoBack != null) ...[
+                  const SizedBox(height: 16),
+                  TextButton.icon(
+                    onPressed: onGoBack,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    label: const Text('Go Back'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.grey.shade600,
+                    ),
+                  ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Empty state widget for when there's no data
+class EmptyStateWidget extends StatelessWidget {
+  final String title;
+  final String message;
+  final IconData icon;
+  final VoidCallback? onAction;
+  final String? actionLabel;
+
+  const EmptyStateWidget({
+    super.key,
+    required this.title,
+    required this.message,
+    this.icon = Icons.inbox_rounded,
+    this.onAction,
+    this.actionLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F4FF),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 48, color: const Color(0xFF667EEA)),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A2E),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (onAction != null && actionLabel != null) ...[
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: onAction,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF667EEA),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(actionLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Loading state widget with shimmer effect
+class LoadingStateWidget extends StatelessWidget {
+  final String? message;
+
+  const LoadingStateWidget({super.key, this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F4FF),
+              shape: BoxShape.circle,
+            ),
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF667EEA)),
+              ),
+            ),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 20),
+            Text(
+              message!,
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            ),
+          ],
+        ],
       ),
     );
   }

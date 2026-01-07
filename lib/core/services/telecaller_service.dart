@@ -18,7 +18,7 @@ class TelecallerService {
   final DatabaseService _db = DatabaseService.instance;
 
   // Get dashboard statistics for current telecaller
-  Future<Map<String, int>> getDashboardStats() async {
+  Future<Map<String, int>> getDashboardStats({String period = 'today'}) async {
     try {
       // Use RealAuthService to get current user
       final currentUser = await _getCurrentUser();
@@ -28,19 +28,32 @@ class TelecallerService {
       
       final callerId = int.tryParse(currentUser.id) ?? 1;
       
-      // Call the dashboard stats API
+      // Call the dashboard stats API with period filter
       final response = await http.get(
-        Uri.parse('${ApiConfig.dashboardStatsApi}?caller_id=$callerId'),
+        Uri.parse('${ApiConfig.dashboardStatsApi}?caller_id=$callerId&period=$period'),
       ).timeout(ApiConfig.shortTimeout);
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
           final stats = data['data'];
+          
+          // Get backlog count from telehead API
+          int backlogCount = stats['pending_calls'] ?? 0;
+          try {
+            final backlogCountFromAPI = await _getBacklogCountFromTelehead();
+            if (backlogCountFromAPI > 0) {
+              backlogCount = backlogCountFromAPI;
+            }
+          } catch (e) {
+            print('Failed to get backlog from telehead API, using pending_calls: $e');
+          }
+          
           return {
             'total_calls': stats['total_calls'] ?? 0,
             'connected_calls': stats['connected_calls'] ?? 0,
-            'pending_calls': stats['pending_calls'] ?? 0,
+            'not_connected_calls': stats['not_connected_calls'] ?? 0,
+            'pending_calls': backlogCount,
             'fresh_leads': stats['fresh_leads'] ?? 0,
             'callbacks_scheduled': stats['callbacks_scheduled'] ?? 0,
             'interested_count': stats['interested_count'] ?? 0,
@@ -52,6 +65,39 @@ class TelecallerService {
     } catch (e) {
       print('Error fetching dashboard stats: $e');
       return _getDefaultStats();
+    }
+  }
+  
+  // Get backlog count from filtered API
+  Future<int> _getBacklogCountFromTelehead() async {
+    try {
+      final currentUser = await _getCurrentUser();
+      if (currentUser == null) return 0;
+      
+      final callerId = int.tryParse(currentUser.id) ?? 1;
+      final token = await RealAuthService.instance.getAuthToken();
+      if (token == null) return 0;
+      
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/backlog_by_telecaller.php?caller_id=$callerId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(ApiConfig.shortTimeout);
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == true) {
+          // Return the total_backlog count (filtered by telecaller)
+          return data['total_backlog'] ?? 0;
+        }
+      }
+      return 0;
+    } catch (e) {
+      print('Error fetching backlog count: $e');
+      return 0;
     }
   }
   
@@ -70,6 +116,7 @@ class TelecallerService {
     return {
       'total_calls': 0,
       'connected_calls': 0,
+      'not_connected_calls': 0,
       'pending_calls': 0,
       'fresh_leads': 0,
       'callbacks_scheduled': 0,

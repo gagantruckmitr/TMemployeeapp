@@ -68,6 +68,8 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     if (tab != _currentTab) {
       setState(() {
         _currentTab = tab;
+        // Reset section to home when changing tabs
+        _currentSection = NavigationSection.home;
       });
 
       _pageController.animateToPage(
@@ -81,9 +83,79 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   }
 
   void _onSectionChanged(NavigationSection section, {String? filter}) {
-    print(
-      '🔍 MainNav: section=$section, index=${section.index}, filter=$filter',
-    );
+    // Handle new sidebar menu items that map to bottom navigation tabs
+    switch (section) {
+      case NavigationSection.welcomeCall:
+      case NavigationSection.home:
+        // Navigate to Welcome Call tab (index 0) and reset to home sub-page
+        setState(() {
+          _currentTab = MainNavigationTab.welcomeCall;
+          _currentSection = NavigationSection.home;
+        });
+        _pageController.animateToPage(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+        // Also animate sub-page back to home (index 0)
+        _subPageController.animateToPage(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+        HapticFeedback.selectionClick();
+        return;
+      case NavigationSection.tollFree:
+        // Navigate to Toll Free tab (index 1)
+        setState(() {
+          _currentTab = MainNavigationTab.tollFree;
+        });
+        _pageController.animateToPage(
+          1,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+        HapticFeedback.selectionClick();
+        return;
+      case NavigationSection.jobMatching:
+        // Navigate to Match Making tab (index 2)
+        setState(() {
+          _currentTab = MainNavigationTab.matchMaking;
+        });
+        _pageController.animateToPage(
+          2,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+        HapticFeedback.selectionClick();
+        return;
+      case NavigationSection.callbackRequest:
+        // Navigate to Callback tab (index 3)
+        setState(() {
+          _currentTab = MainNavigationTab.callback;
+        });
+        _pageController.animateToPage(
+          3,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+        HapticFeedback.selectionClick();
+        return;
+      case NavigationSection.socialMediaLeads:
+        // Navigate to Social tab (index 4)
+        setState(() {
+          _currentTab = MainNavigationTab.social;
+        });
+        _pageController.animateToPage(
+          4,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+        HapticFeedback.selectionClick();
+        return;
+      default:
+        break;
+    }
 
     setState(() {
       _currentSection = section;
@@ -160,8 +232,9 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                   onClose: _closeDrawer,
                 ),
 
-              // Menu button for home tab
+              // Menu button for home tab - only on home section
               if (_currentTab == MainNavigationTab.welcomeCall &&
+                  _currentSection == NavigationSection.home &&
                   !_isDrawerOpen)
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 16,
@@ -196,8 +269,10 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
                 ),
 
               // Back button for sub-screens
+              // Skip for screens that have their own back button (Call History)
               if (_currentTab == MainNavigationTab.welcomeCall &&
                   _currentSection != NavigationSection.home &&
+                  _currentSection != NavigationSection.callHistory &&
                   !_isDrawerOpen)
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 16,
@@ -255,6 +330,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         CallHistoryScreen(
           key: ValueKey(_callHistoryFilter),
           initialFilter: _callHistoryFilter,
+          onBack: () => _onSectionChanged(NavigationSection.home),
         ),
         const DynamicProfileScreen(), // This won't be used since profile has its own tab
       ],
@@ -263,6 +339,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
 
   Widget _buildBottomNavigation() {
     return FullWidthBottomNavBar(
+      key: ValueKey(_currentTab.index), // Force rebuild when tab changes
       initialIndex: _currentTab.index,
       onIndexChanged: (index) => _onTabChanged(MainNavigationTab.values[index]),
     );

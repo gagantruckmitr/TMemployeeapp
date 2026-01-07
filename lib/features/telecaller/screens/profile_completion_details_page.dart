@@ -149,18 +149,23 @@ class _ProfileCompletionDetailsPageState
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('🔍 _getDriverDocuments() CALLED');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
+
     // Use the flag passed from the calling page, or check document keys as fallback
     final allKeys = docs.keys.map((k) => k.toLowerCase()).toList();
-    final isTransporterFromKeys = allKeys.contains('transport_name') ||
-                                   allKeys.contains('pan_number') ||
-                                   allKeys.contains('fleet_size') ||
-                                   allKeys.contains('gst_certificate');
-    
+    final isTransporterFromKeys =
+        allKeys.contains('transport_name') ||
+        allKeys.contains('pan_number') ||
+        allKeys.contains('fleet_size') ||
+        allKeys.contains('gst_certificate');
+
     final isTransporter = widget.isTransporter || isTransporterFromKeys;
-    
-    print('🔍 widget.isTransporter (from constructor) = ${widget.isTransporter}');
-    print('🔍 isTransporterFromKeys (detected from API) = $isTransporterFromKeys');
+
+    print(
+      '🔍 widget.isTransporter (from constructor) = ${widget.isTransporter}',
+    );
+    print(
+      '🔍 isTransporterFromKeys (detected from API) = $isTransporterFromKeys',
+    );
     print('🔍 isTransporter (FINAL DECISION) = $isTransporter');
     print('🔍 All document keys from API: ${docs.keys.toList()}');
     print('🔍 All keys (lowercase): $allKeys');
@@ -172,47 +177,197 @@ class _ProfileCompletionDetailsPageState
       return [
         DocumentItem('Name', 'name', docs['name'] ?? false, values['name']),
         DocumentItem('Email', 'email', docs['email'] ?? false, values['email']),
-        DocumentItem('Mobile', 'mobile', docs['mobile'] ?? false, values['mobile']),
-        DocumentItem('Transport Name', 'transport_name', docs['transport_name'] ?? false, values['transport_name']),
-        DocumentItem('Year of Establishment', 'year_of_establishment', docs['year_of_establishment'] ?? false, values['year_of_establishment']),
-        DocumentItem('Fleet Size', 'fleet_size', docs['fleet_size'] ?? false, values['fleet_size']),
-        DocumentItem('Operational Segment', 'operational_segment', docs['operational_segment'] ?? false, values['operational_segment']),
-        DocumentItem('Average KM', 'average_km', docs['average_km'] ?? false, values['average_km']),
+        DocumentItem(
+          'Mobile',
+          'mobile',
+          docs['mobile'] ?? false,
+          values['mobile'],
+        ),
+        DocumentItem(
+          'Transport Name',
+          'transport_name',
+          docs['transport_name'] ?? false,
+          values['transport_name'],
+        ),
+        DocumentItem(
+          'Year of Establishment',
+          'year_of_establishment',
+          docs['year_of_establishment'] ?? false,
+          values['year_of_establishment'],
+        ),
+        DocumentItem(
+          'Fleet Size',
+          'fleet_size',
+          docs['fleet_size'] ?? false,
+          values['fleet_size'],
+        ),
+        DocumentItem(
+          'Operational Segment',
+          'operational_segment',
+          docs['operational_segment'] ?? false,
+          values['operational_segment'],
+        ),
+        DocumentItem(
+          'Average KM',
+          'average_km',
+          docs['average_km'] ?? false,
+          values['average_km'],
+        ),
         DocumentItem('City', 'city', docs['city'] ?? false, values['city']),
         DocumentItem('State', 'state', docs['state'] ?? false, values['state']),
-        DocumentItem('Profile Photo', 'images', docs['images'] ?? false, values['images']),
-        DocumentItem('Address', 'address', docs['address'] ?? false, values['address']),
-        DocumentItem('PAN Number', 'pan_number', docs['pan_number'] ?? false, values['pan_number']),
-        DocumentItem('PAN Image', 'pan_image', docs['pan_image'] ?? false, values['pan_image']),
-        DocumentItem('GST Certificate', 'gst_certificate', docs['gst_certificate'] ?? false, values['gst_certificate']),
+        DocumentItem(
+          'Profile Photo',
+          'images',
+          docs['images'] ?? false,
+          values['images'],
+        ),
+        DocumentItem(
+          'Address',
+          'address',
+          docs['address'] ?? false,
+          values['address'],
+        ),
+        DocumentItem(
+          'PAN Number',
+          'pan_number',
+          docs['pan_number'] ?? false,
+          values['pan_number'],
+        ),
+        DocumentItem(
+          'PAN Image',
+          'pan_image',
+          docs['pan_image'] ?? false,
+          values['pan_image'],
+        ),
+        DocumentItem(
+          'GST Certificate',
+          'gst_certificate',
+          docs['gst_certificate'] ?? false,
+          values['gst_certificate'],
+        ),
       ];
     }
 
-    // Return driver-specific fields
+    // Return driver-specific fields (23 records total)
     return [
-      DocumentItem('Basic Information', 'name', docs['name'] ?? false, values['name']),
+      DocumentItem(
+        'Basic Information',
+        'name',
+        docs['name'] ?? false,
+        values['name'],
+      ),
       DocumentItem('Email', 'email', docs['email'] ?? false, values['email']),
-      DocumentItem('City', 'city', docs['city'] ?? false, values['city']),
-      DocumentItem('Gender', 'sex', docs['sex'] ?? false, values['sex']),
-      DocumentItem('Vehicle Type', 'vehicle_type', docs['vehicle_type'] ?? false, values['vehicle_type']),
-      DocumentItem('Father Name', 'father_name', docs['father_name'] ?? false, values['father_name']),
-      DocumentItem('Profile Photo', 'images', docs['images'] ?? false, values['images']),
-      DocumentItem('Address', 'address', docs['address'] ?? false, values['address']),
+      DocumentItem('Mobile', 'mobile', docs['mobile'] ?? false, values['mobile']),
+      DocumentItem('State', 'state', docs['state'] ?? false, values['state']),
+      DocumentItem(
+        'Vehicle Type',
+        'vehicle_type',
+        docs['vehicle_type'] ?? false,
+        values['vehicle_type'],
+      ),
+      DocumentItem(
+        'Father Name',
+        'father_name',
+        docs['father_name'] ?? false,
+        values['father_name'],
+      ),
+      DocumentItem(
+        'Profile Photo',
+        'images',
+        docs['images'] ?? false,
+        values['images'],
+      ),
+      DocumentItem(
+        'Address',
+        'address',
+        docs['address'] ?? false,
+        values['address'],
+      ),
       DocumentItem('Date of Birth', 'dob', docs['dob'] ?? false, values['dob']),
-      DocumentItem('License Type', 'type_of_license', docs['type_of_license'] ?? false, values['type_of_license']),
-      DocumentItem('Driving Experience', 'driving_experience', docs['driving_experience'] ?? false, values['driving_experience']),
-      DocumentItem('Education', 'highest_education', docs['highest_education'] ?? false, values['highest_education']),
-      DocumentItem('License Number', 'license_number', docs['license_number'] ?? false, values['license_number']),
-      DocumentItem('License Expiry', 'expiry_date_of_license', docs['expiry_date_of_license'] ?? false, values['expiry_date_of_license']),
-      DocumentItem('Expected Income', 'expected_monthly_income', docs['expected_monthly_income'] ?? false, values['expected_monthly_income']),
-      DocumentItem('Current Income', 'current_monthly_income', docs['current_monthly_income'] ?? false, values['current_monthly_income']),
-      DocumentItem('Marital Status', 'marital_status', docs['marital_status'] ?? false, values['marital_status']),
-      DocumentItem('Preferred Location', 'preferred_location', docs['preferred_location'] ?? false, values['preferred_location']),
-      DocumentItem('Aadhar Number', 'aadhar_number', docs['aadhar_number'] ?? false, values['aadhar_number']),
-      DocumentItem('Aadhar Photo', 'aadhar_photo', docs['aadhar_photo'] ?? false, values['aadhar_photo']),
-      DocumentItem('Driving License', 'driving_license', docs['driving_license'] ?? false, values['driving_license']),
-      DocumentItem('Previous Employer', 'previous_employer', docs['previous_employer'] ?? false, values['previous_employer']),
-      DocumentItem('Job Placement', 'job_placement', docs['job_placement'] ?? false, values['job_placement']),
+      DocumentItem(
+        'License Type',
+        'type_of_license',
+        docs['type_of_license'] ?? false,
+        values['type_of_license'],
+      ),
+      DocumentItem(
+        'Driving Experience (Yrs)',
+        'driving_experience',
+        docs['driving_experience'] ?? false,
+        values['driving_experience'],
+      ),
+      DocumentItem(
+        'Education',
+        'highest_education',
+        docs['highest_education'] ?? false,
+        values['highest_education'],
+      ),
+      DocumentItem(
+        'License Number',
+        'license_number',
+        docs['license_number'] ?? false,
+        values['license_number'],
+      ),
+      DocumentItem(
+        'License Expiry',
+        'expiry_date_of_license',
+        docs['expiry_date_of_license'] ?? false,
+        values['expiry_date_of_license'],
+      ),
+      DocumentItem(
+        'Expected Income',
+        'expected_monthly_income',
+        docs['expected_monthly_income'] ?? false,
+        values['expected_monthly_income'],
+      ),
+      DocumentItem(
+        'Current Income',
+        'current_monthly_income',
+        docs['current_monthly_income'] ?? false,
+        values['current_monthly_income'],
+      ),
+      DocumentItem(
+        'Marital Status',
+        'marital_status',
+        docs['marital_status'] ?? false,
+        values['marital_status'],
+      ),
+      DocumentItem(
+        'Preferred Location',
+        'preferred_location',
+        docs['preferred_location'] ?? false,
+        values['preferred_location'],
+      ),
+      DocumentItem(
+        'Aadhar Number',
+        'aadhar_number',
+        docs['aadhar_number'] ?? false,
+        values['aadhar_number'],
+      ),
+      DocumentItem(
+        'Aadhar Photo',
+        'aadhar_photo',
+        docs['aadhar_photo'] ?? false,
+        values['aadhar_photo'],
+      ),
+      DocumentItem(
+        'Driving License',
+        'driving_license',
+        docs['driving_license'] ?? false,
+        values['driving_license'],
+      ),
+      DocumentItem(
+        'Previous Employer',
+        'previous_employer',
+        docs['previous_employer'] ?? false,
+        values['previous_employer'],
+      ),
+      DocumentItem(
+        'Job Placement',
+        'job_placement',
+        docs['job_placement'] ?? false,
+        values['job_placement'],
+      ),
     ];
   }
 
@@ -226,16 +381,44 @@ class _ProfileCompletionDetailsPageState
     print('🚨 Contact ID = ${widget.contact.id}');
     print('═══════════════════════════════════════════════════════');
     print('');
-    
-    final completion = _detailedCompletion ?? widget.contact.profileCompletion;
-    final percentage = completion?.percentage ?? 0;
-    final progressColor = _getProgressColor(percentage);
+
+    // Calculate completion based on the displayed documents list ONLY
+    // This ensures count matches the list shown to user
     final documents = _getDriverDocuments();
+    final totalDocs = documents.length;
     
-    // Use actual counts from API if available, otherwise count from documents list
-    final completedDocs = completion?.documentStatus.values.where((v) => v).length ?? 
-                          documents.where((doc) => doc.isPresent).length;
-      final totalDocs = documents.length;
+    // Count completed docs by checking actual values, not just API status
+    // This handles special cases like mobile (from contact) and state (from TMID)
+    final completion = _detailedCompletion ?? widget.contact.profileCompletion;
+    final values = completion?.documentValues ?? {};
+    
+    int completedDocs = 0;
+    for (var doc in documents) {
+      var value = values[doc.fieldName];
+      
+      // Special handling for mobile - fallback to contact phone
+      if (doc.fieldName == 'mobile' && (value == null || value.isEmpty)) {
+        value = widget.contact.phoneNumber;
+      }
+      
+      // Special handling for state - extract from TMID
+      if (doc.fieldName == 'state' && (value == null || value.isEmpty)) {
+        value = StateCodeMapper.getStateName(widget.contact.tmid);
+      }
+      
+      // Check if value is valid
+      if (_isValidValue(value)) {
+        completedDocs++;
+      }
+    }
+
+    // Recalculate percentage from visible docs
+    // This ensures displayed percentage matches the displayed fraction (X/Y Records)
+    final percentage = totalDocs > 0
+        ? ((completedDocs / totalDocs) * 100).round()
+        : 0;
+
+    final progressColor = _getProgressColor(percentage);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -325,7 +508,8 @@ class _ProfileCompletionDetailsPageState
                   color: Color(0xFF3B82F6),
                 ),
                 child: ClipOval(
-                  child: widget.contact.profilePicture != null &&
+                  child:
+                      widget.contact.profilePicture != null &&
                           widget.contact.profilePicture!.isNotEmpty
                       ? Image.network(
                           widget.contact.profilePicture!,
@@ -356,16 +540,16 @@ class _ProfileCompletionDetailsPageState
                               color: const Color(0xFF3B82F6),
                               child: Center(
                                 child: CircularProgressIndicator(
-                                  value: loadingProgress.expectedTotalBytes !=
-                                          null
+                                  value:
+                                      loadingProgress.expectedTotalBytes != null
                                       ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
+                                            loadingProgress.expectedTotalBytes!
                                       : null,
                                   strokeWidth: 3,
                                   valueColor:
                                       const AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
+                                        Colors.white,
+                                      ),
                                 ),
                               ),
                             );
@@ -435,16 +619,25 @@ class _ProfileCompletionDetailsPageState
           const SizedBox(height: 4),
 
           // Completion Status
-            Text(
-              '$completedDocs/$totalDocs docs',
-              style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-            ),
+          Text(
+            '$completedDocs/$totalDocs Records',
+            style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildTabNavigation() {
+    final completion = _detailedCompletion ?? widget.contact.profileCompletion;
+    final docs = completion?.documentStatus ?? {};
+    final allKeys = docs.keys.map((k) => k.toLowerCase()).toList();
+    final isTransporterFromKeys =
+        allKeys.contains('transport_name') ||
+        allKeys.contains('pan_number') ||
+        allKeys.contains('fleet_size');
+    final isTransporter = widget.isTransporter || isTransporterFromKeys;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(4),
@@ -454,9 +647,12 @@ class _ProfileCompletionDetailsPageState
       ),
       child: Row(
         children: [
-          _buildTabItem('Personal Detail', 0),
-          _buildTabItem('Driving Details', 1),
-          _buildTabItem('Uploaded Documents', 2),
+          _buildTabItem('Personal\nDetail', 0),
+          _buildTabItem(
+            isTransporter ? 'Fleet\nDetails' : 'Driving\nDetails',
+            1,
+          ),
+          _buildTabItem('Uploaded\nDocs', 2),
         ],
       ),
     );
@@ -506,12 +702,13 @@ class _ProfileCompletionDetailsPageState
     final completion = _detailedCompletion ?? widget.contact.profileCompletion;
     final values = completion?.documentValues ?? {};
     final docs = completion?.documentStatus ?? {};
-    
+
     // Check if transporter
     final allKeys = docs.keys.map((k) => k.toLowerCase()).toList();
-    final isTransporterFromKeys = allKeys.contains('transport_name') ||
-                                   allKeys.contains('pan_number') ||
-                                   allKeys.contains('fleet_size');
+    final isTransporterFromKeys =
+        allKeys.contains('transport_name') ||
+        allKeys.contains('pan_number') ||
+        allKeys.contains('fleet_size');
     final isTransporter = widget.isTransporter || isTransporterFromKeys;
 
     // Get missing documents
@@ -521,35 +718,57 @@ class _ProfileCompletionDetailsPageState
         .toList();
 
     List<Map<String, dynamic>> personalFields;
-    
+
     if (isTransporter) {
       // Transporter personal fields
       personalFields = [
         {'key': 'name', 'label': 'Name', 'icon': Icons.person_outline},
         {'key': 'email', 'label': 'Email', 'icon': Icons.email_outlined},
         {'key': 'mobile', 'label': 'Mobile', 'icon': Icons.phone_outlined},
-        {'key': 'transport_name', 'label': 'Transport Name', 'icon': Icons.business_outlined},
-        {'key': 'year_of_establishment', 'label': 'Year of Establishment', 'icon': Icons.calendar_today_outlined},
-        {'key': 'fleet_size', 'label': 'Fleet Size', 'icon': Icons.local_shipping_outlined},
-        {'key': 'operational_segment', 'label': 'Operational Segment', 'icon': Icons.category_outlined},
-        {'key': 'average_km', 'label': 'Average KM', 'icon': Icons.speed_outlined},
-        {'key': 'city', 'label': 'City', 'icon': Icons.location_city_outlined},
-        {'key': 'state', 'label': 'State', 'icon': Icons.map_outlined, 'useStateFromTMID': true},
         {'key': 'address', 'label': 'Address', 'icon': Icons.home_outlined},
+        {
+          'key': 'state',
+          'label': 'State',
+          'icon': Icons.map_outlined,
+          'useStateFromTMID': true,
+        },
       ];
     } else {
       // Driver personal fields
       personalFields = [
         {'key': 'name', 'label': 'Full Name', 'icon': Icons.person_outline},
         {'key': 'email', 'label': 'Email', 'icon': Icons.email_outlined},
-        {'key': 'father_name', 'label': 'Father Name', 'icon': Icons.family_restroom_outlined},
-        {'key': 'dob', 'label': 'DOB', 'icon': Icons.cake_outlined, 'isDate': true},
+        {'key': 'mobile', 'label': 'Mobile', 'icon': Icons.phone_outlined},
+        {
+          'key': 'father_name',
+          'label': 'Father Name',
+          'icon': Icons.family_restroom_outlined,
+        },
+        {
+          'key': 'dob',
+          'label': 'DOB',
+          'icon': Icons.cake_outlined,
+          'isDate': true,
+        },
         {'key': 'sex', 'label': 'Gender', 'icon': Icons.wc_outlined},
-        {'key': 'marital_status', 'label': 'Marital Status', 'icon': Icons.favorite_outline},
-        {'key': 'highest_education', 'label': 'Highest Education', 'icon': Icons.school_outlined},
+        {
+          'key': 'marital_status',
+          'label': 'Marital Status',
+          'icon': Icons.favorite_outline,
+        },
+        {
+          'key': 'highest_education',
+          'label': 'Highest Education',
+          'icon': Icons.school_outlined,
+        },
         {'key': 'address', 'label': 'Address', 'icon': Icons.home_outlined},
         {'key': 'city', 'label': 'City', 'icon': Icons.location_city_outlined},
-        {'key': 'state', 'label': 'State', 'icon': Icons.map_outlined, 'useStateFromTMID': true},
+        {
+          'key': 'state',
+          'label': 'State',
+          'icon': Icons.map_outlined,
+          'useStateFromTMID': true,
+        },
       ];
     }
 
@@ -559,76 +778,84 @@ class _ProfileCompletionDetailsPageState
       child: Column(
         children: [
           // Missing documents banner
-          if (missingDocs.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFCA5A5)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Missing Documents (${missingDocs.length})',
-                        style: const TextStyle(
-                          color: Color(0xFFEF4444),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: missingDocs.map((doc) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFFCA5A5)),
-                        ),
-                        child: Text(
-                          doc.replaceAll('_', ' ').toUpperCase(),
-                          style: const TextStyle(
-                            color: Color(0xFFEF4444),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
-          
+          // if (missingDocs.isNotEmpty)
+          //   Container(
+          //     margin: const EdgeInsets.only(bottom: 16),
+          //     padding: const EdgeInsets.all(16),
+          //     decoration: BoxDecoration(
+          //       color: const Color(0xFFFEF2F2),
+          //       borderRadius: BorderRadius.circular(12),
+          //       border: Border.all(color: const Color(0xFFFCA5A5)),
+          //     ),
+          //     child: Column(
+          //       crossAxisAlignment: CrossAxisAlignment.start,
+          //       children: [
+          //         Row(
+          //           children: [
+          //             const Icon(
+          //               Icons.warning_amber_rounded,
+          //               color: Color(0xFFEF4444),
+          //               size: 20,
+          //             ),
+          //             const SizedBox(width: 8),
+          //             Text(
+          //               'Missing Documents (${missingDocs.length})',
+          //               style: const TextStyle(
+          //                 color: Color(0xFFEF4444),
+          //                 fontSize: 14,
+          //                 fontWeight: FontWeight.w600,
+          //               ),
+          //             ),
+          //           ],
+          //         ),
+          //         const SizedBox(height: 8),
+          //         Wrap(
+          //           spacing: 6,
+          //           runSpacing: 6,
+          //           children: missingDocs.map((doc) {
+          //             return Container(
+          //               padding: const EdgeInsets.symmetric(
+          //                 horizontal: 8,
+          //                 vertical: 4,
+          //               ),
+          //               decoration: BoxDecoration(
+          //                 color: Colors.white,
+          //                 borderRadius: BorderRadius.circular(6),
+          //                 border: Border.all(color: const Color(0xFFFCA5A5)),
+          //               ),
+          //               child: Text(
+          //                 doc.replaceAll('_', ' ').toUpperCase(),
+          //                 style: const TextStyle(
+          //                   color: Color(0xFFEF4444),
+          //                   fontSize: 11,
+          //                   fontWeight: FontWeight.w500,
+          //                 ),
+          //               ),
+          //             );
+          //           }).toList(),
+          //         ),
+          //       ],
+          //     ),
+          //   ),
+
           // Personal fields
           ...personalFields.map((field) {
-            final useStateFromTMID = field['useStateFromTMID'] as bool? ?? false;
+            final useStateFromTMID =
+                field['useStateFromTMID'] as bool? ?? false;
             String? stateValue;
-            
+
             if (useStateFromTMID && field['key'] == 'state') {
               // Extract state name from TMID using StateCodeMapper
               stateValue = StateCodeMapper.getStateName(widget.contact.tmid);
             }
-            
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _buildInfoCard(
                 field['key'] as String,
                 field['label'] as String,
                 field['icon'] as IconData,
-                useStateFromTMID && stateValue != null 
+                useStateFromTMID && stateValue != null
                     ? {...values, 'state': stateValue}
                     : values,
                 isDate: field['isDate'] as bool? ?? false,
@@ -644,52 +871,107 @@ class _ProfileCompletionDetailsPageState
     final completion = _detailedCompletion ?? widget.contact.profileCompletion;
     final values = completion?.documentValues ?? {};
     final docs = completion?.documentStatus ?? {};
-    
+
     // Check if transporter
     final allKeys = docs.keys.map((k) => k.toLowerCase()).toList();
-    final isTransporterFromKeys = allKeys.contains('transport_name') ||
-                                   allKeys.contains('pan_number') ||
-                                   allKeys.contains('fleet_size');
+    final isTransporterFromKeys =
+        allKeys.contains('transport_name') ||
+        allKeys.contains('pan_number') ||
+        allKeys.contains('fleet_size');
     final isTransporter = widget.isTransporter || isTransporterFromKeys;
 
-    // For transporters, this tab is not relevant - show a message
+    // For transporters, show Fleet Details
     if (isTransporter) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.info_outline,
-                size: 64,
-                color: Colors.grey[400],
+      final fleetFields = [
+        {
+          'key': 'transport_name',
+          'label': 'Transport Name',
+          'icon': Icons.business_outlined,
+        },
+        {
+          'key': 'year_of_establishment',
+          'label': 'Year of Establishment',
+          'icon': Icons.calendar_today_outlined,
+        },
+        {
+          'key': 'fleet_size',
+          'label': 'Fleet Size',
+          'icon': Icons.local_shipping_outlined,
+        },
+        {
+          'key': 'operational_segment',
+          'label': 'Operational Segment',
+          'icon': Icons.category_outlined,
+        },
+        {
+          'key': 'average_km',
+          'label': 'Average KM',
+          'icon': Icons.speed_outlined,
+        },
+        {'key': 'city', 'label': 'City', 'icon': Icons.location_city_outlined},
+      ];
+
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          children: fleetFields.map((field) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildInfoCard(
+                field['key'] as String,
+                field['label'] as String,
+                field['icon'] as IconData,
+                values,
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Not applicable for transporters',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+            );
+          }).toList(),
         ),
       );
     }
 
     // Driver driving fields
     final drivingFields = [
-      {'key': 'vehicle_type', 'label': 'Vehicle Type', 'icon': Icons.local_shipping_outlined},
-      {'key': 'driving_experience', 'label': 'Driving Experience', 'icon': Icons.speed_outlined},
-      {'key': 'preferred_location', 'label': 'Preferred Location', 'icon': Icons.location_on_outlined},
-      {'key': 'current_monthly_income', 'label': 'Current Monthly Income', 'icon': Icons.currency_rupee},
-      {'key': 'expected_monthly_income', 'label': 'Expected Monthly Income', 'icon': Icons.trending_up_outlined},
-      {'key': 'type_of_license', 'label': 'Type of License', 'icon': Icons.badge_outlined},
-      {'key': 'previous_employer', 'label': 'Previous Employer', 'icon': Icons.work_outline},
-      {'key': 'job_placement', 'label': 'Job Placement', 'icon': Icons.work_history_outlined},
+      {
+        'key': 'vehicle_type',
+        'label': 'Vehicle Type',
+        'icon': Icons.local_shipping_outlined,
+      },
+      {
+        'key': 'driving_experience',
+        'label': 'Driving Experience (Yrs)',
+        'icon': Icons.speed_outlined,
+      },
+      {
+        'key': 'preferred_location',
+        'label': 'Preferred Location',
+        'icon': Icons.location_on_outlined,
+      },
+      {
+        'key': 'current_monthly_income',
+        'label': 'Current Monthly Income',
+        'icon': Icons.currency_rupee,
+      },
+      {
+        'key': 'expected_monthly_income',
+        'label': 'Expected Monthly Income',
+        'icon': Icons.trending_up_outlined,
+      },
+      {
+        'key': 'type_of_license',
+        'label': 'Type of License',
+        'icon': Icons.badge_outlined,
+      },
+      {
+        'key': 'previous_employer',
+        'label': 'Previous Employer',
+        'icon': Icons.work_outline,
+      },
+      {
+        'key': 'job_placement',
+        'label': 'Job Placement',
+        'icon': Icons.work_history_outlined,
+      },
     ];
 
     return SingleChildScrollView(
@@ -715,12 +997,13 @@ class _ProfileCompletionDetailsPageState
     final completion = _detailedCompletion ?? widget.contact.profileCompletion;
     final values = completion?.documentValues ?? {};
     final docs = completion?.documentStatus ?? {};
-    
+
     // Check if transporter
     final allKeys = docs.keys.map((k) => k.toLowerCase()).toList();
-    final isTransporterFromKeys = allKeys.contains('transport_name') ||
-                                   allKeys.contains('pan_number') ||
-                                   allKeys.contains('fleet_size');
+    final isTransporterFromKeys =
+        allKeys.contains('transport_name') ||
+        allKeys.contains('pan_number') ||
+        allKeys.contains('fleet_size');
     final isTransporter = widget.isTransporter || isTransporterFromKeys;
 
     if (isTransporter) {
@@ -730,13 +1013,33 @@ class _ProfileCompletionDetailsPageState
         physics: const BouncingScrollPhysics(),
         child: Column(
           children: [
-            _buildInfoCard('pan_number', 'PAN Number', Icons.credit_card_outlined, values),
+            _buildInfoCard(
+              'pan_number',
+              'PAN Number',
+              Icons.credit_card_outlined,
+              values,
+            ),
             const SizedBox(height: 12),
-            _buildDocumentPhotoCard('pan_image', 'PAN Image', Icons.photo_outlined, values),
+            _buildDocumentPhotoCard(
+              'pan_image',
+              'PAN Image',
+              Icons.photo_outlined,
+              values,
+            ),
             const SizedBox(height: 12),
-            _buildDocumentPhotoCard('gst_certificate', 'GST Certificate', Icons.description_outlined, values),
+            _buildDocumentPhotoCard(
+              'gst_certificate',
+              'GST Certificate',
+              Icons.description_outlined,
+              values,
+            ),
             const SizedBox(height: 12),
-            _buildDocumentPhotoCard('images', 'Profile Photo', Icons.photo_library_outlined, values),
+            _buildDocumentPhotoCard(
+              'images',
+              'Profile Photo',
+              Icons.photo_library_outlined,
+              values,
+            ),
           ],
         ),
       );
@@ -748,15 +1051,41 @@ class _ProfileCompletionDetailsPageState
       physics: const BouncingScrollPhysics(),
       child: Column(
         children: [
-          _buildInfoCard('aadhar_number', 'Aadhar Number', Icons.credit_card_outlined, values),
+          _buildInfoCard(
+            'aadhar_number',
+            'Aadhar Number',
+            Icons.credit_card_outlined,
+            values,
+          ),
           const SizedBox(height: 12),
-          _buildDocumentPhotoCard('aadhar_photo', 'Uploaded Aadhar Photo', Icons.photo_outlined, values),
+          _buildDocumentPhotoCard(
+            'aadhar_photo',
+            'Uploaded Aadhar Photo',
+            Icons.photo_outlined,
+            values,
+          ),
           const SizedBox(height: 12),
-          _buildInfoCard('license_number', 'License Number', Icons.drive_eta_outlined, values),
+          _buildInfoCard(
+            'license_number',
+            'License Number',
+            Icons.drive_eta_outlined,
+            values,
+          ),
           const SizedBox(height: 12),
-          _buildInfoCard('expiry_date_of_license', 'Expiry Date of License', Icons.event_outlined, values, isDate: true),
+          _buildInfoCard(
+            'expiry_date_of_license',
+            'Expiry Date of License',
+            Icons.event_outlined,
+            values,
+            isDate: true,
+          ),
           const SizedBox(height: 12),
-          _buildDocumentPhotoCard('driving_license', 'Uploaded Driving License Photo', Icons.photo_library_outlined, values),
+          _buildDocumentPhotoCard(
+            'driving_license',
+            'Uploaded Driving License Photo',
+            Icons.photo_library_outlined,
+            values,
+          ),
         ],
       ),
     );
@@ -769,11 +1098,35 @@ class _ProfileCompletionDetailsPageState
     Map<String, String?> values, {
     bool isDate = false,
   }) {
-    final value = values[key];
+    var value = values[key];
+
+    // Fallback for mobile if missing in values but present in contact
+    if (key == 'mobile' && (value == null || value.isEmpty)) {
+      value = widget.contact.phoneNumber;
+    }
+
     final hasValue = _isValidValue(value);
-    final displayValue = hasValue
-        ? (isDate ? _formatDate(value.toString()) : value.toString())
-        : 'N/A';
+
+    String displayValue = 'N/A';
+    // Logic to masking mobile number
+    final isMobile = key == 'mobile';
+
+    if (hasValue) {
+      if (isDate) {
+        displayValue = _formatDate(value.toString());
+      } else if (isMobile) {
+        // Mask mobile number for both driver and transporters: 63****6798
+        final mobile = value.toString();
+        if (mobile.length >= 10) {
+          displayValue =
+              '${mobile.substring(0, 2)}******${mobile.substring(mobile.length - 2)}';
+        } else {
+          displayValue = mobile;
+        }
+      } else {
+        displayValue = value.toString();
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -786,7 +1139,7 @@ class _ProfileCompletionDetailsPageState
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withOpacity(0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -800,8 +1153,8 @@ class _ProfileCompletionDetailsPageState
             height: 40,
             decoration: BoxDecoration(
               color: hasValue
-                  ? const Color(0xFF3B82F6).withValues(alpha: 0.1)
-                  : const Color(0xFFEF4444).withValues(alpha: 0.05),
+                  ? const Color(0xFF3B82F6).withOpacity(0.1)
+                  : const Color(0xFFEF4444).withOpacity(0.05),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -828,29 +1181,64 @@ class _ProfileCompletionDetailsPageState
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  displayValue,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: hasValue
-                        ? const Color(0xFF1F2937)
-                        : const Color(0xFFF87171),
-                    fontWeight: FontWeight.w600,
+                const SizedBox(height: 2),
+                if (isMobile && hasValue)
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: value.toString()));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Mobile number copied to clipboard'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          displayValue,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.copy_rounded,
+                          size: 16,
+                          color: Colors.grey.shade400,
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Text(
+                    displayValue,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: hasValue
+                          ? const Color(0xFF111827)
+                          : const Color(0xFFF87171),
+                    ),
+                    maxLines: label == 'Address' ? 3 : 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: label == 'Address' ? 3 : 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
               ],
             ),
           ),
 
           // Status Icon
-          Icon(
-            hasValue ? Icons.check_circle : Icons.error_outline,
-            size: 20,
-            color: hasValue ? const Color(0xFF34D399) : const Color(0xFFEF4444),
-          ),
+          if (hasValue)
+            const Icon(
+              Icons.check_circle_outline,
+              color: Color(0xFF10B981),
+              size: 18,
+            )
+          else
+            const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 18),
         ],
       ),
     );

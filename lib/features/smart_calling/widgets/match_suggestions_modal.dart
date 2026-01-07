@@ -88,7 +88,7 @@ class MatchSuggestionsModal extends StatelessWidget {
               CircleAvatar(
                 backgroundColor: scoreColor.withOpacity(0.1),
                 child: Text(
-                  match['driverName'].toString().substring(0, 1),
+                  (match['driverName']?.toString() ?? '').isNotEmpty ? match['driverName'].toString().substring(0, 1) : '?',
                   style: TextStyle(
                     color: scoreColor,
                     fontWeight: FontWeight.bold,

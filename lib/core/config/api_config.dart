@@ -20,7 +20,8 @@ class ApiConfig {
   static const String authApi = '$baseUrl/auth_api.php';
   static const String dashboardStatsApi =
       '$baseUrl/telecaller_dashboard_stats.php';
-  static const String freshLeadsApi = '$baseUrl/fresh_leads_api.php';
+  // REMOVED: fresh_leads_api.php has been deleted from server\n  // static const String freshLeadsApi = '$baseUrl/fresh_leads_api.php';
+  static const String backlogLeadsApi = '$baseUrl/backlog_leads_api.php';
   static const String driversApi = '$baseUrl/simple_drivers_api.php';
   static const String managerDashboardApi =
       '$baseUrl/manager_dashboard_api.php';

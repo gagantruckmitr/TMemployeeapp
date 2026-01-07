@@ -19,16 +19,27 @@ class _FullWidthBottomNavBarState extends State<FullWidthBottomNavBar> {
 
   final List<NavItem> _items = [
     NavItem(icon: Icons.waving_hand, label: 'Welcome'),
-    NavItem(icon: Icons.headset_mic, label: 'Toll Free'),
-    NavItem(icon: Icons.handshake, label: 'Match-making'),
+    NavItem(icon: Icons.headset_mic, label: 'Search & Call'),
+    NavItem(icon: Icons.handshake, label: 'Job-Matching'),
     NavItem(icon: Icons.phone_callback, label: 'Callbacks'),
-    NavItem(icon: Icons.groups, label: 'Social-Media'),
+    NavItem(icon: Icons.groups, label: 'Leads'),
   ];
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
+  }
+
+  @override
+  void didUpdateWidget(FullWidthBottomNavBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update current index when parent changes it
+    if (widget.initialIndex != _currentIndex) {
+      setState(() {
+        _currentIndex = widget.initialIndex;
+      });
+    }
   }
 
   @override

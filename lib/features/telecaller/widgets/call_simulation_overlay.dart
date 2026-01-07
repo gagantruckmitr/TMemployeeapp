@@ -318,7 +318,7 @@ class _CallSimulationOverlayState extends State<CallSimulationOverlay>
                             ),
                             child: Center(
                               child: Text(
-                                widget.contact.name.substring(0, 1).toUpperCase(),
+                                widget.contact.name.isNotEmpty ? widget.contact.name.substring(0, 1).toUpperCase() : '?',
                                 style: AppTheme.headingLarge.copyWith(
                                   fontSize: 48,
                                   fontWeight: FontWeight.bold,

@@ -39,7 +39,7 @@ function getCallHistory() {
     }
     
     $callerId = isset($_GET['caller_id']) ? (int)$_GET['caller_id'] : 0;
-    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 1000; // Increased default limit
     $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
     $period = isset($_GET['period']) ? $_GET['period'] : 'all'; // all, today, week, month
     $feedbackFilter = isset($_GET['feedback']) ? $_GET['feedback'] : '';
@@ -51,13 +51,13 @@ function getCallHistory() {
         $conditions[] = "clm.caller_id = $callerId";
     }
     
-    // Date filtering
+    // Date filtering - Use DATE() function to compare calendar dates accurately
     if ($period === 'today') {
         $conditions[] = "DATE(clm.created_at) = CURDATE()";
     } elseif ($period === 'week') {
-        $conditions[] = "clm.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
+        $conditions[] = "DATE(clm.created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)";
     } elseif ($period === 'month') {
-        $conditions[] = "clm.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+        $conditions[] = "DATE(clm.created_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
     }
     
     // Feedback filtering
@@ -78,16 +78,30 @@ function getCallHistory() {
         $countResult = $conn->query($countQuery);
         $total = $countResult->fetch_assoc()['total'];
         
-        // Get paginated data with phone numbers
+        // Get paginated data with ALL necessary fields including phone numbers, emails, locations, etc.
         $query = "SELECT 
             clm.*,
             a.name as caller_name,
+            a.email as caller_email,
             u_driver.mobile as driver_mobile,
-            u_transporter.mobile as transporter_mobile
+            u_driver.email as driver_email,
+            u_driver.city as driver_city,
+            u_driver.state as driver_state,
+            u_driver.name as driver_full_name,
+            u_driver.name_eng as driver_name_eng,
+            u_transporter.mobile as transporter_mobile,
+            u_transporter.email as transporter_email,
+            u_transporter.city as transporter_city,
+            u_transporter.state as transporter_state,
+            u_transporter.Transport_Name as transporter_company_name,
+            u_transporter.name as transporter_full_name,
+            u_transporter.name_eng as transporter_name_eng,
+            DATE(clm.created_at) as call_date,
+            TIME(clm.created_at) as call_time
         FROM call_logs_match_making clm
         LEFT JOIN admins a ON clm.caller_id = a.id
-        LEFT JOIN users u_driver ON clm.unique_id_driver = u_driver.unique_id
-        LEFT JOIN users u_transporter ON clm.unique_id_transporter = u_transporter.unique_id
+        LEFT JOIN users u_driver ON clm.unique_id_driver = u_driver.unique_id AND u_driver.role = 'driver'
+        LEFT JOIN users u_transporter ON clm.unique_id_transporter = u_transporter.unique_id AND u_transporter.role = 'transporter'
         $whereClause
         ORDER BY clm.created_at DESC
         LIMIT $limit OFFSET $offset";
@@ -100,16 +114,36 @@ function getCallHistory() {
         
         $logs = [];
         while ($row = $result->fetch_assoc()) {
+            // Use the best available name for driver
+            $driverDisplayName = $row['driver_name'] ?? 
+                                $row['driver_name_eng'] ?? 
+                                $row['driver_full_name'] ?? 
+                                '';
+            
+            // Use the best available name for transporter
+            $transporterDisplayName = $row['transporter_name'] ?? 
+                                     $row['transporter_company_name'] ?? 
+                                     $row['transporter_name_eng'] ?? 
+                                     $row['transporter_full_name'] ?? 
+                                     '';
+            
             $logs[] = [
                 'id' => (int)$row['id'],
                 'callerId' => (int)$row['caller_id'],
                 'callerName' => $row['caller_name'] ?? 'Unknown',
+                'callerEmail' => $row['caller_email'] ?? '',
                 'uniqueIdTransporter' => $row['unique_id_transporter'] ?? '',
                 'uniqueIdDriver' => $row['unique_id_driver'] ?? '',
-                'driverName' => $row['driver_name'] ?? '',
-                'transporterName' => $row['transporter_name'] ?? '',
+                'driverName' => $driverDisplayName,
+                'transporterName' => $transporterDisplayName,
                 'driverMobile' => $row['driver_mobile'] ?? '',
+                'driverEmail' => $row['driver_email'] ?? '',
+                'driverCity' => $row['driver_city'] ?? '',
+                'driverState' => $row['driver_state'] ?? '',
                 'transporterMobile' => $row['transporter_mobile'] ?? '',
+                'transporterEmail' => $row['transporter_email'] ?? '',
+                'transporterCity' => $row['transporter_city'] ?? '',
+                'transporterState' => $row['transporter_state'] ?? '',
                 'feedback' => $row['feedback'] ?? '',
                 'matchStatus' => $row['match_status'] ?? '',
                 'remark' => $row['remark'] ?? '',
@@ -117,6 +151,8 @@ function getCallHistory() {
                 'callRecording' => $row['call_recording'] ?? '',
                 'createdAt' => $row['created_at'],
                 'updatedAt' => $row['updated_at'],
+                'callDate' => $row['call_date'],
+                'callTime' => $row['call_time'],
             ];
         }
         

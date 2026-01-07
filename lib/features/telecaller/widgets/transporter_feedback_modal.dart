@@ -18,7 +18,8 @@ class TransporterFeedbackModal extends StatefulWidget {
   });
 
   @override
-  State<TransporterFeedbackModal> createState() => _TransporterFeedbackModalState();
+  State<TransporterFeedbackModal> createState() =>
+      _TransporterFeedbackModalState();
 }
 
 class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
@@ -33,10 +34,12 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
   CallStatus? _selectedStatus;
   TransporterConnectedFeedback? _selectedTransporterFeedback;
   CallBackReason? _selectedCallBackReason;
+  CallBackTime? _selectedCallBackTime;
   final TextEditingController _remarksController = TextEditingController();
 
   bool _showConnectedOptions = false;
   bool _showCallBackReasons = false;
+  bool _showCallBackTimeOptions = false;
   bool _showCloseJobOption = false;
   bool? _closeJob;
 
@@ -87,8 +90,8 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
   }
 
   void _onStatusSelected(CallStatus status) {
-    final currentScrollPosition = _scrollController.hasClients 
-        ? _scrollController.position.pixels 
+    final currentScrollPosition = _scrollController.hasClients
+        ? _scrollController.position.pixels
         : 0.0;
 
     setState(() {
@@ -96,14 +99,17 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
         _selectedStatus = null;
         _showConnectedOptions = false;
         _showCallBackReasons = false;
+        _showCallBackTimeOptions = false;
       } else {
         _selectedStatus = status;
         _showConnectedOptions = status == CallStatus.connected;
         _showCallBackReasons = status == CallStatus.callBack;
+        _showCallBackTimeOptions = status == CallStatus.callBackLater;
       }
 
       _selectedTransporterFeedback = null;
       _selectedCallBackReason = null;
+      _selectedCallBackTime = null;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -113,7 +119,9 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
     });
 
     _feedbackAnimationController.reset();
-    if (_showConnectedOptions || _showCallBackReasons) {
+    if (_showConnectedOptions ||
+        _showCallBackReasons ||
+        _showCallBackTimeOptions) {
       _feedbackAnimationController.forward();
     }
 
@@ -123,32 +131,11 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
   void _onTransporterFeedbackSelected(TransporterConnectedFeedback feedback) {
     setState(() {
       _selectedTransporterFeedback = feedback;
-      
-      // Only show Yes/No prompt for "Close Job" option
-      _showCloseJobOption = feedback == TransporterConnectedFeedback.closeJob;
-      
-      // Auto-set closeJob to true for "Not a Transporter" and "Driver registered as Transporter"
-      if (feedback == TransporterConnectedFeedback.notATransporter ||
-          feedback == TransporterConnectedFeedback.driverRegisteredAsTransporter) {
-        _closeJob = true; // Automatically close job
-      } else if (!_showCloseJobOption) {
-        _closeJob = null; // Reset if not applicable
-      }
+      // Reset closeJob option - no longer used
+      _showCloseJobOption = false;
+      _closeJob = null;
     });
-    
-    // Scroll down to show the close job section if it appears
-    if (_showCloseJobOption) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-    }
-    
+
     HapticFeedback.selectionClick();
   }
 
@@ -159,12 +146,21 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
     HapticFeedback.selectionClick();
   }
 
+  void _onCallBackTimeSelected(CallBackTime time) {
+    setState(() {
+      _selectedCallBackTime = time;
+    });
+    HapticFeedback.selectionClick();
+  }
+
   Color _getStatusColor(CallStatus status) {
     switch (status) {
       case CallStatus.connected:
         return Colors.green;
       case CallStatus.callBack:
         return Colors.yellow.shade700;
+      case CallStatus.callBackLater:
+        return Colors.blue;
       default:
         return Colors.grey;
     }
@@ -173,15 +169,35 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
   Color _getFeedbackColor(TransporterConnectedFeedback feedback) {
     switch (feedback) {
       case TransporterConnectedFeedback.agreeForSubscription:
+      case TransporterConnectedFeedback.agreeForSubscriptionToday:
       case TransporterConnectedFeedback.agreeForSubscriptionTomorrow:
-      case TransporterConnectedFeedback.jobDetailsReceived:
+      case TransporterConnectedFeedback.alreadySubscribed:
         return Colors.green;
-      case TransporterConnectedFeedback.callBackLater:
+      case TransporterConnectedFeedback.needsHelpInProfile:
+      case TransporterConnectedFeedback.doesntUnderstandApp:
+      case TransporterConnectedFeedback.languageBarrier:
+      case TransporterConnectedFeedback.wantsDemoVideo:
+      case TransporterConnectedFeedback.internetIssueLowSpeed:
         return Colors.blue;
-      case TransporterConnectedFeedback.notATransporter:
-      case TransporterConnectedFeedback.driverRegisteredAsTransporter:
-      case TransporterConnectedFeedback.closeJob:
+      case TransporterConnectedFeedback.willSubscribeLater:
+      case TransporterConnectedFeedback.willSubscribeWhenDriversNeeded:
+      case TransporterConnectedFeedback.wantsToThink:
+      case TransporterConnectedFeedback.needLoad:
+      case TransporterConnectedFeedback.needsDriverUrgently:
+        return Colors.yellow.shade700;
+      case TransporterConnectedFeedback.neitherTransporterNorDriver:
+      case TransporterConnectedFeedback.driverButRegisteredAsTransporter:
+      case TransporterConnectedFeedback.driverCabBus:
+      case TransporterConnectedFeedback.notInterested:
+      case TransporterConnectedFeedback.misbehave:
         return Colors.red;
+      case TransporterConnectedFeedback.appIssue:
+        return Colors.orange;
+      case TransporterConnectedFeedback.wrongNumber:
+      case TransporterConnectedFeedback.thirdPersonReceivedAskedToCallLater:
+        return Colors.orange;
+      case TransporterConnectedFeedback.others:
+        return Colors.grey;
     }
   }
 
@@ -196,6 +212,8 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
         return true;
       case CallStatus.callBack:
         return _selectedCallBackReason != null;
+      case CallStatus.callBackLater:
+        return _selectedCallBackTime != null;
       default:
         return false;
     }
@@ -208,6 +226,7 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
       status: _selectedStatus!,
       transporterConnectedFeedback: _selectedTransporterFeedback,
       callBackReason: _selectedCallBackReason,
+      callBackTime: _selectedCallBackTime,
       remarks: _remarksController.text.trim().isEmpty
           ? null
           : _remarksController.text.trim(),
@@ -238,7 +257,8 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
               child: SingleChildScrollView(
                 controller: _scrollController,
                 physics: const ClampingScrollPhysics(),
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: EdgeInsets.only(
                   left: 20,
                   right: 20,
@@ -360,7 +380,7 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
             ),
             child: Center(
               child: Text(
-                widget.contact.name.substring(0, 1).toUpperCase(),
+                widget.contact.name.isNotEmpty ? widget.contact.name.substring(0, 1).toUpperCase() : '?',
                 style: AppTheme.titleMedium.copyWith(
                   color: AppTheme.primaryBlue,
                   fontWeight: FontWeight.bold,
@@ -420,6 +440,14 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
           CallStatus.callBack,
           _showCallBackReasons,
           _buildCallBackReasonOptions(),
+        ),
+
+        // Call Back Later Status
+        _buildStatusWithFeedback(
+          'Call Back Later',
+          CallStatus.callBackLater,
+          _showCallBackTimeOptions,
+          _buildCallBackTimeOptions(),
         ),
       ],
     );
@@ -513,6 +541,34 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
     );
   }
 
+  Widget _buildCallBackTimeOptions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Call Back Time',
+            style: AppTheme.titleMedium.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Colors.blue,
+            ),
+          ),
+        ),
+        ...CallBackTime.values.map(
+          (time) => _buildRadioOption(
+            time.displayName,
+            time,
+            _selectedCallBackTime,
+            _onCallBackTimeSelected,
+            Colors.blue,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildRadioOption<T>(
     String title,
     T value,
@@ -591,21 +647,9 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(
-              child: _buildCloseJobOption(
-                'Yes',
-                true,
-                Colors.red,
-              ),
-            ),
+            Expanded(child: _buildCloseJobOption('Yes', true, Colors.red)),
             const SizedBox(width: 12),
-            Expanded(
-              child: _buildCloseJobOption(
-                'No',
-                false,
-                Colors.green,
-              ),
-            ),
+            Expanded(child: _buildCloseJobOption('No', false, Colors.green)),
           ],
         ),
       ],

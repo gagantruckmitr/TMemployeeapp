@@ -192,9 +192,9 @@ class _DriverFullDetailPageState extends State<DriverFullDetailPage>
                         ),
                         child: Center(
                           child: Text(
-                            (widget.driverName ?? 'D')
-                                .substring(0, 1)
-                                .toUpperCase(),
+                            (widget.driverName ?? 'D').isNotEmpty
+                                ? (widget.driverName ?? 'D').substring(0, 1).toUpperCase()
+                                : 'D',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,

@@ -38,6 +38,8 @@ function getCallHistory($conn) {
     $feedback = $_GET['feedback'] ?? null;
     $remarks = $_GET['remarks'] ?? null;
     $search = $_GET['search'] ?? null;
+    $dateFrom = $_GET['date_from'] ?? null;
+    $dateTo = $_GET['date_to'] ?? null;
     $limit = $_GET['limit'] ?? 1000;
     $offset = $_GET['offset'] ?? 0;
     
@@ -49,20 +51,21 @@ function getCallHistory($conn) {
         return;
     }
     
-    // Build query - using users table instead of drivers with proper timing
+    // Build query - using LEFT JOIN to include toll-free and other calls without user_id
     $query = "
         SELECT 
             cl.id,
             cl.user_id as driver_id,
-            u.unique_id as tmid,
-            u.name as driver_name,
-            u.mobile as phone_number,
+            COALESCE(u.unique_id, '') as tmid,
+            COALESCE(cl.driver_name, u.name, 'Unknown') as driver_name,
+            COALESCE(cl.user_number, u.mobile, '') as phone_number,
             cl.call_status as status,
             cl.feedback,
             cl.remarks,
             cl.call_duration as duration,
             cl.recording_url,
             cl.manual_call_recording_url,
+            cl.tc_for,
             COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at) as call_time,
             cl.call_initiated_at,
             cl.call_completed_at,
@@ -75,7 +78,7 @@ function getCallHistory($conn) {
             END as time_ago,
             CONCAT(FLOOR(COALESCE(cl.call_duration, 0) / 60), ':', LPAD(COALESCE(cl.call_duration, 0) % 60, 2, '0')) as duration_formatted
         FROM call_logs cl
-        INNER JOIN users u ON cl.user_id = u.id
+        LEFT JOIN users u ON cl.user_id = u.id
         WHERE cl.caller_id = ?
     ";
     
@@ -105,9 +108,22 @@ function getCallHistory($conn) {
         }
     }
 
-    // Add search filter if provided
+    // Add date range filter if provided
+    if ($dateFrom) {
+        $query .= " AND DATE(COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at)) >= ?";
+        $params[] = $dateFrom;
+        $types .= 's';
+    }
+    
+    if ($dateTo) {
+        $query .= " AND DATE(COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at)) <= ?";
+        $params[] = $dateTo;
+        $types .= 's';
+    }
+
+    // Add search filter if provided - include call_logs fields for toll-free calls
     if ($search) {
-        $query .= " AND (u.name LIKE ? OR u.mobile LIKE ? OR u.unique_id LIKE ?)";
+        $query .= " AND (COALESCE(cl.driver_name, u.name) LIKE ? OR COALESCE(cl.user_number, u.mobile) LIKE ? OR u.unique_id LIKE ?)";
         $searchTerm = "%$search%";
         $params[] = $searchTerm;
         $params[] = $searchTerm;
@@ -153,15 +169,16 @@ function getCallHistory($conn) {
             'time_ago' => $row['time_ago'] ?? 'Unknown',
             'seconds_ago' => (int)($row['seconds_ago'] ?? 0),
             'recording_url' => $row['recording_url'],
-            'manual_call_recording_url' => $row['manual_call_recording_url']
+            'manual_call_recording_url' => $row['manual_call_recording_url'],
+            'tc_for' => $row['tc_for'] ?? null
         ];
     }
 
-    // Get total count for pagination/display
+    // Get total count for pagination/display - use LEFT JOIN to include all calls
     $countQuery = "
         SELECT COUNT(*) as total
         FROM call_logs cl
-        INNER JOIN users u ON cl.user_id = u.id
+        LEFT JOIN users u ON cl.user_id = u.id
         WHERE cl.caller_id = ?
     ";
     
@@ -186,6 +203,19 @@ function getCallHistory($conn) {
         } elseif ($remarks === 'no_remarks') {
             $countQuery .= " AND (cl.remarks IS NULL OR cl.remarks = '')";
         }
+    }
+
+    // Add date range filter to count query
+    if ($dateFrom) {
+        $countQuery .= " AND DATE(COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at)) >= ?";
+        $countParams[] = $dateFrom;
+        $countTypes .= 's';
+    }
+    
+    if ($dateTo) {
+        $countQuery .= " AND DATE(COALESCE(cl.call_initiated_at, cl.call_time, cl.Created_at)) <= ?";
+        $countParams[] = $dateTo;
+        $countTypes .= 's';
     }
 
     if ($search) {

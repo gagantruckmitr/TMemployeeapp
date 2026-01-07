@@ -123,6 +123,100 @@ class JobModel {
     );
   }
 
+  // Factory method for Laravel API response format
+  factory JobModel.fromLaravelJson(Map<String, dynamic> json) {
+    // Parse status: 1 = approved, 0 = not approved
+    final int statusValue = int.tryParse(json['status']?.toString() ?? '0') ?? 0;
+    final bool isApproved = statusValue == 1;
+    
+    // Parse active_inactive: 1 = active, 0 = pending/inactive
+    final int activeInactiveValue = int.tryParse(json['active_inactive']?.toString() ?? '0') ?? 0;
+    final bool isActive = activeInactiveValue == 1;
+    
+    // Parse closed_job - check closed_job_by_jobs_details field
+    // If value is 1, job is closed. If null or other value, job is not closed.
+    final bool isClosed = json['closed_job_by_jobs_details'] != null && 
+                          json['closed_job_by_jobs_details'].toString() == '1';
+    
+    // Calculate expiry
+    bool isExpired = false;
+    try {
+      if (json['Application_Deadline'] != null) {
+        final deadline = DateTime.parse(json['Application_Deadline']);
+        final now = DateTime.now();
+        isExpired = now.isAfter(deadline);
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+
+    // Extract transporter details from new API response format
+    final transporterName = json['transporter_name']?.toString() ?? 
+                           json['transporterName']?.toString() ?? 
+                           'Unknown Transporter';
+    
+    final transporterTmid = json['transporter_unique_id']?.toString() ?? 
+                           json['transporterTmid']?.toString() ?? 
+                           json['transporter_tmid']?.toString() ?? 
+                           '';
+    
+    final transporterPhone = json['transporter_mobile']?.toString() ?? 
+                            json['transporterPhone']?.toString() ?? 
+                            '';
+    
+    final transporterState = json['state_name']?.toString() ?? 
+                            json['transporterState']?.toString() ?? 
+                            '';
+    
+    // Parse profile completion percentage
+    final profileCompletion = int.tryParse(json['profile_completion']?.toString() ?? '0') ?? 0;
+    
+    // Parse applicants count
+    final applicantsCount = int.tryParse(json['total_applicants']?.toString() ?? '0') ?? 0;
+
+    return JobModel(
+      id: json['id'] ?? 0,
+      jobId: json['job_id'] ?? '',
+      jobTitle: json['job_title'] ?? '',
+      transporterId: json['transporter_id']?.toString() ?? '',
+      transporterName: transporterName,
+      transporterTmid: transporterTmid,
+      transporterPhone: transporterPhone,
+      transporterCity: '', // Not provided in new API
+      transporterState: transporterState,
+      transporterProfileCompletion: profileCompletion,
+      transporterProfilePhoto: json['transporter_image'],
+      transporterGender: null,
+      jobLocation: json['job_location'] ?? '',
+      jobDescription: json['Job_Description'] ?? '',
+      salaryRange: json['Salary_Range'] ?? '',
+      requiredExperience: json['Required_Experience'] ?? '',
+      preferredStatus: json['Preferred_Skills'] ?? '',
+      typeOfLicense: json['Type_of_License'] ?? '',
+      vehicleType: json['vehicle_type'] ?? '',
+      vehicleTypeDetail: json['vehicle_type'] ?? '',
+      applicationDeadline: json['Application_Deadline'] ?? '',
+      jobManagementDate: json['Job_Management'] ?? '',
+      jobManagementId: json['Job_Management'] ?? '',
+      jobDescriptionId: json['Job_Description'] ?? '',
+      numberOfDriverRequired: int.tryParse(json['number_of_drivers_required']?.toString() ?? '1') ?? 1,
+      activePosition: 0,
+      createdVehicleDetail: json['vehicle_type'] ?? '',
+      createdAt: json['Created_at'] ?? '',
+      updatedAt: json['Updated_at'] ?? '',
+      status: statusValue,
+      applicantsCount: applicantsCount,
+      isApproved: isApproved,
+      isActive: isActive,
+      isExpired: isExpired,
+      assignedTo: json['assigned_to'] != null
+          ? int.tryParse(json['assigned_to'].toString())
+          : null,
+      assignedToName: null, // Not provided in Laravel API
+      isClosed: isClosed,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

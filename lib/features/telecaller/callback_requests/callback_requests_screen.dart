@@ -1,21 +1,26 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/config/api_config.dart';
 import '../../../core/services/callback_requests_service.dart';
 import '../../../core/services/smart_calling_service.dart';
-import '../../../core/services/phase2_auth_service.dart';
 import '../../../core/services/real_auth_service.dart';
+import '../../../core/services/call_feedback_guard_service.dart';
 import '../../../models/database_models.dart';
 import '../../../models/smart_calling_models.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/transporter_feedback_modal.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/easygo_ivr_call_helper.dart';
 import '../widgets/tab_page_header.dart';
-import '../widgets/profile_completion_avatar.dart';
-import '../../../widgets/coming_soon_screen.dart';
-import 'callback_profile_details_screen.dart';
+
+import '../screens/search_users_screen.dart';
+import '../../../widgets/draggable_floating_action_button.dart';
+import '../widgets/driver_contact_card.dart';
 
 class CallbackRequestsScreen extends StatefulWidget {
   const CallbackRequestsScreen({super.key});
@@ -27,7 +32,6 @@ class CallbackRequestsScreen extends StatefulWidget {
 class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
     with AutomaticKeepAliveClientMixin {
   final CallbackRequestsService _service = CallbackRequestsService.instance;
-  final DateFormat _timeFormat = DateFormat('d MMM • h:mm a');
 
   List<CallbackRequest> _requests = [];
   List<CallbackRequest> _history = [];
@@ -43,6 +47,8 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
   @override
   void initState() {
     super.initState();
+    // Initialize pending feedback check for call button visibility
+    CallFeedbackGuardService.instance.getPendingCalls();
     _loadAll();
   }
 
@@ -133,24 +139,19 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
     }
   }
 
-  void _copyNumber(String phoneNumber) {
-    Clipboard.setData(ClipboardData(text: phoneNumber));
-    HapticFeedback.lightImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Copied $phoneNumber'),
-        backgroundColor: AppTheme.primaryBlue,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   Future<void> _onCallPressed(CallbackRequest request) async {
     await _callDriver(request);
   }
 
   Future<void> _callDriver(CallbackRequest request) async {
     try {
+      // Check for pending feedback before allowing call
+      final hasPending = await CallFeedbackGuardService.instance.hasLastCallPendingFeedback();
+      if (hasPending && mounted) {
+        CallFeedbackGuardService.showPendingFeedbackToast(context);
+        return;
+      }
+
       // Show call type selection dialog
       final callType = await showDialog<String>(
         context: context,
@@ -213,6 +214,7 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
           clientName: request.userName,
           clientPhone: cleanNumber,
           clientId: request.id.toString(),
+          tmid: request.uniqueId ?? 'TM${request.id}',
           contactType: 'driver',
           callSource: 'callback_requests',
           onCallEnded: () {
@@ -242,21 +244,43 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
   }
 
   void _showCallFeedbackModal(CallbackRequest request) {
-    final contact = _mapRequestToDriverContact(request);
+    // Check if user is driver or transporter
+    final isTransporter = request.appType == AppType.transporter;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => CallFeedbackModal(
-        contact: contact,
-        allowDismiss: true,
-        onFeedbackSubmitted: (feedback) {
-          Navigator.of(context).pop();
-          _handleFeedbackSubmitted(contact, feedback);
-        },
-      ),
-    );
+    if (isTransporter) {
+      // Show transporter feedback modal
+      final transporterContact = _mapRequestToTransporterContact(request);
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => TransporterFeedbackModal(
+          contact: transporterContact,
+          onFeedbackSubmitted: (feedback) {
+            Navigator.of(context).pop();
+            _handleFeedbackSubmitted(request, feedback);
+          },
+        ),
+      );
+    } else {
+      // Show driver feedback modal
+      final driverContact = _mapRequestToDriverContact(request);
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => CallFeedbackModal(
+          contact: driverContact,
+          allowDismiss: true,
+          onFeedbackSubmitted: (feedback) async {
+            Navigator.of(context).pop();
+            await _handleFeedbackSubmitted(request, feedback);
+          },
+        ),
+      );
+    }
   }
 
   DriverContact _mapRequestToDriverContact(CallbackRequest request) {
@@ -270,7 +294,71 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
         ? ProfileCompletion.fromPercentageString(request.profileCompletion!)
         : null;
 
+    debugPrint(
+      '📊 Profile completion for ${request.userName}: ${request.profileCompletion} -> ${profileCompletion?.percentage}%',
+    );
+
+    // Parse training status
+    TrainingInfo? trainingInfo;
+    if (request.trainingStatus != null) {
+      trainingInfo = TrainingInfo(
+        isCompleted: request.trainingStatus!.toLowerCase() == 'completed',
+        totalQuestions: 0,
+        correctAnswers: 0,
+        percentage: 0.0,
+        rating: 0,
+        rankingPercentage: 0.0,
+        tier: 'N/A',
+      );
+    }
+
+    // Parse applied jobs from API data
+    final appliedJobs = (request.appliedJobs ?? [])
+        .map((job) => AppliedJob.fromJson(job as Map<String, dynamic>))
+        .toList();
+
+    // Parse call history from API data
+    final callHistory = (request.callHistory ?? [])
+        .map((call) => CallHistoryEntry.fromJson(call as Map<String, dynamic>))
+        .toList();
+
     return DriverContact(
+      id: request.userId?.toString() ?? request.id.toString(),
+      tmid: request.uniqueId ?? 'TM000000',
+      name: request.userName,
+      company: request.contactReason,
+      phoneNumber: request.mobileNumber,
+      state: '',
+      subscriptionStatus: hasSubscription
+          ? SubscriptionStatus.active
+          : SubscriptionStatus.inactive,
+      status: _mapCallbackStatus(request.status),
+      lastFeedback: request.callFeedback,
+      lastCallTime: request.lastCallTime ?? request.requestDateTime,
+      remarks: request.callRemarks ?? request.notes,
+      paymentInfo: PaymentInfo.none(),
+      registrationDate: request.registrationDate ?? request.createdAt,
+      profileCompletion: profileCompletion,
+      role: request.appType.value,
+      trainingInfo: trainingInfo,
+      appliedJobs: appliedJobs,
+      callHistory: callHistory,
+      assignedTelecaller: request.assignedTelecaller,
+    );
+  }
+
+  TransporterContact _mapRequestToTransporterContact(CallbackRequest request) {
+    final hasSubscription =
+        request.subscribeDate != null &&
+        request.subscribeDate!.trim().isNotEmpty &&
+        request.subscribeDate!.trim().toLowerCase() != 'n/a' &&
+        request.subscribeDate!.trim().toLowerCase() != 'not yet';
+
+    final profileCompletion = request.profileCompletion != null
+        ? ProfileCompletion.fromPercentageString(request.profileCompletion!)
+        : null;
+
+    return TransporterContact(
       id: request.id.toString(),
       tmid: request.uniqueId ?? 'TM000000',
       name: request.userName,
@@ -281,11 +369,11 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
           ? SubscriptionStatus.active
           : SubscriptionStatus.inactive,
       status: _mapCallbackStatus(request.status),
-      lastFeedback: null,
-      lastCallTime: request.requestDateTime,
-      remarks: request.notes,
+      lastFeedback: request.callFeedback,
+      lastCallTime: request.lastCallTime ?? request.requestDateTime,
+      remarks: request.callRemarks ?? request.notes,
       paymentInfo: PaymentInfo.none(),
-      registrationDate: request.createdAt,
+      registrationDate: request.registrationDate ?? request.createdAt,
       profileCompletion: profileCompletion,
     );
   }
@@ -308,8 +396,29 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
     }
   }
 
+  String _getSubscriptionLabel(CallbackRequest request) {
+    final value = request.subscribeDate?.trim();
+    if (value == null ||
+        value.isEmpty ||
+        value.toLowerCase() == 'n/a' ||
+        value.toLowerCase() == 'not yet') {
+      return 'Not yet';
+    }
+
+    try {
+      // Handle potential different separators
+      String cleaned = value.replaceAll('/', '-');
+      final date = DateTime.tryParse(cleaned);
+      if (date != null) {
+        return DateFormat('dd-MMM-yyyy').format(date);
+      }
+    } catch (_) {}
+
+    return value;
+  }
+
   Future<void> _handleFeedbackSubmitted(
-    DriverContact contact,
+    CallbackRequest request,
     CallFeedback feedback,
   ) async {
     if (!mounted) return;
@@ -317,7 +426,7 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
     HapticFeedback.lightImpact();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Saved feedback for ${contact.name}'),
+        content: Text('Saved feedback for ${request.userName}'),
         backgroundColor: AppTheme.primaryBlue,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
@@ -326,10 +435,12 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
 
     // Optimistic update: Move from requests to history immediately
     setState(() {
-      final index = _requests.indexWhere((r) => r.id.toString() == contact.id);
+      final index = _requests.indexWhere((r) => r.id == request.id);
       if (index != -1) {
-        final request = _requests[index];
         _requests.removeAt(index);
+
+        // Get feedback text for optimistic update
+        final feedbackText = _getFeedbackText(feedback);
 
         // Create updated request for history
         final updatedRequest = CallbackRequest(
@@ -348,26 +459,65 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
           profileCompletion: request.profileCompletion,
           subscribeDate: request.subscribeDate,
           profileImage: request.profileImage,
+          callFeedback: feedbackText,
+          callRemarks: feedback.remarks,
+          lastCallTime: DateTime.now(),
+          appliedJobsCount: request.appliedJobsCount,
+          callHistoryCount: (request.callHistoryCount ?? 0) + 1,
+          trainingStatus: request.trainingStatus,
+          assignedTelecaller: request.assignedTelecaller,
+          registrationDate: request.registrationDate,
+          appliedJobs: request.appliedJobs,
+          callHistory: request.callHistory,
+          userId: request.userId,
         );
 
         _history.insert(0, updatedRequest);
       }
     });
 
-    // Call API to update status
+    // Get feedback text for call_logs
+    String feedbackText = _getFeedbackText(feedback);
+
     try {
+      // Get current user
+      final user = RealAuthService.instance.currentUser;
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // 1. Save to call_logs table via API with correct user_id
+      final actualUserId =
+          request.userId ??
+          request
+              .id; // Use userId from users table, fallback to callback_request id
+      await _saveToCallLogs(
+        userId: actualUserId,
+        callerId: int.parse(user.id),
+        driverName: request.userName,
+        userNumber: request.mobileNumber,
+        status: _mapCallStatusToString(feedback.status),
+        feedback: feedbackText,
+        remarks: feedback.remarks,
+        callSource: 'callback_requests',
+        tmid: request.uniqueId,
+      );
+
+      // 2. Update callback_requests table status
       final status = _mapFeedbackToCallbackStatus(feedback);
       await _service.updateCallbackRequest(
-        requestId: int.parse(contact.id),
+        requestId: request.id,
         status: status.value,
         notes: feedback.remarks,
       );
+
+      debugPrint('✅ Feedback saved to call_logs and callback_requests updated');
     } catch (e) {
-      debugPrint('Error updating callback request: $e');
+      debugPrint('❌ Error saving feedback: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to sync with server: $e'),
+            content: Text('Failed to save feedback: $e'),
             backgroundColor: AppTheme.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -379,23 +529,138 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
     _refresh();
   }
 
+  String _getFeedbackText(CallFeedback feedback) {
+    switch (feedback.status) {
+      case CallStatus.connected:
+        if (feedback.connectedFeedback != null) {
+          return feedback.connectedFeedback!.displayName;
+        }
+        return 'Connected';
+      case CallStatus.callBack:
+        if (feedback.callBackReason != null) {
+          return feedback.callBackReason!.displayName;
+        }
+        return 'Call Back';
+      case CallStatus.callBackLater:
+        if (feedback.callBackTime != null) {
+          return feedback.callBackTime!.displayName;
+        }
+        return 'Call Back Later';
+      case CallStatus.notReachable:
+        return 'Not Reachable';
+      case CallStatus.notInterested:
+        return 'Not Interested';
+      case CallStatus.invalid:
+        return 'Invalid Number';
+      case CallStatus.pending:
+        return 'Pending';
+    }
+  }
+
+  String _mapCallStatusToString(CallStatus status) {
+    switch (status) {
+      case CallStatus.connected:
+        return 'connected';
+      case CallStatus.callBack:
+        return 'callback';
+      case CallStatus.callBackLater:
+        return 'callback_later';
+      case CallStatus.notReachable:
+        return 'not_reachable';
+      case CallStatus.notInterested:
+        return 'not_interested';
+      case CallStatus.invalid:
+        return 'invalid';
+      case CallStatus.pending:
+        return 'pending';
+    }
+  }
+
+  Future<void> _saveToCallLogs({
+    required int userId,
+    required int callerId,
+    required String driverName,
+    required String userNumber,
+    required String status,
+    required String feedback,
+    String? remarks,
+    String? callSource,
+    String? tmid,
+  }) async {
+    try {
+      // Get current user for caller number
+      final user = RealAuthService.instance.currentUser;
+      final callerNumber = user?.mobile ?? '';
+
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/call_logs_api.php?action=insert'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'user_id': userId,
+          'caller_id': callerId,
+          'driver_name': driverName,
+          'user_number': userNumber,
+          'caller_number': callerNumber,
+          'call_status': status,
+          'feedback': feedback,
+          'remarks': remarks,
+          'notes': remarks,
+          'call_source': callSource,
+          'call_time': DateTime.now().toIso8601String(),
+          'reference_id':
+              'CALLBACK_${DateTime.now().millisecondsSinceEpoch}_${callerId}_$userId',
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          debugPrint('✅ Call log saved successfully: ${data['id']}');
+        } else {
+          throw Exception(data['error'] ?? 'Failed to save call log');
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('❌ Error saving to call_logs: $e');
+      rethrow;
+    }
+  }
+
   CallbackStatus _mapFeedbackToCallbackStatus(CallFeedback feedback) {
     switch (feedback.status) {
       case CallStatus.connected:
         if (feedback.connectedFeedback != null) {
           switch (feedback.connectedFeedback!) {
+            case ConnectedFeedback.agreeForSubscription:
             case ConnectedFeedback.agreeForSubscriptionToday:
             case ConnectedFeedback.agreeForSubscriptionTomorrow:
             case ConnectedFeedback.alreadySubscribed:
+            case ConnectedFeedback.readyForInterview:
               return CallbackStatus.interested;
-            case ConnectedFeedback.notATruckDriver:
+            case ConnectedFeedback.neitherTransporterNorDriver:
+            case ConnectedFeedback.transporterButRegisteredAsDriver:
+            case ConnectedFeedback.driverCabBus:
             case ConnectedFeedback.noMoney:
+            case ConnectedFeedback.notInterested:
+            case ConnectedFeedback.misbehave:
+            case ConnectedFeedback.wrongNumber:
               return CallbackStatus.notInterested;
             case ConnectedFeedback.willSubscribeLater:
             case ConnectedFeedback.willSubscribeWhenNeedJob:
             case ConnectedFeedback.wantsToThink:
+            case ConnectedFeedback.thirdPersonReceivedAskedToCallLater:
               return CallbackStatus.futureProspects;
-            default:
+            case ConnectedFeedback.needsHelpInProfile:
+            case ConnectedFeedback.doesntUnderstandApp:
+            case ConnectedFeedback.languageBarrier:
+            case ConnectedFeedback.wantsDemoVideo:
+            case ConnectedFeedback.internetIssueLowSpeed:
+            case ConnectedFeedback.appIssue:
+            case ConnectedFeedback.needLoad:
+            case ConnectedFeedback.needJobUrgently:
+            case ConnectedFeedback.others:
               return CallbackStatus.contacted;
           }
         }
@@ -430,49 +695,66 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
       length: 2,
       child: Scaffold(
         backgroundColor: AppTheme.lightGray,
-        body: Column(
+        body: Stack(
           children: [
-            TelecallerTabHeader(
-              icon: Icons.call_missed_outgoing,
-              iconColor: AppTheme.primaryBlue,
-              title: 'Callback Requests',
-              subtitle: subtitle,
-              trailing: TelecallerHeaderActionButton(
-                isLoading: _isRefreshing,
-                onPressed: _refresh,
-                icon: Icons.refresh_rounded,
-                color: AppTheme.primaryBlue,
-              ),
-            ),
-            Container(
-              color: Colors.white,
-              child: TabBar(
-                labelColor: AppTheme.primaryBlue,
-                unselectedLabelColor: Colors.grey.shade600,
-                indicatorColor: AppTheme.primaryBlue,
-                indicatorWeight: 3,
-                labelStyle: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
+            Column(
+              children: [
+                TelecallerTabHeader(
+                  icon: Icons.call_missed_outgoing,
+                  iconColor: AppTheme.primaryBlue,
+                  title: 'App Callback',
+                  subtitle: subtitle,
+                  trailing: TelecallerHeaderActionButton(
+                    isLoading: _isRefreshing,
+                    onPressed: _refresh,
+                    icon: Icons.refresh_rounded,
+                    color: AppTheme.primaryBlue,
+                  ),
                 ),
-                tabs: const [
-                  Tab(text: 'Requests'),
-                  Tab(text: 'History'),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SafeArea(
-                top: false,
-                child: TabBarView(
-                  children: [
-                    // Requests Tab
-                    _buildRequestsList(),
-                    // History Tab
-                    _buildHistoryList(),
-                  ],
+                Container(
+                  color: Colors.white,
+                  child: TabBar(
+                    labelColor: AppTheme.primaryBlue,
+                    unselectedLabelColor: Colors.grey.shade600,
+                    indicatorColor: AppTheme.primaryBlue,
+                    indicatorWeight: 3,
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                    tabs: const [
+                      Tab(text: 'Requests'),
+                      Tab(text: 'History'),
+                    ],
+                  ),
                 ),
-              ),
+                Expanded(
+                  child: SafeArea(
+                    top: false,
+                    child: TabBarView(
+                      children: [
+                        // Requests Tab
+                        _buildRequestsList(),
+                        // History Tab
+                        _buildHistoryList(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            DraggableFloatingActionButton(
+              heroTag: 'callback_requests_global_search',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SearchUsersScreen(),
+                  ),
+                );
+              },
+              backgroundColor: AppTheme.primaryBlue,
+              child: const Icon(Icons.search, color: Colors.white),
             ),
           ],
         ),
@@ -513,11 +795,20 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
               itemBuilder: (context, index) {
                 final request = _requests[index];
-                return _CallbackRequestCard(
-                  request: request,
-                  formattedTime: _timeFormat.format(request.requestDateTime),
-                  onCall: () => _onCallPressed(request),
-                  onCopyNumber: _copyNumber,
+                final contact = _mapRequestToDriverContact(request);
+                final requestTime = DateFormat(
+                  'dd-MMM-yyyy hh:mma',
+                ).format(request.requestDateTime);
+
+                return DriverContactCard(
+                  contact: contact,
+                  onCallPressed: () => _onCallPressed(request),
+                  isCallInProgress: false,
+                  showPhoneNumber: true,
+                  reason: '${request.contactReason}\n\n $requestTime',
+                  subscriptionDateText: _getSubscriptionLabel(request),
+                  callbackHistory: request.callbackHistory,
+                  callbackRequestsCount: request.callbackRequestsCount,
                 );
               },
               itemCount: _requests.length,
@@ -534,457 +825,65 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
       color: AppTheme.primaryBlue,
       child: _history.isEmpty
           ? Center(
-              child: Text(
-                'No history available',
-                style: TextStyle(color: Colors.grey.shade600),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryBlue.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(45),
+                      ),
+                      child: Icon(
+                        Icons.history_outlined,
+                        color: AppTheme.primaryBlue,
+                        size: 38,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'No callback history yet',
+                      style: AppTheme.headingMedium.copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Completed callback requests will appear here.',
+                      textAlign: TextAlign.center,
+                      style: AppTheme.bodyLarge.copyWith(color: AppTheme.gray),
+                    ),
+                  ],
+                ),
               ),
             )
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
               itemBuilder: (context, index) {
                 final request = _history[index];
-                return _CallbackRequestCard(
-                  request: request,
-                  formattedTime: _timeFormat.format(request.requestDateTime),
-                  onCall: () => _onCallPressed(request),
-                  onCopyNumber: _copyNumber,
+                final contact = _mapRequestToDriverContact(request);
+                final requestTime = DateFormat(
+                  'dd-MMM hh:mma',
+                ).format(request.requestDateTime);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: DriverContactCard(
+                    contact: contact,
+                    onCallPressed: () => _onCallPressed(request),
+                    isCallInProgress: false,
+                    showPhoneNumber: true,
+                    reason:
+                        '${request.contactReason}\n\nRequested: $requestTime',
+                    subscriptionDateText: _getSubscriptionLabel(request),
+                  ),
                 );
               },
               itemCount: _history.length,
             ),
-    );
-  }
-}
-
-class _CallbackRequestCard extends StatefulWidget {
-  const _CallbackRequestCard({
-    required this.request,
-    required this.formattedTime,
-    required this.onCall,
-    required this.onCopyNumber,
-  });
-
-  final CallbackRequest request;
-  final String formattedTime;
-  final VoidCallback onCall;
-  final ValueChanged<String> onCopyNumber;
-
-  @override
-  State<_CallbackRequestCard> createState() => _CallbackRequestCardState();
-}
-
-class _CallbackRequestCardState extends State<_CallbackRequestCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _scaleController;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _scaleController = AnimationController(
-      duration: const Duration(milliseconds: 150),
-      vsync: this,
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _scaleController.dispose();
-    super.dispose();
-  }
-
-  void _onTapDown(TapDownDetails details) {
-    _scaleController.forward();
-  }
-
-  void _onTapUp(TapUpDetails details) {
-    _scaleController.reverse();
-  }
-
-  void _onTapCancel() {
-    _scaleController.reverse();
-  }
-
-  int _profilePercentage() {
-    final raw = widget.request.profileCompletion;
-    if (raw == null) return 0;
-    final digits = int.tryParse(raw.replaceAll(RegExp(r'[^0-9]'), ''));
-    return digits != null ? digits.clamp(0, 100) : 0;
-  }
-
-  String _subscriptionLabel() {
-    final value = widget.request.subscribeDate?.trim();
-    if (value == null ||
-        value.isEmpty ||
-        value.toLowerCase() == 'n/a' ||
-        value.toLowerCase() == 'not yet') {
-      return 'Not yet';
-    }
-    return value;
-  }
-
-  bool _hasSubscription() {
-    final label = _subscriptionLabel().toLowerCase();
-    return label != 'not yet';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      child: AnimatedBuilder(
-        animation: _scaleAnimation,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-                border: Border.all(color: Colors.grey.shade200, width: 1),
-              ),
-              child: Column(
-                children: [
-                  // Top Row: Avatar, Name, Call Button
-                  Row(
-                    children: [
-                      // Avatar with profile completion
-                      ProfileCompletionAvatar(
-                        name: widget.request.userName,
-                        completionPercentage: _profilePercentage(),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  CallbackProfileDetailsScreen(
-                                    request: widget.request,
-                                  ),
-                            ),
-                          );
-                        },
-                        size: 54,
-                        imageUrl: widget.request.profileImage,
-                      ),
-                      const SizedBox(width: 14),
-
-                      // Name and TMID
-                      Expanded(
-                        child: GestureDetector(
-                          onLongPress: () {
-                            Clipboard.setData(
-                              ClipboardData(text: widget.request.userName),
-                            );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Name copied: ${widget.request.userName}',
-                                ),
-                                duration: const Duration(seconds: 1),
-                                behavior: SnackBarBehavior.floating,
-                                margin: const EdgeInsets.all(8),
-                              ),
-                            );
-                            HapticFeedback.mediumImpact();
-                          },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.request.userName,
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1A1A1A),
-                                  letterSpacing: -0.3,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                widget.request.uniqueId ?? 'TM ID unavailable',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 12),
-
-                      // Call Button
-                      GestureDetector(
-                        onTap: () {
-                          HapticFeedback.mediumImpact();
-                          widget.onCall();
-                        },
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2196F3),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF2196F3,
-                                ).withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.phone,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Divider
-                  Container(height: 1, color: Colors.grey.shade200),
-
-                  const SizedBox(height: 14),
-
-                  // Bottom Grid: Details in 2x2 layout
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildDetailItem(
-                          Icons.calendar_today_outlined,
-                          'Registration',
-                          widget.formattedTime,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildDetailItem(
-                          Icons.badge_outlined,
-                          'Role Type',
-                          widget.request.appType.value.toUpperCase(),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      Expanded(child: _buildSubscriptionItem()),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildDetailItem(
-                          Icons.message_outlined,
-                          'Reason',
-                          widget.request.contactReason.isNotEmpty
-                              ? widget.request.contactReason
-                              : 'N/A',
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Notes Section
-                  if (widget.request.notes != null &&
-                      widget.request.notes!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _buildNotesSection(),
-                  ],
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildDetailItem(IconData icon, String label, String value) {
-    return GestureDetector(
-      onLongPress: () {
-        Clipboard.setData(ClipboardData(text: value));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$label copied: $value'),
-            duration: const Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(8),
-          ),
-        );
-        HapticFeedback.mediumImpact();
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: Colors.grey.shade600),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF1A1A1A),
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Icon(Icons.copy, size: 12, color: Colors.grey.shade400),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubscriptionItem() {
-    final subscriptionText = _subscriptionLabel();
-    final hasSubscription = _hasSubscription();
-    final subscriptionColor = hasSubscription
-        ? const Color(0xFF4CAF50)
-        : Colors.grey.shade600;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              hasSubscription
-                  ? Icons.check_circle_outline
-                  : Icons.cancel_outlined,
-              size: 14,
-              color: subscriptionColor,
-            ),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                'Subscription',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: subscriptionColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: subscriptionColor.withValues(alpha: 0.3),
-              width: 1,
-            ),
-          ),
-          child: Text(
-            subscriptionText,
-            style: TextStyle(
-              fontSize: 11,
-              color: subscriptionColor,
-              fontWeight: FontWeight.w700,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNotesSection() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.shade200, width: 1),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.note_outlined, size: 16, color: Colors.amber.shade700),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Notes',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.amber.shade700,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  widget.request.notes!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.amber.shade900,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

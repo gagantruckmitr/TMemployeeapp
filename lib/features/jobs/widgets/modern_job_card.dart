@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../../../core/config/api_config.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/services/phase2_api_service.dart';
 import '../../../core/services/phase2_auth_service.dart';
 import '../../../core/services/smart_calling_service.dart';
+import '../../../core/services/real_auth_service.dart';
 import '../../../models/job_model.dart';
 import '../../../widgets/profile_completion_avatar.dart';
 import '../job_applicants_screen.dart';
 import 'job_brief_feedback_modal.dart';
-import 'show_transporter_call_feedback.dart';
+import 'job_call_status_selection_modal.dart';
 import '../../telecaller/widgets/call_type_selection_dialog.dart';
 import '../../telecaller/widgets/easygo_ivr_call_helper.dart';
 
@@ -134,9 +136,11 @@ class _ModernJobCardState extends State<ModernJobCard> {
     }
 
     try {
+      // First show call type selection dialog
       final callType = await showDialog<String>(
         context: context,
-        builder: (context) =>
+        barrierDismissible: true,
+        builder: (dialogContext) =>
             CallTypeSelectionDialog(driverName: widget.job.transporterName),
       );
 
@@ -145,14 +149,28 @@ class _ModernJobCardState extends State<ModernJobCard> {
       if (callType == 'manual') {
         await _handleManualCall(phone);
       } else if (callType == 'easygo_ivr') {
+        // Get current user ID for assignedTo
+        final currentUser = await Phase2AuthService.getCurrentUser();
+        final currentUserId = currentUser?.id ?? 0;
+        
+        // Parse transporter ID - it should be numeric
+        final transporterUserId = int.tryParse(widget.job.transporterId) ?? 0;
+
         await EasyGoIVRCallHelper.initiateCall(
           context: context,
           clientName: widget.job.transporterName,
           clientPhone: phone,
-          clientId: widget.job.transporterTmid,
+          clientId: transporterUserId.toString(),
+          tmid: widget.job.transporterTmid,
           contactType: 'transporter',
           callSource: 'job_posting',
-          onCallEnded: () => _showTransporterCallFeedbackAfterIVR(),
+          onCallCompleted: (jobBriefId) {
+            // After call ends, show call status selection modal
+            _showCallStatusModalAfterCall(jobBriefId);
+          },
+          jobId: widget.job.jobId,
+          assignedTo: currentUserId,
+          jobBriefTransporterUserId: transporterUserId,
         );
       }
     } catch (e) {
@@ -179,123 +197,197 @@ class _ModernJobCardState extends State<ModernJobCard> {
       final driverMobileRaw = result['data']?['driver_mobile_raw'];
       await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
       await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) _showTransporterCallFeedbackAfterIVR();
+      if (mounted) _showCallStatusModalAfterCall(null);
     }
   }
 
-  Future<void> _showTransporterCallFeedbackAfterIVR() async {
-    print('=== SHOWING TRANSPORTER FEEDBACK MODAL ===');
-    print('Transporter TMID: ${widget.job.transporterTmid}');
-    print('Transporter Name: ${widget.job.transporterName}');
-    print('Job ID: ${widget.job.jobId}');
-
-    await showTransporterCallFeedback(
+  // Show call status selection modal after call ends
+  Future<void> _showCallStatusModalAfterCall(String? jobBriefId) async {
+    if (!mounted) return;
+    
+    print('🔵 _showCallStatusModalAfterCall called with jobBriefId: $jobBriefId');
+    
+    // Show modal and get result via callback
+    await showModalBottomSheet(
       context: context,
-      transporterTmid: widget.job.transporterTmid,
-      transporterName: widget.job.transporterName,
-      jobId: widget.job.jobId,
-      onSubmit: (callStatus, notes, recordingFile) async {
-        print('=== FEEDBACK SUBMITTED ===');
-        print('Call Status: $callStatus');
-        print('Notes: $notes');
-        print('Recording File: ${recordingFile?.path}');
-
-        Navigator.pop(context);
-
-        if (callStatus == 'Connected: Details Received') {
-          print('Opening job brief modal for Details Received');
-          showJobBriefFeedbackModal(
-            context: context,
-            job: widget.job,
-            onSubmit: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Job brief saved with call status: $callStatus',
-                  ),
-                ),
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => PopScope(
+        canPop: false,
+        child: JobCallStatusSelectionModal(
+          transporterName: widget.job.transporterName,
+          onStatusSelected: (String status, String? feedback, String? remarks, bool shouldCloseJob) async {
+            print('🔵 onStatusSelected: status=$status, feedback=$feedback, remarks=$remarks, closeJob=$shouldCloseJob');
+            
+            // Close the modal first
+            Navigator.of(modalContext).pop();
+            
+            // Small delay to ensure modal animation completes
+            await Future.delayed(const Duration(milliseconds: 100));
+            
+            if (!mounted) return;
+            
+            // Handle the selection based on feedback type
+            if (status == 'Connected' && feedback == 'Transporter Confirmed Job Details') {
+              print('🔵 Opening Job Brief modal');
+              // Open Job Brief modal
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  showJobBriefFeedbackModal(
+                    context: context,
+                    job: widget.job,
+                    jobBriefId: jobBriefId,
+                    hideCallStatusFields: true,
+                    preSelectedCallStatus: 'connected',
+                    preSelectedCallFeedback: 'Transporter Confirmed Job Details',
+                    preSelectedRemarks: remarks,
+                    onSubmit: () {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Job brief feedback saved successfully'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    },
+                  );
+                }
+              });
+            } else {
+              // For other feedbacks, update via API
+              print('🔵 Submitting feedback via API: $status - $feedback');
+              await _updateJobBriefCallStatus(
+                jobBriefId: jobBriefId,
+                status: status,
+                feedback: feedback!,
+                remarks: remarks,
+                closeJob: shouldCloseJob,
               );
-            },
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateJobBriefCallStatus({
+    String? jobBriefId,
+    required String status,
+    required String feedback,
+    String? remarks,
+    bool closeJob = false,
+  }) async {
+    try {
+      final user = await Phase2AuthService.getCurrentUser();
+      if (user == null) {
+        print('✗ No user found');
+        return;
+      }
+
+      // Get authentication token
+      final token = await RealAuthService.instance.getAuthToken();
+      if (token == null) {
+        print('✗ No auth token found');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Authentication error. Please login again.'),
+              backgroundColor: Colors.red,
+            ),
           );
-        } else {
-          print('Saving feedback to database...');
-          try {
-            // Get current user for caller_id
-            final user = await Phase2AuthService.getCurrentUser();
-            final callerId = user?.id ?? 0;
+        }
+        return;
+      }
 
-            print('Caller ID: $callerId');
-            print('User: ${user?.name}');
+      // Map status to API format
+      String apiCallStatus;
+      if (status == 'Connected') {
+        apiCallStatus = 'connected';
+      } else if (status == 'Not Connected') {
+        apiCallStatus = 'not_connected';
+      } else if (status == 'Call Back Later') {
+        apiCallStatus = 'callback_later';
+      } else {
+        apiCallStatus = status.toLowerCase().replaceAll(' ', '_');
+      }
+      
+      // Build request body with important fields only
+      final requestBody = {
+        'id': jobBriefId ?? '',
+        'call_status': apiCallStatus,
+        'call_feedback': feedback,
+        'call_remarks': remarks ?? '',
+        'name': widget.job.transporterName,
+        'transporter_tmid': widget.job.transporterTmid,
+        'assigned_to': user.id,
+        'closed_job': closeJob ? 1 : 0,
+        'job_id': widget.job.jobId,
+      };
+      
+      print('🔵 API Request Body: $requestBody');
+      print('🔵 Auth Token: ${token.substring(0, 20)}...');
+      
+      // Call the API to update job brief with call status
+      final response = await http.post(
+        Uri.parse('https://truckmitr.com/api/telehead/ivr-call-update-jobBrief'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(requestBody),
+      );
 
-            // Upload recording file if provided
-            String? recordingUrl;
-            if (recordingFile != null) {
-              print('Uploading recording file...');
-              try {
-                final uploadResult =
-                    await Phase2ApiService.uploadTransporterCallRecording(
-                      filePath: recordingFile.path,
-                      jobId: widget.job.jobId,
-                      callerId: callerId,
-                      transporterTmid: widget.job.transporterTmid,
-                    );
-                recordingUrl = uploadResult['recording_url'];
-                print('Recording uploaded: $recordingUrl');
-              } catch (e) {
-                print('Recording upload failed: $e');
-                // Continue with feedback submission even if recording fails
-              }
-            }
+      print('🔵 API Response: ${response.statusCode} - ${response.body}');
 
-            // Build the complete feedback string with notes if provided
-            String completeFeedback = callStatus;
-            if (notes != null && notes.isNotEmpty) {
-              completeFeedback = '$callStatus - Notes: $notes';
-            }
-
-            print('=== CALLING API ===');
-            print('uniqueId: ${widget.job.transporterTmid}');
-            print('jobId: ${widget.job.jobId}');
-            print('callerId: $callerId');
-            print('name: ${widget.job.transporterName}');
-            print('callStatusFeedback: $completeFeedback');
-            print('callRecording: $recordingUrl');
-
-            // Save job brief with feedback, notes, and recording
-            await Phase2ApiService.saveJobBrief(
-              uniqueId: widget.job.transporterTmid,
-              jobId: widget.job.jobId,
-              callerId: callerId,
-              name: widget.job.transporterName,
-              callStatusFeedback: completeFeedback,
-              callRecording: recordingUrl,
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true || data['status'] == 'success') {
+          print('✓ Job brief call status updated successfully');
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(closeJob ? 'Job closed successfully' : 'Feedback saved successfully'),
+                backgroundColor: Colors.green,
+              ),
             );
-
-            print('✓ API call successful');
-
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Feedback saved successfully'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            }
-          } catch (e) {
-            print('✗ ERROR SAVING FEEDBACK: $e');
-            print('Stack trace: ${StackTrace.current}');
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error saving: $e'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
+          }
+        } else {
+          print('✗ Failed to update call status: ${data['message']}');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to save feedback: ${data['message'] ?? 'Unknown error'}'),
+                backgroundColor: Colors.red,
+              ),
+            );
           }
         }
-      },
-    );
+      } else {
+        print('✗ API error: ${response.statusCode}');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('API error: ${response.statusCode}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('✗ Error updating call status: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -365,7 +457,7 @@ class _ModernJobCardState extends State<ModernJobCard> {
                 Text(
                   widget.job.transporterName,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: AppColors.darkGray,
                   ),
@@ -394,7 +486,7 @@ class _ModernJobCardState extends State<ModernJobCard> {
                             ? widget.job.transporterTmid
                             : 'No TMID',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 10,
                           color: Colors.grey.shade600,
                         ),
                       ),

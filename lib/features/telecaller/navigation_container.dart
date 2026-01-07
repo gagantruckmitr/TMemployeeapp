@@ -94,7 +94,9 @@ class _NavigationContainerState extends State<NavigationContainer> with WidgetsB
   }
 
   void _onSectionChanged(NavigationSection section, {String? filter}) {
-    print('🔍 Navigation: section=$section, index=${section.index}, filter=$filter');
+    // Handle new sidebar menu items - these navigate to different tabs/screens
+    // For this container, we'll handle the basic sections
+    // The new tab-based sections (welcomeCall, tollFree, etc.) are handled by MainNavigationContainer
     
     setState(() {
       _currentSection = section;

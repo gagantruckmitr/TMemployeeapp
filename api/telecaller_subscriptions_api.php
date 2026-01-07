@@ -1,9 +1,7 @@
 <?php
 /**
  * Telecaller Subscriptions API
- * Track subscriptions based on call_logs.user_id matching with payments.user_id
- * Credits telecaller who made the call that led to subscription
- * Same logic as subscription.php but filtered for specific telecaller
+ * Simple logic: Count subscriptions where user is assigned to telecaller and has captured payment
  */
 
 header('Content-Type: application/json');
@@ -20,13 +18,13 @@ require_once 'config.php';
 
 try {
     $telecaller_id = $_GET['user_id'] ?? null;
-    $period = $_GET['period'] ?? 'all'; // 'today', 'week', 'month', 'all'
+    $period = $_GET['period'] ?? 'all';
     
     if (!$telecaller_id) {
         throw new Exception('User ID is required');
     }
     
-    // Build date filter based on period (filter by payment date, not call date)
+    // Build date filter
     $dateFilter = '';
     switch ($period) {
         case 'today':
@@ -43,8 +41,7 @@ try {
             break;
     }
     
-    // Main query: Get subscriptions where telecaller called driver before they subscribed
-    // Use a simple approach with post-processing for call details
+    // Main query: Get subscriptions where user is assigned to telecaller
     $query = "
         SELECT 
             p.id as payment_id,
@@ -52,74 +49,42 @@ try {
             u.name as driver_name,
             u.mobile as driver_mobile,
             u.unique_id as driver_tmid,
-            " . intval($telecaller_id) . " as telecaller_id,
+            u.assigned_to as telecaller_id,
             a.name as telecaller_name,
             p.created_at as payment_created_at,
-            FROM_UNIXTIME(p.start_at) AS payment_start_time,
-            FROM_UNIXTIME(p.end_at) AS payment_end_time,
+            FROM_UNIXTIME(p.start_at) as payment_start_time,
+            FROM_UNIXTIME(p.end_at) as payment_end_time,
             p.amount,
             p.payment_id as razorpay_payment_id,
             p.payment_status,
             p.payment_type,
-            DATEDIFF(FROM_UNIXTIME(p.end_at), FROM_UNIXTIME(p.start_at)) as subscription_days
-        FROM payments p
-        LEFT JOIN users u ON p.user_id = u.id
-        LEFT JOIN admins a ON a.id = " . intval($telecaller_id) . "
-        WHERE p.payment_status = 'captured'
-        AND EXISTS (
-            SELECT 1 FROM call_logs cl
-            WHERE cl.user_id = p.user_id
-            AND cl.caller_id = " . intval($telecaller_id) . "
-            AND cl.created_at < p.created_at
-        )
+            DATEDIFF(FROM_UNIXTIME(p.end_at), FROM_UNIXTIME(p.start_at)) as subscription_days,
+            0 as call_log_id,
+            p.created_at as call_time,
+            'assigned' as call_status,
+            0 as call_duration,
+            0 as minutes_after_call,
+            NULL as plan_id
+        FROM users u
+        JOIN payments p ON u.id = p.user_id
+        LEFT JOIN admins a ON u.assigned_to = a.id
+        WHERE u.assigned_to = " . intval($telecaller_id) . "
+        AND p.payment_status = 'captured'
         $dateFilter
         ORDER BY p.created_at DESC
     ";
     
     $result = $conn->query($query);
-    
     if (!$result) {
-        throw new Exception("Query failed: " . $conn->error);
+        throw new Exception("Query failed: " . $conn->error . " | Query: " . $query);
     }
     
     $subscriptions = [];
     while ($row = $result->fetch_assoc()) {
-        // Get call details for this payment
-        $call_query = "
-            SELECT id, created_at as call_time, call_status, call_duration,
-                   TIMESTAMPDIFF(MINUTE, created_at, '" . $row['payment_created_at'] . "') as minutes_after_call
-            FROM call_logs
-            WHERE user_id = " . intval($row['driver_id']) . "
-            AND caller_id = " . intval($telecaller_id) . "
-            AND created_at < '" . $row['payment_created_at'] . "'
-            ORDER BY created_at DESC
-            LIMIT 1
-        ";
-        
-        $call_result = $conn->query($call_query);
-        if ($call_result && $call_result->num_rows > 0) {
-            $call_data = $call_result->fetch_assoc();
-            $row['call_log_id'] = $call_data['id'];
-            $row['call_time'] = $call_data['call_time'];
-            $row['call_status'] = $call_data['call_status'];
-            $row['call_duration'] = $call_data['call_duration'];
-            $row['minutes_after_call'] = $call_data['minutes_after_call'];
-        } else {
-            // Fallback values if no call found (shouldn't happen due to EXISTS clause)
-            $row['call_log_id'] = 0;
-            $row['call_time'] = $row['payment_created_at'];
-            $row['call_status'] = 'unknown';
-            $row['call_duration'] = 0;
-            $row['minutes_after_call'] = 0;
-        }
-        
-        // Add plan_id as null since it doesn't exist in payments table
-        $row['plan_id'] = null;
-        
         $subscriptions[] = $row;
     }
     
-    // Get summary statistics for this telecaller
+    // Summary query
     $summary_query = "
         SELECT 
             COUNT(DISTINCT p.id) as total_subscriptions,
@@ -127,46 +92,35 @@ try {
             AVG(p.amount) as avg_subscription_value,
             MIN(p.created_at) as first_subscription_date,
             MAX(p.created_at) as latest_subscription_date
-        FROM payments p
-        WHERE p.payment_status = 'captured'
-        AND EXISTS (
-            SELECT 1 FROM call_logs cl
-            WHERE cl.user_id = p.user_id
-            AND cl.caller_id = " . intval($telecaller_id) . "
-            AND cl.created_at < p.created_at
-        )
+        FROM users u
+        JOIN payments p ON u.id = p.user_id
+        WHERE u.assigned_to = " . intval($telecaller_id) . "
+        AND p.payment_status = 'captured'
         $dateFilter
     ";
     
     $summary_result = $conn->query($summary_query);
-    
     if (!$summary_result) {
         throw new Exception("Summary query failed: " . $conn->error);
     }
-    
     $summary = $summary_result->fetch_assoc();
     
-    // Get subscription count by date for charts
+    // By date query
     $by_date_query = "
         SELECT 
             DATE(p.created_at) as subscription_date,
             COUNT(DISTINCT p.id) as count,
             SUM(p.amount) as daily_revenue
-        FROM payments p
-        WHERE p.payment_status = 'captured'
-        AND EXISTS (
-            SELECT 1 FROM call_logs cl
-            WHERE cl.user_id = p.user_id
-            AND cl.caller_id = " . intval($telecaller_id) . "
-            AND cl.created_at < p.created_at
-        )
+        FROM users u
+        JOIN payments p ON u.id = p.user_id
+        WHERE u.assigned_to = " . intval($telecaller_id) . "
+        AND p.payment_status = 'captured'
         $dateFilter
         GROUP BY DATE(p.created_at)
         ORDER BY subscription_date DESC
     ";
     
     $by_date_result = $conn->query($by_date_query);
-    
     if (!$by_date_result) {
         throw new Exception("By date query failed: " . $conn->error);
     }
@@ -175,6 +129,11 @@ try {
     while ($row = $by_date_result->fetch_assoc()) {
         $subscriptions_by_date[] = $row;
     }
+    
+    // Debug info
+    $debug_query = "SELECT COUNT(*) as count FROM users WHERE assigned_to = " . intval($telecaller_id);
+    $debug_result = $conn->query($debug_query);
+    $debug_row = $debug_result->fetch_assoc();
     
     echo json_encode([
         'success' => true,
@@ -185,7 +144,13 @@ try {
             'subscriptions' => $subscriptions,
             'subscriptions_by_date' => $subscriptions_by_date,
             'period' => $period,
-            'summary' => $summary
+            'summary' => $summary,
+            'logic_used' => 'assigned_to',
+            'debug' => [
+                'telecaller_id' => $telecaller_id,
+                'users_assigned_count' => $debug_row['count'],
+                'date_filter' => $dateFilter
+            ]
         ]
     ]);
     

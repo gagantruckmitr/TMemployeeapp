@@ -93,10 +93,11 @@ class CallbackRequestsService {
     final userId = RealAuthService.instance.currentUser?.id;
     final token = await RealAuthService.instance.getAuthToken();
 
-    final uri = Uri.parse('${ApiConfig.baseUrl}/callback_requests_api.php');
+    // Put action in query string, not body
+    final uri = Uri.parse('${ApiConfig.baseUrl}/callback_requests_api.php')
+        .replace(queryParameters: {'action': 'update_status'});
 
     final body = {
-      'action': 'update_status',
       'request_id': requestId.toString(),
       'status': status,
       if (notes != null) 'notes': notes,

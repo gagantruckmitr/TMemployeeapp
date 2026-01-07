@@ -15,6 +15,9 @@ class TollFreeUser {
   final List<Map<String, dynamic>> appliedJobs;
   final List<Map<String, dynamic>> postedJobs;
   final List<Map<String, dynamic>> callLogs;
+  final List<Map<String, dynamic>> matchMakingHistory;
+  final List<Map<String, dynamic>> callHistory;
+  final Map<String, dynamic>? trainingInfo;
   
   // Personal Details
   final String? fatherName;
@@ -58,6 +61,9 @@ class TollFreeUser {
     required this.appliedJobs,
     required this.postedJobs,
     required this.callLogs,
+    required this.matchMakingHistory,
+    required this.callHistory,
+    this.trainingInfo,
     this.fatherName,
     this.dob,
     this.sex,
@@ -123,9 +129,12 @@ class TollFreeUser {
       profileImage: imageUrl,
       hasSubscription: hasSubscription,
       latestPayment: payment,
-      appliedJobs: List<Map<String, dynamic>>.from(user['applied_jobs'] ?? []),
-      postedJobs: List<Map<String, dynamic>>.from(user['posted_jobs'] ?? []),
-      callLogs: List<Map<String, dynamic>>.from(user['call_logs'] ?? []),
+      appliedJobs: _parseList(user['appliedJobs'] ?? user['applied_jobs']),
+      postedJobs: _parseList(user['postedJobs'] ?? user['posted_jobs']),
+      callLogs: _parseList(user['call_logs']),
+      matchMakingHistory: _parseList(user['matchMakingHistory']),
+      callHistory: _parseList(user['callHistory']),
+      trainingInfo: user['trainingInfo'] is Map ? user['trainingInfo'] as Map<String, dynamic> : null,
       // Personal Details
       fatherName: user['Father_Name'],
       dob: user['DOB'],
@@ -155,4 +164,19 @@ class TollFreeUser {
 
   bool get isDriver => role.toLowerCase() == 'driver';
   bool get isTransporter => role.toLowerCase() == 'transporter';
+
+  static List<Map<String, dynamic>> _parseList(dynamic value) {
+    if (value == null) return [];
+    if (value is List) {
+      return value.map((item) {
+        if (item is Map<String, dynamic>) {
+          return item;
+        } else if (item is Map) {
+          return Map<String, dynamic>.from(item);
+        }
+        return <String, dynamic>{};
+      }).toList();
+    }
+    return [];
+  }
 }

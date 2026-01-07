@@ -1,85 +1,55 @@
 class TelecallerSubscription {
-  final int callLogId;
-  final int driverId;
-  final String driverName;
-  final String driverMobile;
-  final String driverTmid;
-  final int telecallerId;
-  final String telecallerName;
-  final DateTime callTime;
-  final String callStatus;
-  final int callDuration;
-  final int paymentId;
-  final DateTime paymentCreatedAt;
-  final DateTime paymentStartTime;
-  final DateTime? paymentEndTime;
-  final int minutesAfterCall;
+  final int assignedTo;
+  final String paymentUniqueId;
+  final String userName;
   final double amount;
-  final String razorpayPaymentId;
-  final String paymentStatus;
-  final String paymentType;
-  final String? planId;
-  final int subscriptionDays;
+  final DateTime startAt;
+  final DateTime endAt;
+  final DateTime updatedAt;
 
   TelecallerSubscription({
-    required this.callLogId,
-    required this.driverId,
-    required this.driverName,
-    required this.driverMobile,
-    required this.driverTmid,
-    required this.telecallerId,
-    required this.telecallerName,
-    required this.callTime,
-    required this.callStatus,
-    required this.callDuration,
-    required this.paymentId,
-    required this.paymentCreatedAt,
-    required this.paymentStartTime,
-    this.paymentEndTime,
-    required this.minutesAfterCall,
+    required this.assignedTo,
+    required this.paymentUniqueId,
+    required this.userName,
     required this.amount,
-    required this.razorpayPaymentId,
-    required this.paymentStatus,
-    required this.paymentType,
-    this.planId,
-    required this.subscriptionDays,
+    required this.startAt,
+    required this.endAt,
+    required this.updatedAt,
   });
 
-  factory TelecallerSubscription.fromJson(Map<String, dynamic> json) {
+  /// Factory for Laravel API response
+  /// API: https://truckmitr.com/api/telehead/reports/assigned-to-wise-summary/
+  factory TelecallerSubscription.fromLaravelJson(Map<String, dynamic> json) {
     try {
+      // start_at and end_at are Unix timestamps
+      final startAtTimestamp = int.parse(json['start_at']?.toString() ?? '0');
+      final endAtTimestamp = int.parse(json['end_at']?.toString() ?? '0');
+      
       return TelecallerSubscription(
-        callLogId: int.parse(json['call_log_id']?.toString() ?? '0'),
-        driverId: int.parse(json['driver_id']?.toString() ?? '0'),
-        driverName: json['driver_name'] ?? 'Unknown',
-        driverMobile: json['driver_mobile'] ?? '',
-        driverTmid: json['driver_tmid'] ?? '',
-        telecallerId: int.parse(json['telecaller_id']?.toString() ?? '0'),
-        telecallerName: json['telecaller_name'] ?? '',
-        callTime: json['call_time'] != null 
-            ? DateTime.parse(json['call_time']) 
-            : DateTime.now(),
-        callStatus: json['call_status'] ?? '',
-        callDuration: int.parse(json['call_duration']?.toString() ?? '0'),
-        paymentId: int.parse(json['payment_id']?.toString() ?? '0'),
-        paymentCreatedAt: DateTime.parse(json['payment_created_at']),
-        paymentStartTime: DateTime.parse(json['payment_start_time']),
-        paymentEndTime: json['payment_end_time'] != null 
-            ? DateTime.parse(json['payment_end_time']) 
-            : null,
-        minutesAfterCall: int.parse(json['minutes_after_call']?.toString() ?? '0'),
+        assignedTo: int.parse(json['assigned_to']?.toString() ?? '0'),
+        paymentUniqueId: json['payment_unique_id'] ?? '',
+        userName: json['user_name'] ?? 'Unknown',
         amount: double.parse(json['amount']?.toString() ?? '0'),
-        razorpayPaymentId: json['razorpay_payment_id'] ?? '',
-        paymentStatus: json['payment_status'] ?? '',
-        paymentType: json['payment_type'] ?? '',
-        planId: json['plan_id'],
-        subscriptionDays: int.parse(json['subscription_days']?.toString() ?? '0'),
+        startAt: DateTime.fromMillisecondsSinceEpoch(startAtTimestamp * 1000),
+        endAt: DateTime.fromMillisecondsSinceEpoch(endAtTimestamp * 1000),
+        updatedAt: json['created_at'] != null 
+            ? DateTime.parse(json['created_at']) 
+            : DateTime.now(),
       );
     } catch (e) {
-      print('❌ Error parsing TelecallerSubscription: $e');
+      print('❌ Error parsing TelecallerSubscription from Laravel: $e');
       print('JSON data: $json');
       rethrow;
     }
   }
+
+  // Getters for backward compatibility with UI
+  String get driverName => userName;
+  String get driverTmid => paymentUniqueId;
+  DateTime get paymentStartTime => updatedAt; // Use updated_at for payment date/time display
+  DateTime? get paymentEndTime => endAt;
+  String get paymentStatus => 'PAID';
+  String get paymentType => 'Online';
 }
 
 class SubscriptionStats {

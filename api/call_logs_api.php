@@ -88,7 +88,7 @@ function insertCallLog($pdo) {
     
     // Extract all fields from input
     $callerId = $input['caller_id'] ?? null;
-    $tcFor = $input['tc_for'] ?? null;
+    $tcFor = $input['tc_for'] ?? $input['call_source'] ?? null; // Use call_source as tc_for if not provided
     $userId = $input['user_id'] ?? null;
     $driverName = $input['driver_name'] ?? null;
     $callStatus = $input['call_status'] ?? 'pending';
@@ -111,19 +111,25 @@ function insertCallLog($pdo) {
     $callStartTime = $input['call_start_time'] ?? null;
     $callEndTime = $input['call_end_time'] ?? null;
     
+    // Log the insert for debugging
+    error_log("📞 Inserting call log: user_id=$userId, caller_id=$callerId, tc_for=$tcFor, status=$callStatus, feedback=$feedback");
+    
+    // Get call_source from input
+    $callSource = $input['call_source'] ?? null;
+    
     try {
         $sql = "INSERT INTO call_logs (
                     caller_id, tc_for, user_id, driver_name, call_status,
                     feedback, remarks, notes, call_duration, caller_number, user_number,
                     call_time, reference_id, api_response, call_initiated_at, call_completed_at,
                     ip_address, recording_url, manual_call_recording_url, myoperator_unique_id,
-                    webhook_data, call_start_time, call_end_time, created_at, updated_at
+                    webhook_data, call_start_time, call_end_time, call_source, created_at, updated_at
                 ) VALUES (
                     ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?,
                     COALESCE(?, NOW()), ?, ?, ?, ?,
                     ?, ?, ?, ?,
-                    ?, ?, ?, NOW(), NOW()
+                    ?, ?, ?, ?, NOW(), NOW()
                 )";
         
         $stmt = $pdo->prepare($sql);
@@ -132,7 +138,7 @@ function insertCallLog($pdo) {
             $feedback, $remarks, $notes, $callDuration, $callerNumber, $userNumber,
             $callTime, $referenceId, $apiResponse, $callInitiatedAt, $callCompletedAt,
             $ipAddress, $recordingUrl, $manualCallRecordingUrl, $myoperatorUniqueId,
-            $webhookData, $callStartTime, $callEndTime
+            $webhookData, $callStartTime, $callEndTime, $callSource
         ]);
         
         $insertedId = $pdo->lastInsertId();

@@ -10,6 +10,7 @@ import '../widgets/driver_contact_card.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/ivr_call_waiting_overlay.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../../../widgets/error_handler.dart';
 
 class PendingCallsScreen extends StatefulWidget {
   const PendingCallsScreen({super.key});
@@ -45,7 +46,9 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
     setState(() => _isLoading = true);
 
     try {
-      final leads = await SmartCallingService.instance.getDrivers(forceRefresh: true);
+      final leads = await SmartCallingService.instance.getDrivers(
+        forceRefresh: true,
+      );
 
       if (mounted) {
         setState(() {
@@ -59,12 +62,7 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
           _pendingLeads = [];
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load pending calls: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorHandler.showError(context, e, onRetry: _loadPendingLeads);
       }
     }
   }
@@ -163,25 +161,25 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _pendingLeads == null || _pendingLeads!.isEmpty
-                      ? _buildEmptyState()
-                      : RefreshIndicator(
-                          onRefresh: _refreshData,
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _pendingLeads!.length,
-                            itemBuilder: (context, index) {
-                              final lead = _pendingLeads![index];
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: DriverContactCard(
-                                  contact: lead,
-                                  onCallPressed: () => _initiateCall(lead),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      onRefresh: _refreshData,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _pendingLeads!.length,
+                        itemBuilder: (context, index) {
+                          final lead = _pendingLeads![index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: DriverContactCard(
+                              contact: lead,
+                              onCallPressed: () => _initiateCall(lead),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
             ),
           ],
         ),
@@ -230,7 +228,7 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
 
   Future<void> _initiateCall(DriverContact lead) async {
     HapticFeedback.lightImpact();
-    
+
     try {
       // Get current user
       final currentUser = RealAuthService.instance.currentUser;
@@ -252,9 +250,7 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
       if (mounted) {
         final callType = await showDialog<String>(
           context: context,
-          builder: (context) => CallTypeSelectionDialog(
-            driverName: lead.name,
-          ),
+          builder: (context) => CallTypeSelectionDialog(driverName: lead.name),
         );
 
         if (callType == null) return;
@@ -277,12 +273,7 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error initiating call: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorHandler.showError(context, e, onRetry: () => _initiateCall(lead));
       }
     }
   }
@@ -320,12 +311,7 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorHandler.showError(context, e);
       }
     }
   }
@@ -336,7 +322,10 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
       final currentUser = RealAuthService.instance.currentUser;
       if (currentUser == null) return;
 
-      final telecallerPhone = currentUser.mobile.replaceAll(RegExp(r'[^\d]'), '');
+      final telecallerPhone = currentUser.mobile.replaceAll(
+        RegExp(r'[^\d]'),
+        '',
+      );
 
       if (!mounted) return;
 
@@ -352,14 +341,16 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
         clientPhone: cleanMobile,
         callerId: callerId.toString(),
         contactId: lead.id,
+        tmid: lead.tmid,
         contactType: 'driver',
       );
 
       if (mounted) {
         if (result['success'] == true) {
-          final referenceId = result['reference_id'] ?? 
-                             result['data']?['call_id'] ?? 
-                             DateTime.now().millisecondsSinceEpoch.toString();
+          final referenceId =
+              result['reference_id'] ??
+              result['data']?['call_id'] ??
+              DateTime.now().millisecondsSinceEpoch.toString();
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -398,12 +389,7 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorHandler.showError(context, e);
       }
     }
   }
@@ -426,7 +412,7 @@ class _PendingCallsScreenState extends State<PendingCallsScreen>
               _pendingLeads?.removeWhere((c) => c.id == lead.id);
             });
             Navigator.of(context).pop();
-            
+
             // Show success message
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

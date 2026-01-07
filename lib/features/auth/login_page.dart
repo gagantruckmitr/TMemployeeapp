@@ -262,35 +262,62 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
           const SizedBox(height: 16),
 
-          // Remember Me Checkbox
+          // Remember Me Checkbox & Forgot Password
           Padding(
             padding: const EdgeInsets.only(left: 2),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: Checkbox(
-                    value: _rememberMe,
-                    onChanged: (value) {
-                      setState(() => _rememberMe = value ?? false);
-                    },
-                    activeColor: const Color(0xFF8B8BC0),
-                    checkColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(5),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: Checkbox(
+                        value: _rememberMe,
+                        onChanged: (value) {
+                          setState(() => _rememberMe = value ?? false);
+                        },
+                        activeColor: const Color(0xFF8B8BC0),
+                        checkColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        side: BorderSide(
+                          color: Colors.grey.shade400,
+                          width: 1.5,
+                        ),
+                      ),
                     ),
-                    side: BorderSide(color: Colors.grey.shade400, width: 1.5),
-                  ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Remember me',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Text(
-                  'Remember me',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0.1,
+                TextButton(
+                  onPressed: _showForgotPasswordSheet,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text(
+                    'Forgot Password?',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF5C5C99),
+                    ),
                   ),
                 ),
               ],
@@ -486,7 +513,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
           // Navigate based on user role
           final userRole = result.user?.role.toLowerCase() ?? 'telecaller';
-          
+
           if (userRole == 'manager' || userRole == 'admin') {
             // Managers go to manager dashboard
             context.go(AppRouter.managerDashboard);
@@ -563,12 +590,359 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       final success = await Phase2AuthService.login(mobile, password);
       if (success) {
         final user = await Phase2AuthService.getCurrentUser();
-        debugPrint('✅ Phase 2 auto-login successful - User: ${user?.name}, ID: ${user?.id}, tc_for: ${user?.tcFor}');
+        debugPrint(
+          '✅ Phase 2 auto-login successful - User: ${user?.name}, ID: ${user?.id}, tc_for: ${user?.tcFor}',
+        );
       } else {
-        debugPrint('⚠️ Phase 2 auto-login failed - User may not have Phase 2 access');
+        debugPrint(
+          '⚠️ Phase 2 auto-login failed - User may not have Phase 2 access',
+        );
       }
     } catch (e) {
       debugPrint('⚠️ Phase 2 auto-login error: $e');
     }
+  }
+
+  void _showForgotPasswordSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: const ForgotPasswordSheet(),
+      ),
+    );
+  }
+}
+
+class ForgotPasswordSheet extends StatefulWidget {
+  const ForgotPasswordSheet({super.key});
+
+  @override
+  State<ForgotPasswordSheet> createState() => _ForgotPasswordSheetState();
+}
+
+class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
+  final _mobileController = TextEditingController();
+  final _otpController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  int _step = 0; // 0: Enter Mobile, 1: Reset Password
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  @override
+  void dispose() {
+    _mobileController.dispose();
+    _otpController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Handle Bar
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Title
+              Text(
+                _step == 0 ? 'Forgot Password?' : 'Reset Password',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D2D5F),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _step == 0
+                    ? 'Enter your mobile number to receive an OPT to reset your password.'
+                    : 'Enter the OTP sent to your email/mobile and your new password.',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+
+              if (_step == 0) ...[
+                // Step 0: Mobile Number
+                TextFormField(
+                  controller: _mobileController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Mobile Number',
+                    hintText: 'Enter your registered mobile',
+                    prefixIcon: const Icon(
+                      Icons.phone_android_rounded,
+                      color: Color(0xFF5C5C99),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF5C5C99),
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Required';
+                    if (value.length < 10) return 'Invalid mobile number';
+                    return null;
+                  },
+                ),
+              ] else ...[
+                // Step 1: OTP and New Password
+                TextFormField(
+                  controller: _otpController,
+                  keyboardType: TextInputType.text,
+                  decoration: InputDecoration(
+                    labelText: 'OTP Token',
+                    hintText: 'Enter OTP',
+                    prefixIcon: const Icon(
+                      Icons.key_rounded,
+                      color: Color(0xFF5C5C99),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF5C5C99),
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  validator: (value) => value!.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    prefixIcon: const Icon(
+                      Icons.lock_outline_rounded,
+                      color: Color(0xFF5C5C99),
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF5C5C99),
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  validator: (value) =>
+                      (value?.length ?? 0) < 6 ? 'Min 6 chars' : null,
+                ),
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: _confirmPasswordController,
+                  obscureText: _obscureConfirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Password',
+                    prefixIcon: const Icon(
+                      Icons.lock_rounded,
+                      color: Color(0xFF5C5C99),
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () => setState(
+                        () =>
+                            _obscureConfirmPassword = !_obscureConfirmPassword,
+                      ),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF5C5C99),
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value != _passwordController.text)
+                      return 'Passwords do not match';
+                    return null;
+                  },
+                ),
+              ],
+
+              const SizedBox(height: 32),
+
+              // Action Button
+              ElevatedButton(
+                onPressed: _isLoading ? null : _handleSubmit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3D4A7A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 2,
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text(
+                        _step == 0 ? 'Send OTP' : 'Reset Password',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleSubmit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+    final mobile = _mobileController.text.trim();
+
+    try {
+      if (_step == 0) {
+        // Forgot Password API
+        final result = await RealAuthService.instance.forgotPassword(mobile);
+
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        if (result['success'] == true || result['status'] == true) {
+          // Move to next step
+          setState(() => _step = 1);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('OTP sent successfully! Check your email.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          _showError(result['message'] ?? 'Failed to send OTP');
+        }
+      } else {
+        // Reset Password API
+        final result = await RealAuthService.instance.resetPassword(
+          mobile: mobile,
+          token: _otpController.text.trim(),
+          password: _passwordController.text,
+          passwordConfirmation: _confirmPasswordController.text,
+        );
+
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        if (result['success'] == true || result['status'] == true) {
+          Navigator.pop(context); // Close sheet
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Password reset successful! Please login.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          _showError(result['message'] ?? 'Failed to reset password');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showError('An error occurred: $e');
+      }
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 }

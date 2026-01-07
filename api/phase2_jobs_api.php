@@ -147,11 +147,12 @@ function getJobs() {
                     $transporterGender = $user['sex'] ?? '';
                     $transporterImage = $user['images'] ?? '';
                     
-                    // Calculate profile completion for transporter (EXACT same logic as profile_completion_api.php)
+                    // Calculate profile completion for transporter (MUST MATCH profile_completion_helper.php)
+                    // EXACT 15 fields as defined in profile_completion_helper.php for transporter role
                     $transporterFields = [
-                        'name', 'email', 'city', 'address', 'transport_name',
-                        'year_of_establishment', 'fleet_size', 'operational_segment', 'average_km',
-                        'pan_number', 'pan_image', 'gst_certificate', 'images'
+                        'name', 'email', 'mobile', 'transport_name', 'year_of_establishment',
+                        'fleet_size', 'operational_segment', 'average_km', 'city', 'states',
+                        'images', 'address', 'pan_number', 'pan_image', 'gst_certificate'
                     ];
                     
                     $filledCount = 0;
@@ -159,7 +160,21 @@ function getJobs() {
                     
                     foreach ($transporterFields as $field) {
                         $value = $user[$field] ?? null;
-                        $isFilled = !empty($value) && $value !== '0000-00-00';
+                        
+                        // Check if field is filled (not empty, not null, not '0000-00-00', not empty array [])
+                        $isFilled = false;
+                        if (!empty($value) && $value !== '0000-00-00') {
+                            // Handle JSON fields - check if it's an empty array
+                            $decoded = json_decode($value, true);
+                            if (json_last_error() === JSON_ERROR_NONE) {
+                                // It's valid JSON - check if it's an empty array
+                                $isFilled = !empty($decoded);
+                            } else {
+                                // Not JSON, just check if not empty
+                                $isFilled = true;
+                            }
+                        }
+                        
                         if ($isFilled) {
                             $filledCount++;
                         }

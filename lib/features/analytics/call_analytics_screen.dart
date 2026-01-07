@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
 import '../calls/call_history_screen.dart';
+import '../../widgets/error_handler.dart';
 
 class CallAnalyticsScreen extends StatefulWidget {
   const CallAnalyticsScreen({super.key});
@@ -69,9 +70,7 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
       print('Error loading analytics: $e');
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ErrorHandler.showError(context, e, onRetry: _loadData);
       }
     }
   }
@@ -97,7 +96,8 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
       backgroundColor: AppColors.background,
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
           : RefreshIndicator(
               onRefresh: _loadData,
               color: AppColors.primary,
@@ -136,7 +136,7 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
             gradient: LinearGradient(
               colors: [
                 AppColors.primary,
-                AppColors.primary.withValues(alpha: 0.85)
+                AppColors.primary.withValues(alpha: 0.85),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -194,15 +194,27 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
       childAspectRatio: 1.1,
       children: [
         _buildStatCard('Total', '${_stats?['totalCalls'] ?? 0}', Colors.blue),
-        _buildStatCard('Transporter', '${_stats?['transporterCalls'] ?? 0}',
-            Colors.purple),
         _buildStatCard(
-            'Driver', '${_stats?['driverCalls'] ?? 0}', Colors.orange),
+          'Transporter',
+          '${_stats?['transporterCalls'] ?? 0}',
+          Colors.purple,
+        ),
         _buildStatCard(
-            'Matches', '${_stats?['totalMatches'] ?? 0}', Colors.green),
+          'Driver',
+          '${_stats?['driverCalls'] ?? 0}',
+          Colors.orange,
+        ),
+        _buildStatCard(
+          'Matches',
+          '${_stats?['totalMatches'] ?? 0}',
+          Colors.green,
+        ),
         _buildStatCard('Selected', '${_stats?['selected'] ?? 0}', Colors.teal),
         _buildStatCard(
-            'Rejected', '${_stats?['notSelected'] ?? 0}', Colors.red),
+          'Rejected',
+          '${_stats?['notSelected'] ?? 0}',
+          Colors.red,
+        ),
       ],
     );
   }
@@ -287,18 +299,26 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
         decoration: InputDecoration(
           hintText: 'Search by name, TMID, feedback...',
           hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-          prefixIcon:
-              Icon(Icons.search_rounded, color: AppColors.primary, size: 22),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: AppColors.primary,
+            size: 22,
+          ),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
-                  icon: Icon(Icons.clear_rounded,
-                      color: Colors.grey.shade600, size: 20),
+                  icon: Icon(
+                    Icons.clear_rounded,
+                    color: Colors.grey.shade600,
+                    size: 20,
+                  ),
                   onPressed: () => _searchController.clear(),
                 )
               : null,
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -310,8 +330,11 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
         padding: const EdgeInsets.all(40),
         child: Column(
           children: [
-            Icon(Icons.phone_disabled_rounded,
-                size: 60, color: Colors.grey.shade300),
+            Icon(
+              Icons.phone_disabled_rounded,
+              size: 60,
+              color: Colors.grey.shade300,
+            ),
             const SizedBox(height: 16),
             Text(
               'No call logs found',
@@ -401,10 +424,7 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
               ),
               Text(
                 _formatDateTime(log['createdAt'] ?? ''),
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               ),
             ],
           ),
@@ -420,8 +440,11 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
               const SizedBox(width: 16),
               if (log['feedback'] != null &&
                   log['feedback'].toString().isNotEmpty) ...[
-                Icon(Icons.comment_outlined,
-                    size: 14, color: Colors.grey.shade600),
+                Icon(
+                  Icons.comment_outlined,
+                  size: 14,
+                  color: Colors.grey.shade600,
+                ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
@@ -440,8 +463,9 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color:
-                    _getStatusColor(log['matchStatus']).withValues(alpha: 0.1),
+                color: _getStatusColor(
+                  log['matchStatus'],
+                ).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
@@ -488,9 +512,7 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
       // Navigate to call history screen
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (context) => const CallHistoryScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const CallHistoryScreen()),
       );
 
       // Show a brief snackbar to indicate navigation
@@ -501,9 +523,7 @@ class _CallAnalyticsScreenState extends State<CallAnalyticsScreen> {
           backgroundColor: AppColors.primary,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     } catch (e) {
@@ -525,7 +545,11 @@ class CurvedHeaderClipper extends CustomClipper<Path> {
     final path = Path();
     path.lineTo(0, size.height - 30);
     path.quadraticBezierTo(
-        size.width / 2, size.height, size.width, size.height - 30);
+      size.width / 2,
+      size.height,
+      size.width,
+      size.height - 30,
+    );
     path.lineTo(size.width, 0);
     path.close();
     return path;

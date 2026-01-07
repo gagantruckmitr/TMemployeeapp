@@ -77,8 +77,9 @@ function initiateManualCall($pdo) {
     $driverMobile = $input['driver_mobile'] ?? '';
     $callerId = (int)($input['caller_id'] ?? 0);
     $driverId = (int)($input['driver_id'] ?? 0);
+    $callSource = $input['call_source'] ?? '';
     
-    error_log("📱 Manual Call - Driver Mobile: $driverMobile, Caller ID: $callerId, Driver ID: $driverId");
+    error_log("📱 Manual Call - Driver Mobile: $driverMobile, Caller ID: $callerId, Driver ID: $driverId, Call Source: $callSource");
     
     if (empty($callerId)) {
         echo json_encode([
@@ -154,34 +155,43 @@ function initiateManualCall($pdo) {
         
         error_log('📞 Manual Call Setup: Driver=' . $driverNumber . ', Telecaller=' . $telecallerNumber);
         
-        // Save to call_logs (same structure as IVR) with IST timezone (NOW() already returns IST)
-        $sql = "INSERT INTO call_logs 
-                (caller_id, user_id, caller_number, user_number, driver_name, call_status, 
-                 reference_id, api_response, call_time, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())";
-        
-        $apiResponse = json_encode([
-            'type' => 'manual',
-            'status' => 'initiated',
-            'message' => 'Manual call logged successfully',
-            'timestamp' => date('Y-m-d H:i:s')
-        ]);
-        
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            $callerId,
-            $driver['id'],
-            $telecallerNumber,
-            $driverNumber,
-            $driver['name'],
-            'pending',
-            $referenceId,
-            $apiResponse
-        ]);
-        
-        $callLogId = $pdo->lastInsertId();
-        
-        error_log('✅ Manual call logged - ID: ' . $callLogId . ', Ref: ' . $referenceId);
+        // SKIP logging to call_logs if call is from job_applicants screen
+        // Job applicants calls should ONLY be logged in call_logs_match_making table
+        $callLogId = null;
+        if ($callSource === 'job_applicants') {
+            error_log("⏭️ Skipping call_logs insert for job_applicants call (Ref: $referenceId)");
+            // Set a dummy ID for response
+            $callLogId = 0;
+        } else {
+            // Save to call_logs (same structure as IVR) with IST timezone (NOW() already returns IST)
+            $sql = "INSERT INTO call_logs 
+                    (caller_id, user_id, caller_number, user_number, driver_name, call_status, 
+                     reference_id, api_response, call_time, created_at, updated_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())";
+            
+            $apiResponse = json_encode([
+                'type' => 'manual',
+                'status' => 'initiated',
+                'message' => 'Manual call logged successfully',
+                'timestamp' => date('Y-m-d H:i:s')
+            ]);
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                $callerId,
+                $driver['id'],
+                $telecallerNumber,
+                $driverNumber,
+                $driver['name'],
+                'pending',
+                $referenceId,
+                $apiResponse
+            ]);
+            
+            $callLogId = $pdo->lastInsertId();
+            
+            error_log('✅ Manual call logged - ID: ' . $callLogId . ', Ref: ' . $referenceId);
+        }
         
         $responseData = [
             'success' => true,
