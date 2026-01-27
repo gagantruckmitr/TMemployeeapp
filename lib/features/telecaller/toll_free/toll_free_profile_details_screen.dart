@@ -6,7 +6,7 @@ import '../../../models/smart_calling_models.dart';
 import '../../../core/services/easygo_ivr_service.dart';
 import '../../../core/services/toll_free_feedback_service.dart';
 import '../../../core/services/real_auth_service.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 import '../widgets/call_feedback_modal.dart';
 
 class TollFreeProfileDetailsScreen extends StatefulWidget {

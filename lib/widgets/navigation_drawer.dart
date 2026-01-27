@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/smart_calling_models.dart';
 import '../core/services/real_auth_service.dart';
-import '../routes/app_router.dart';
+import '../app/router/app_router.dart';
 
 /// Apple-style minimal sidebar for TMConnect
 /// Following iOS Human Interface Guidelines

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/manager_models.dart';
 import '../../../core/services/manager_service.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 
 class LeaderboardWidget extends StatefulWidget {
   final int managerId;

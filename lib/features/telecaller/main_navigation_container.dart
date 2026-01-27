@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/theme/app_theme.dart';
+import '../../app/theme/app_theme.dart';
 import '../../models/smart_calling_models.dart';
-import '../../routes/app_router.dart';
+import '../../app/router/app_router.dart';
 import '../../widgets/navigation_drawer.dart';
 import '../../widgets/full_width_bottom_nav.dart';
 import '../../features/dashboard/interested_dashboard_wrapper.dart';

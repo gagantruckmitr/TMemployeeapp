@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import '../../core/theme/app_colors.dart';
+import '../../app/theme/app_colors.dart';
 import '../../models/dummy_data.dart';
 import 'widgets/match_card.dart';
 import 'widgets/confetti_animation.dart';

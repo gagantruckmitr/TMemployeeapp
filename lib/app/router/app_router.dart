@@ -1,25 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../features/splash/splash_screen.dart';
-import '../features/onboarding/onboarding_page.dart';
-import '../features/auth/login_page.dart';
-import '../features/telecaller/main_navigation_container.dart';
-import '../features/telecaller/smart_calling_page.dart';
-import '../features/telecaller/performance_analytics_page.dart';
-import '../features/telecaller/subscriptions/subscriptions_screen.dart';
-import '../features/telecaller/screens/dynamic_profile_screen.dart';
-import '../features/telecaller/screens/edit_profile_screen.dart';
-import '../features/telecaller/screens/settings_screen.dart';
-import '../features/telecaller/screens/driver_full_detail_page.dart';
-import '../features/telecaller/screens/leave_break_management_screen.dart';
-import '../features/manager/manager_dashboard_page.dart';
-import '../features/drivers/driver_bucket_screen.dart';
-import '../core/services/real_auth_service.dart';
-import '../test_db_connection.dart';
-import '../features/dashboard/interested_dashboard_wrapper.dart';
-import '../widgets/callback_notification_overlay.dart'
+import '../../features/splash/splash_screen.dart';
+import '../../features/onboarding/onboarding_page.dart';
+import '../../features/auth/login_page.dart';
+import '../../features/telecaller/main_navigation_container.dart';
+import '../../features/telecaller/smart_calling_page.dart';
+import '../../features/telecaller/performance_analytics_page.dart';
+import '../../features/telecaller/subscriptions/subscriptions_screen.dart';
+import '../../features/telecaller/screens/dynamic_profile_screen.dart';
+import '../../features/telecaller/screens/edit_profile_screen.dart';
+import '../../features/telecaller/screens/settings_screen.dart';
+import '../../features/telecaller/screens/driver_full_detail_page.dart';
+import '../../features/telecaller/screens/leave_break_management_screen.dart';
+import '../../features/manager/manager_dashboard_page.dart';
+import '../../features/drivers/driver_bucket_screen.dart';
+import '../../core/services/real_auth_service.dart';
+import '../../test_db_connection.dart';
+import '../../features/dashboard/interested_dashboard_wrapper.dart';
+import '../../widgets/callback_notification_overlay.dart'
     show callbackNavigatorKey;
-import '../attendance/attendance_screen.dart';
+import '../../features/attendance/presentation/pages/attendance_screen.dart';
 
 // Wrapper to get manager info from auth service
 class ManagerDashboardWrapper extends StatelessWidget {

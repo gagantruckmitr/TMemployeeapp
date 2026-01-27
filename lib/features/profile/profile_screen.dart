@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import '../../core/theme/app_colors.dart';
+import '../../app/theme/app_colors.dart';
 import '../../core/services/phase2_auth_service.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../models/phase2_user_model.dart';

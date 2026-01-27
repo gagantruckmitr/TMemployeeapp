@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../app/theme/app_colors.dart';
 
 class JobCard extends StatelessWidget {
   final Map<String, dynamic> job;

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/manager_models.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 
 class OverviewCards extends StatelessWidget {
   final ManagerOverview overview;

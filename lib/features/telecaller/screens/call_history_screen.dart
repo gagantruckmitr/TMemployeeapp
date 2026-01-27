@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../models/smart_calling_models.dart';
 import '../../../models/phase2_user_model.dart';
 import '../../../core/services/smart_calling_service.dart';

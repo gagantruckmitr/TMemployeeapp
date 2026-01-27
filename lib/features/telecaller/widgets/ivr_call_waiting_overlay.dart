@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 
 // Global overlay entry for mini mode
 OverlayEntry? _globalMiniOverlay;

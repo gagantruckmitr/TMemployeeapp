@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import '../../app/theme/app_colors.dart';
 
 enum TelecallerStatus { online, offline, busy, onBreak }
 

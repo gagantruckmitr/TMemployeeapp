@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
-import '../../core/theme/app_colors.dart';
+import '../../app/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
 import '../../core/services/smart_calling_service.dart';

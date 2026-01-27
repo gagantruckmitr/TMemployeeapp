@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../core/services/callback_notification_service.dart';
-import '../core/theme/app_theme.dart';
+import '../app/theme/app_theme.dart';
 
 class CallbackDebugScreen extends StatefulWidget {
   const CallbackDebugScreen({super.key});

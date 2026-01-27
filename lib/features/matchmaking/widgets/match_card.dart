@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../core/widgets/glassmorphic_card.dart';
 
 class MatchCard extends StatelessWidget {

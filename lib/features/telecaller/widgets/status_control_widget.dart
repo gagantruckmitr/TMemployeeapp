@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/services/telecaller_status_service.dart';
 import '../../../core/services/real_auth_service.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 
 class StatusControlWidget extends StatefulWidget {
   const StatusControlWidget({super.key});

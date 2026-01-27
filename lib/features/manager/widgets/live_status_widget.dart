@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/services/telecaller_status_service.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 
 class LiveStatusWidget extends StatefulWidget {
   const LiveStatusWidget({super.key});

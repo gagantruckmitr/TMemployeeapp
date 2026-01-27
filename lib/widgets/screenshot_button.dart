@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/utils/screenshot_helper.dart';
-import '../core/theme/app_theme.dart';
+import '../app/theme/app_theme.dart';
 
 class ScreenshotButton extends StatelessWidget {
   final VoidCallback? onScreenshotTaken;

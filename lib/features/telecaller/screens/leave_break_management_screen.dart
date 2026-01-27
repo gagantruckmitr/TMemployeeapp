@@ -9,7 +9,7 @@ import '../../../core/services/real_auth_service.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/break_service.dart';
 import '../../../models/leave_models.dart';
-import '../../../routes/app_router.dart';
+import '../../../app/router/app_router.dart';
 import '../widgets/break_status_popup.dart';
 import '../widgets/apply_leave_dialog.dart';
 import 'leave_requests_screen.dart';

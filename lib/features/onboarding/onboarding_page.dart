@@ -4,9 +4,9 @@ import 'package:lottie/lottie.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../core/theme/app_theme.dart';
+import '../../app/theme/app_theme.dart';
 import '../../core/utils/constants.dart';
-import '../../routes/app_router.dart';
+import '../../app/router/app_router.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});

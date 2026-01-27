@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import '../../../core/theme/app_colors.dart';
+import '../../../app/theme/app_colors.dart';
 
 class ConfettiAnimation extends StatefulWidget {
   const ConfettiAnimation({super.key});

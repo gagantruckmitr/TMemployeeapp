@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/services/toll_free_feedback_service.dart';
 import '../widgets/tab_page_header.dart';
 import '../../../widgets/audio_player_widget.dart';

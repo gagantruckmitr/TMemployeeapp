@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../models/smart_calling_models.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/utils/state_code_mapper.dart';
 
 class DriverDetailModal extends StatelessWidget {

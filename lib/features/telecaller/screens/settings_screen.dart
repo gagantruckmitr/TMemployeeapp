@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/real_auth_service.dart';
 import '../../../core/config/api_config.dart';
-import '../../../routes/app_router.dart';
+import '../../../app/router/app_router.dart';
 import '../../auth/login_page.dart';
 
 /// Apple-style Settings Screen for TMConnect

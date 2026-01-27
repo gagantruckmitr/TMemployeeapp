@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 
 /// Simple and elegant call type selection dialog
 class CallTypeSelectionDialog extends StatelessWidget {

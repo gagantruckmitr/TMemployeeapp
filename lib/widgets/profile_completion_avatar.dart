@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/profile_completion_loader_screen.dart';
+import '../features/telecaller/screens/profile_completion_loader_screen.dart';
 import 'progress_ring_avatar.dart';
 
 class ProfileCompletionAvatar extends StatelessWidget {

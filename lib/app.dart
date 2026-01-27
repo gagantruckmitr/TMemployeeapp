@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:screenshot/screenshot.dart';
-import 'core/theme/app_theme.dart';
+import 'app/theme/app_theme.dart';
 import 'core/utils/screenshot_helper.dart';
-import 'routes/app_router.dart';
+import 'app/router/app_router.dart';
 import 'core/database/database_setup.dart';
 import 'core/services/session_manager.dart';
 import 'core/services/callback_notification_service.dart';

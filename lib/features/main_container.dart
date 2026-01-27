@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:animated_bottom_navigation_bar/animated_bottom_navigation_bar.dart';
-import '../core/theme/app_colors.dart';
+import '../app/theme/app_colors.dart';
 import 'dashboard/dynamic_dashboard_screen.dart';
 import 'jobs/dynamic_jobs_screen.dart';
 import 'calls/call_history_hub_screen.dart';

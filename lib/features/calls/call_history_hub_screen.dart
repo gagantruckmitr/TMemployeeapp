@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../../core/theme/app_colors.dart';
+import '../../app/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
 import '../../core/services/smart_calling_service.dart';

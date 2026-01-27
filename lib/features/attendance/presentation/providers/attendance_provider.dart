@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/services/tasksuite_auth_service.dart';
+import '../../../../core/services/tasksuite_auth_service.dart';
 import '../../data/repositories/attendance_repository.dart';
 
 // Sentinel value for copyWith to distinguish between null and not provided
@@ -7,7 +7,7 @@ const _undefined = Object();
 
 // Attendance Repository Provider
 final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
-  return AttendanceRepository();
+  return AttendanceRepositoryImpl();
 });
 
 // Attendance State Provider

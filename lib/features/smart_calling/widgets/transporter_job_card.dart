@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../app/theme/app_colors.dart';
 
 class TransporterJobCard extends StatelessWidget {
   final Map<String, dynamic> transporter;

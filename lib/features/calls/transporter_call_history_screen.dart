@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../core/config/api_config.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
-import '../../core/theme/app_colors.dart';
+import '../../app/theme/app_colors.dart';
 import '../../widgets/audio_player_widget.dart';
 import 'package:intl/intl.dart';
 

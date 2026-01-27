@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/theme/app_theme.dart';
+import '../../app/theme/app_theme.dart';
 import '../../core/services/api_service.dart';
 
 class PerformanceAnalyticsPage extends StatefulWidget {

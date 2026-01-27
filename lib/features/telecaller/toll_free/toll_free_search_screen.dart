@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/services/real_auth_service.dart';
 import '../../../core/services/smart_calling_service.dart';
 import '../../../models/smart_calling_models.dart';
@@ -76,9 +76,7 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
       }
 
       // Build URL with search query - same API as search_users_screen
-      final uri = Uri.parse(
-        Uri.parse(ApiConfig.paymentsSearchApi),
-      ).replace(queryParameters: {'search': query.trim()});
+      final uri = Uri.parse(ApiConfig.paymentsSearchApi).replace(queryParameters: {'search': query.trim()});
 
       debugPrint('🔍 [TollFree] Searching users: $uri');
 

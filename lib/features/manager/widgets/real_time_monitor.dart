@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../../models/manager_models.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../app/theme/app_theme.dart';
 
 class RealTimeMonitor extends StatefulWidget {
   final Map<String, dynamic> realTimeStatus;

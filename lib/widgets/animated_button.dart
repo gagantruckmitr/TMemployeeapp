@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../core/theme/app_theme.dart';
+import '../app/theme/app_theme.dart';
 
 class AnimatedButton extends StatefulWidget {
   final String text;

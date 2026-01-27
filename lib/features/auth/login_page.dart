@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
-import '../../routes/app_router.dart';
+import '../../app/router/app_router.dart';
 import '../../core/utils/assets.dart';
 import '../../core/services/real_auth_service.dart';
 import '../../core/services/api_service.dart';

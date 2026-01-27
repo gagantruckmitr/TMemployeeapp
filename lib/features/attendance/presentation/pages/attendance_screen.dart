@@ -4,12 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../core/theme/app_theme.dart';
-import '../core/services/real_auth_service.dart';
-import '../core/services/tasksuite_auth_service.dart';
-import '../core/constants/api_constants.dart';
-import 'presentation/pages/check_in_page.dart';
-import 'presentation/pages/attendance_history_page.dart';
+import '../../../../app/theme/app_theme.dart';
+import '../../../../core/services/real_auth_service.dart';
+import '../../../../core/services/tasksuite_auth_service.dart';
+import '../../../../core/constants/api_constants.dart';
+import 'check_in_page.dart';
+import 'attendance_history_page.dart';
 
 /// Main Attendance Screen - Entry point for attendance feature
 /// Shows current attendance status and quick actions
