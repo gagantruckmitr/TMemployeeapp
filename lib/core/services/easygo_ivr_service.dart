@@ -3,15 +3,15 @@ import 'package:http/http.dart' as http;
 import 'real_auth_service.dart';
 
 /// EasyGo IVR Service for Live API Integration
-/// Uses https://development.truckmitr.com/api/telehead/ivr-call
+/// Uses https://truckmitr.com/api/telehead/ivr-call
 class EasyGoIVRService {
   // Live API Endpoints
   static const String _initiateCallUrl =
-      'https://development.truckmitr.com/api/telehead/ivr-call';
+      'https://truckmitr.com/api/telehead/ivr-call';
   static const String _updateCallUrl =
-      'https://development.truckmitr.com/api/telehead/ivr-call-update';
+      'https://truckmitr.com/api/telehead/ivr-call-update';
   static const String _userDetailsUrl =
-      'https://development.truckmitr.com/api/telehead/user-details';
+      'https://truckmitr.com/api/telehead/user-details';
 
   static const Duration _timeout = Duration(seconds: 30);
   static const String _defaultDID = '8062982912';
@@ -194,13 +194,13 @@ class EasyGoIVRService {
       };
 
       print('=== JOB MATCHING IVR CALL API ===');
-      print('URL: https://development.truckmitr.com/api/telehead/ivr-call-jobMatching');
+      print('URL: https://truckmitr.com/api/telehead/ivr-call-jobMatching');
       print('Request Body: ${json.encode(requestBody)}');
 
       final response = await http
           .post(
             Uri.parse(
-              'https://development.truckmitr.com/api/telehead/ivr-call-jobMatching',
+              'https://truckmitr.com/api/telehead/ivr-call-jobMatching',
             ),
             headers: {
               'Content-Type': 'application/json',

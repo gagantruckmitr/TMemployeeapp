@@ -15,7 +15,7 @@ class SocialMediaIVRService {
   static const Duration _timeout = Duration(seconds: 30);
 
   /// Initiate Social Media IVR call using Live API
-  /// API Endpoint: POST https://development.truckmitr.com/api/telehead/social-media-ivr-call
+  /// API Endpoint: POST https://truckmitr.com/api/telehead/social-media-ivr-call
   /// Request Body:
   /// {
   ///   "assigned_id": 12,
@@ -268,7 +268,7 @@ class SocialMediaIVRService {
   }
 
   /// Fetch Social Media IVR Call History
-  /// API Endpoint: GET https://development.truckmitr.com/api/telehead/social-media-ivr-calls?assigned_id={id}
+  /// API Endpoint: GET https://truckmitr.com/api/telehead/social-media-ivr-calls?assigned_id={id}
   static Future<Map<String, dynamic>> fetchCallHistory({
     required int assignedId,
     int page = 1,
@@ -280,7 +280,7 @@ class SocialMediaIVRService {
       }
 
       final url =
-          'https://development.truckmitr.com/api/telehead/social-media-ivr-calls?assigned_id=$assignedId&page=$page';
+          'https://truckmitr.com/api/telehead/social-media-ivr-calls?assigned_id=$assignedId&page=$page';
 
       print('🔵 [Social Media IVR] Fetching History: $url');
 

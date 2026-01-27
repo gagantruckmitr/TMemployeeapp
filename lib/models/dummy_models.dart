@@ -100,7 +100,7 @@ class DummyData {
   static final User currentUser = User(
     id: '1',
     name: 'Rajesh Kumar',
-    email: 'rajesh.kumar@development.truckmitr.com',
+    email: 'rajesh.kumar@truckmitr.com',
     role: 'Telecaller',
     avatar: 'assets/images/profile_placeholder.png',
   );

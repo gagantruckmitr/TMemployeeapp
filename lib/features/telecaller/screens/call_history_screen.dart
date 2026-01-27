@@ -144,7 +144,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
       // Call the new API endpoint
       final url =
-          'https://development.truckmitr.com/api/telehead/call-history/$assignedToId';
+          'https://truckmitr.com/api/telehead/call-history/$assignedToId';
       debugPrint('🌐 API URL: $url');
 
       final response = await http
@@ -535,7 +535,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
       // Call the new API endpoint
       final url =
-          'https://development.truckmitr.com/api/telehead/call-history/$assignedToId';
+          'https://truckmitr.com/api/telehead/call-history/$assignedToId';
 
       final response = await http
           .get(

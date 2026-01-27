@@ -7,7 +7,7 @@ class SubscriptionService {
   static final SubscriptionService instance = SubscriptionService._internal();
   SubscriptionService._internal();
 
-  static const String _laravelBaseUrl = 'https://development.truckmitr.com/api';
+  static const String _laravelBaseUrl = 'https://truckmitr.com/api';
 
   /// Get subscription statistics for dashboard using Laravel API
   Future<SubscriptionStats?> getSubscriptionStats() async {
@@ -45,7 +45,7 @@ class SubscriptionService {
   }
 
   /// Get all subscriptions from Laravel API
-  /// API: https://development.truckmitr.com/api/telehead/reports/assigned-to-wise-summary
+  /// API: https://truckmitr.com/api/telehead/reports/assigned-to-wise-summary
   /// Response structure: { success: true, data: { today: {...}, yesterday: {...}, overall: {...} } }
   Future<List<TelecallerSubscription>> getSubscriptions({
     String period = 'all',

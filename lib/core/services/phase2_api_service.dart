@@ -600,11 +600,11 @@ class Phase2ApiService {
       }
 
       print(
-        'URL: https://development.truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
+        'URL: https://truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
       );
 
       final uri = Uri.parse(
-        'https://development.truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
+        'https://truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
       );
 
       // Use Bearer token
@@ -856,11 +856,11 @@ class Phase2ApiService {
       }
 
       print(
-        'URL: https://development.truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
+        'URL: https://truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
       );
 
       final uri = Uri.parse(
-        'https://development.truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
+        'https://truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
       );
 
       final response = await http.get(uri);
@@ -1269,12 +1269,12 @@ class Phase2ApiService {
       }
 
       print(
-        'URL: https://development.truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
+        'URL: https://truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
       );
 
       final response = await http.get(
         Uri.parse(
-          'https://development.truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
+          'https://truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
         ),
         headers: {
           'Authorization': 'Bearer $token',
@@ -1412,12 +1412,12 @@ class Phase2ApiService {
       }
 
       print(
-        'URL: https://development.truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
+        'URL: https://truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
       );
 
       final response = await http.get(
         Uri.parse(
-          'https://development.truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
+          'https://truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
         ),
         headers: {
           'Authorization': 'Bearer $token',
@@ -2373,7 +2373,7 @@ class Phase2ApiService {
       }
 
       final uri = Uri.parse(
-        'https://development.truckmitr.com/api/telehead/driver-buckets',
+        'https://truckmitr.com/api/telehead/driver-buckets',
       );
 
       print('=== FETCHING DRIVER BUCKETS ===');

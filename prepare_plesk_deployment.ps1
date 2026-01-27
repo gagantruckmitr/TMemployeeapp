@@ -94,7 +94,7 @@ Write-Host ""
 Write-Host "[6/6] Creating deployment instructions..." -ForegroundColor Green
 $readmeContent = "TruckMitr Plesk Deployment Package`n`n"
 $readmeContent += "Upload all files to: /httpdocs/truckmitr-app/`n`n"
-$readmeContent += "Test: https://development.truckmitr.com/truckmitr-app/api/test_connection.php`n"
+$readmeContent += "Test: https://truckmitr.com/truckmitr-app/api/test_connection.php`n"
 
 $readmePath = Join-Path $deployDir "README.txt"
 $readmeContent | Out-File -FilePath $readmePath -Encoding UTF8
@@ -112,7 +112,7 @@ Write-Host "Next Steps:" -ForegroundColor Cyan
 Write-Host "1. Review files in: $deployDir" -ForegroundColor White
 Write-Host "2. Login to Plesk: https://82.29.161.25:8443" -ForegroundColor White
 Write-Host "3. Upload all files via File Manager" -ForegroundColor White
-Write-Host "4. Test: https://development.truckmitr.com/truckmitr-app/api/test_connection.php" -ForegroundColor White
+Write-Host "4. Test: https://truckmitr.com/truckmitr-app/api/test_connection.php" -ForegroundColor White
 Write-Host ""
 
 # Open deployment folder

@@ -3,7 +3,7 @@
 class ApiConstants {
   // Base URL for TaskSuite HRMS Backend
   static const String baseUrl =
-      'https://tasksuite.development.truckmitr.com/backend/public/api';
+      'https://tasksuite.truckmitr.com/backend/public/api';
 
   // Attendance Endpoints
   static const String checkIn = '$baseUrl/attendance/check-in';

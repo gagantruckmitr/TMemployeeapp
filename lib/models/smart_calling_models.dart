@@ -647,7 +647,7 @@ class DriverContact {
       return imagePath;
     }
     // Build full URL with base path
-    const baseUrl = 'https://development.truckmitr.com/public/';
+    const baseUrl = 'https://truckmitr.com/public/';
     return '$baseUrl$imagePath';
   }
 

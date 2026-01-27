@@ -72,7 +72,7 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
 
       // Build URL with search query
       final uri = Uri.parse(
-        'https://development.truckmitr.com/api/telehead/payments/search',
+        'https://truckmitr.com/api/telehead/payments/search',
       ).replace(queryParameters: {'search': query.trim()});
 
       print('🔍 Searching users: $uri');

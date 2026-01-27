@@ -5,9 +5,9 @@ import 'real_auth_service.dart';
 
 class BreakService {
   // Use the base URL from ApiConfig but pointing to the new telehead/break-logs endpoint
-  // Assuming development.truckmitr.com is the base host.
+  // Assuming truckmitr.com is the base host.
   static const String _baseUrl =
-      'https://development.truckmitr.com/api/telehead/break-logs';
+      'https://truckmitr.com/api/telehead/break-logs';
 
   static Future<Map<String, String>> _getHeaders() async {
     final token = await RealAuthService.instance.getAuthToken();

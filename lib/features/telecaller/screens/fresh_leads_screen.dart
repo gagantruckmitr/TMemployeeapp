@@ -663,7 +663,7 @@ class _FreshLeadsScreenState extends State<FreshLeadsScreen> {
           break;
       }
 
-      // Use Laravel API directly: https://development.truckmitr.com/api/telehead/ivr-call-update
+      // Use Laravel API directly: https://truckmitr.com/api/telehead/ivr-call-update
       // referenceId is the call_history_id from the IVR call
       if (referenceId != null && referenceId.isNotEmpty) {
         final callId = int.tryParse(referenceId);

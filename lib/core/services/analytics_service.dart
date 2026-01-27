@@ -5,7 +5,7 @@ import 'phase2_auth_service.dart';
 import 'real_auth_service.dart';
 
 class AnalyticsService {
-  static const String baseUrl = 'https://development.truckmitr.com/api/telehead';
+  static const String baseUrl = 'https://truckmitr.com/api/telehead';
 
   static Future<AnalyticsKPIResponse> fetchAnalytics({
     String filter = 'today',
