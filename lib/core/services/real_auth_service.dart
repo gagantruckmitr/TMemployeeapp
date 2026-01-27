@@ -38,7 +38,7 @@ class RealAuthService {
   // Login with mobile and password
   Future<LoginResult> login(String mobile, String password) async {
     try {
-      final uri = Uri.parse('https://truckmitr.com/api/telehead/login');
+      final uri = Uri.parse(ApiConfig.loginApi);
 
       final response = await http
           .post(
@@ -108,9 +108,7 @@ class RealAuthService {
   // Forgot Password
   Future<Map<String, dynamic>> forgotPassword(String mobile) async {
     try {
-      final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/forgot-password',
-      );
+      final uri = Uri.parse(ApiConfig.forgotPasswordApi);
 
       print('🔵 Requesting OTP for mobile: $mobile');
       final response = await http
@@ -152,9 +150,7 @@ class RealAuthService {
     required String passwordConfirmation,
   }) async {
     try {
-      final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/reset-password',
-      );
+      final uri = Uri.parse(ApiConfig.resetPasswordApi);
 
       print('🔵 Resetting password for mobile: $mobile with token: $token');
       final response = await http
@@ -614,7 +610,7 @@ class UserProfile {
   String? get photoUrl {
     if (employeeDetails?.photoPath != null &&
         employeeDetails!.photoPath!.isNotEmpty) {
-      return 'https://truckmitr.com/storage/app/public/${employeeDetails!.photoPath}';
+      return ApiConfig.getStorageUrl(employeeDetails!.photoPath!);
     }
     return null;
   }
@@ -759,7 +755,7 @@ class EmployeeDetails {
   // Helper to get full photo URL
   String? get photoUrl {
     if (photoPath != null && photoPath!.isNotEmpty) {
-      return 'https://truckmitr.com/storage/app/public/$photoPath';
+      return ApiConfig.getStorageUrl(photoPath!);
     }
     return null;
   }

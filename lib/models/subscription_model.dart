@@ -1,3 +1,4 @@
+import '../core/config/api_config.dart';
 class TelecallerSubscription {
   final int assignedTo;
   final String paymentUniqueId;
@@ -18,7 +19,7 @@ class TelecallerSubscription {
   });
 
   /// Factory for Laravel API response
-  /// API: https://truckmitr.com/api/telehead/reports/assigned-to-wise-summary/
+  /// API: ${ApiConfig.laravelApiBase}/reports/assigned-to-wise-summary/
   factory TelecallerSubscription.fromLaravelJson(Map<String, dynamic> json) {
     try {
       // start_at and end_at are Unix timestamps

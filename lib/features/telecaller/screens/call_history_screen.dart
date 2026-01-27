@@ -1,3 +1,4 @@
+import '../../../core/config/api_config.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -144,7 +145,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
       // Call the new API endpoint
       final url =
-          'https://truckmitr.com/api/telehead/call-history/$assignedToId';
+          '${ApiConfig.laravelApiBase}/call-history/$assignedToId';
       debugPrint('🌐 API URL: $url');
 
       final response = await http
@@ -535,7 +536,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
       // Call the new API endpoint
       final url =
-          'https://truckmitr.com/api/telehead/call-history/$assignedToId';
+          '${ApiConfig.laravelApiBase}/call-history/$assignedToId';
 
       final response = await http
           .get(

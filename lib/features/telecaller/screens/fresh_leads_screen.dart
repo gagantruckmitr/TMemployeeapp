@@ -1,3 +1,4 @@
+import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
@@ -663,7 +664,7 @@ class _FreshLeadsScreenState extends State<FreshLeadsScreen> {
           break;
       }
 
-      // Use Laravel API directly: https://truckmitr.com/api/telehead/ivr-call-update
+      // Use Laravel API directly: ${ApiConfig.laravelApiBase}/ivr-call-update
       // referenceId is the call_history_id from the IVR call
       if (referenceId != null && referenceId.isNotEmpty) {
         final callId = int.tryParse(referenceId);

@@ -4,8 +4,10 @@ import '../../models/analytics_kpi_model.dart';
 import 'phase2_auth_service.dart';
 import 'real_auth_service.dart';
 
+import '../config/api_config.dart';
+
 class AnalyticsService {
-  static const String baseUrl = 'https://truckmitr.com/api/telehead';
+  static String get baseUrl => ApiConfig.laravelApiBase;
 
   static Future<AnalyticsKPIResponse> fetchAnalytics({
     String filter = 'today',

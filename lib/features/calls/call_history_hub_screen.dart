@@ -1,3 +1,4 @@
+import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'dart:convert';
@@ -891,7 +892,7 @@ class _TransporterCard extends StatelessWidget {
       // Call the API to update job brief with call status
       final response = await http.post(
         Uri.parse(
-          'https://truckmitr.com/api/telehead/ivr-call-update-jobBrief',
+          '${ApiConfig.laravelApiBase}/ivr-call-update-jobBrief',
         ),
         headers: {
           'Content-Type': 'application/json',

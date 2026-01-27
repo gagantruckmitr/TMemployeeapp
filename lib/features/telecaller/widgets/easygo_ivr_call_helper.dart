@@ -1,3 +1,4 @@
+import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import '../../../core/services/smart_calling_service.dart';
 import '../../../core/services/phase2_auth_service.dart';
@@ -104,7 +105,7 @@ class EasyGoIVRCallHelper {
       }
 
       // For job applicants, use ONLY the job matching API (don't call generic IVR)
-      // API: https://truckmitr.com/api/telehead/ivr-call-jobMatching
+      // API: ${ApiConfig.laravelApiBase}/ivr-call-jobMatching
       String? matchId;
       Map<String, dynamic> result;
 
@@ -120,7 +121,7 @@ class EasyGoIVRCallHelper {
           assignedTo != null) {
         try {
           print('🔵 Calling Job Matching IVR API (job_applicants)...');
-          print('🔵 API: https://truckmitr.com/api/telehead/ivr-call-jobMatching');
+          print('🔵 API: ${ApiConfig.laravelApiBase}/ivr-call-jobMatching');
           print('🔵 Request Data:');
           print('   unique_id_transporter: $transporterTmid');
           print('   unique_id_driver: $tmid');

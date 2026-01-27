@@ -1,3 +1,4 @@
+import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
@@ -1526,7 +1527,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
       print('🔵 Job ID: ${log.jobId}');
 
       // Use EasyGo IVR with job matching API for driver calls
-      // API: https://truckmitr.com/api/telehead/ivr-call-jobMatching
+      // API: ${ApiConfig.laravelApiBase}/ivr-call-jobMatching
       await EasyGoIVRCallHelper.initiateCall(
         context: context,
         clientName: log.contactName,
@@ -1795,11 +1796,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
             final effectiveMatchId = matchId ?? _currentMatchId;
 
             // If matchId is available, use the job matching feedback API
-            // API: https://truckmitr.com/api/telehead/ivr-call-update-jobMatching
+            // API: ${ApiConfig.laravelApiBase}/ivr-call-update-jobMatching
             if (effectiveMatchId != null && effectiveMatchId.isNotEmpty) {
               print('🔵 Using IVR Job Matching Feedback API');
               print(
-                '🔵 API: https://truckmitr.com/api/telehead/ivr-call-update-jobMatching',
+                '🔵 API: ${ApiConfig.laravelApiBase}/ivr-call-update-jobMatching',
               );
 
               // Extract call_status from feedback string

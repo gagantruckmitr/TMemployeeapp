@@ -1,3 +1,4 @@
+import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
@@ -365,7 +366,7 @@ class _DriverBucketScreenState extends State<DriverBucketScreen>
     if (imagePath.startsWith('http')) return imagePath;
     if (imagePath.isNotEmpty) {
       if (imagePath.startsWith('/')) imagePath = imagePath.substring(1);
-      return 'https://truckmitr.com/public/$imagePath';
+      return '${ApiConfig.publicUrl}/$imagePath';
     }
     return null;
   }

@@ -41,6 +41,18 @@ class ApiConfig {
   static const String reportsApi = '$laravelApiBase/reports/assigned-to-wise-summary';
   static const String socialMediaLeadsApi = '$laravelApiBase/social-media-leads';
   static const String socialMediaCallHistoryApi = '$laravelApiBase/social-media-call-history';
+  static const String todayLeadsApi = '$laravelApiBase/today-leads';
+  static const String callHistoryApi = '$laravelApiBase/call-history';
+  static const String matchMakingHistoryApi = '$laravelApiBase/match-making-history';
+  static const String socialMediaIvrCallsApi = '$laravelApiBase/social-media-ivr-calls';
+  static const String breakLogsApi = '$laravelApiBase/break-logs';
+  static const String analyticsApi = '$laravelApiBase/analytics';
+  static const String ivrCallUpdateApi = '$laravelApiBase/ivr-call-update';
+  static const String socialMediaIvrCallApi = '$laravelApiBase/social-media-ivr-call';
+
+  // Email Configuration
+  static const String hrEmail = 'hr@$domain';
+  static const String commandCentreEmail = 'harneet.kaur@$domain';
 
   // ONLINE PRODUCTION: InfinityFree hosting (Commented out)
   // static const String baseUrl = 'https://truckmitr.gt.tc/api';
@@ -80,9 +92,24 @@ class ApiConfig {
     return '$publicUrl/$cleanPath';
   }
 
-  // Helper method to get Laravel API URL with endpoint
+  // Helper method to get Laravel API URL with endpoint and query parameters
   static String getLaravelApiUrl(String endpoint) {
     return '$laravelApiBase/$endpoint';
+  }
+
+  // Helper method to get call history URL for assigned user
+  static String getCallHistoryUrl(int assignedToId) {
+    return '$laravelApiBase/call-history/$assignedToId';
+  }
+
+  // Helper method to get jobs assigned to URL
+  static String getJobsAssignedToUrl(int callerId) {
+    return '$laravelApiBase/jobs/assigned-to/$callerId';
+  }
+
+  // Helper method to get call logs assigned to URL
+  static String getCallLogsAssignedToUrl(int callerId) {
+    return '$laravelApiBase/call-logs/assigned-to/$callerId';
   }
 
   // Helper method to get TaskSuite API URL with endpoint

@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'real_auth_service.dart';
 import '../../models/subscription_model.dart';
+import '../config/api_config.dart';
 
 class SubscriptionService {
   static final SubscriptionService instance = SubscriptionService._internal();
   SubscriptionService._internal();
 
-  static const String _laravelBaseUrl = 'https://truckmitr.com/api';
+  static String get _laravelBaseUrl => 'https://${ApiConfig.domain}/api';
 
   /// Get subscription statistics for dashboard using Laravel API
   Future<SubscriptionStats?> getSubscriptionStats() async {
@@ -45,7 +46,7 @@ class SubscriptionService {
   }
 
   /// Get all subscriptions from Laravel API
-  /// API: https://truckmitr.com/api/telehead/reports/assigned-to-wise-summary
+  /// API: ${ApiConfig.laravelApiBase}/reports/assigned-to-wise-summary
   /// Response structure: { success: true, data: { today: {...}, yesterday: {...}, overall: {...} } }
   Future<List<TelecallerSubscription>> getSubscriptions({
     String period = 'all',

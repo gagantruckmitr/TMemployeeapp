@@ -1,3 +1,4 @@
+import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
@@ -76,7 +77,7 @@ class _TollFreeSearchScreenState extends State<TollFreeSearchScreen> {
 
       // Build URL with search query - same API as search_users_screen
       final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/payments/search',
+        Uri.parse(ApiConfig.paymentsSearchApi),
       ).replace(queryParameters: {'search': query.trim()});
 
       debugPrint('🔍 [TollFree] Searching users: $uri');

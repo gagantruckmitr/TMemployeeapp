@@ -1,3 +1,4 @@
+import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -216,7 +217,7 @@ class _SmartCallingPageState extends State<SmartCallingPage>
     print('🔵 [SmartCalling] _loadData END');
   }
 
-  /// Load drivers from the LIVE API (https://truckmitr.com/api/telehead/today-leads)
+  /// Load drivers from the LIVE API (${ApiConfig.laravelApiBase}/today-leads)
   /// Same data source as fresh_leads_screen.dart
   /// Only returns UNCALLED leads (limited by remaining_fresh count from API)
   /// Also fetches from elechamps API for additional leads

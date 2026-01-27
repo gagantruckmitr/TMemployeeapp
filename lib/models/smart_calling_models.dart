@@ -1,3 +1,4 @@
+import '../core/config/api_config.dart';
 enum CallStatus {
   connected,
   callBack,
@@ -647,7 +648,7 @@ class DriverContact {
       return imagePath;
     }
     // Build full URL with base path
-    const baseUrl = 'https://truckmitr.com/public/';
+    const baseUrl = '${ApiConfig.publicUrl}/';
     return '$baseUrl$imagePath';
   }
 

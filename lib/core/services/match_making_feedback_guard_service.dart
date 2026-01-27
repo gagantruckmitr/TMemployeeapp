@@ -1,3 +1,4 @@
+import '../config/api_config.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -40,8 +41,7 @@ class MatchMakingFeedbackGuardService {
       }
 
       final assignedToId = currentUser.id;
-      final url =
-          'https://truckmitr.com/api/telehead/match-making-history/$assignedToId';
+      final url = ApiConfig.getLaravelApiUrl('match-making-history/$assignedToId');
 
       final response = await http
           .get(

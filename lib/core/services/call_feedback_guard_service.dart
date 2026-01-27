@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import 'real_auth_service.dart';
 
 /// Service to check for pending call feedback before allowing new calls
@@ -47,8 +48,7 @@ class CallFeedbackGuardService {
       }
 
       final assignedToId = currentUser.id;
-      final url =
-          'https://truckmitr.com/api/telehead/call-history/$assignedToId';
+      final url = ApiConfig.getLaravelApiUrl('call-history/$assignedToId');
 
       final response = await http
           .get(

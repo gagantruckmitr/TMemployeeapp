@@ -3,11 +3,11 @@ import 'package:http/http.dart' as http;
 import '../../models/leave_models.dart';
 import 'real_auth_service.dart';
 
+import '../config/api_config.dart';
+
 class BreakService {
-  // Use the base URL from ApiConfig but pointing to the new telehead/break-logs endpoint
-  // Assuming truckmitr.com is the base host.
-  static const String _baseUrl =
-      'https://truckmitr.com/api/telehead/break-logs';
+  // Use the centralized API configuration
+  static String get _baseUrl => '${ApiConfig.laravelApiBase}/break-logs';
 
   static Future<Map<String, String>> _getHeaders() async {
     final token = await RealAuthService.instance.getAuthToken();

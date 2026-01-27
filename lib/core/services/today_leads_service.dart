@@ -1,3 +1,4 @@
+import '../config/api_config.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -211,7 +212,7 @@ class TodayLeadsService {
       debugPrint('👤 Current user ID: $currentUserId (${currentUser.name})');
 
       // Use the assigned leads endpoint with caller_id
-      final uri = Uri.parse('https://truckmitr.com/api/telehead/today-leads/assigned/$currentUserId');
+      final uri = Uri.parse(ApiConfig.getLaravelApiUrl('today-leads/assigned/$currentUserId'));
 
       debugPrint('📡 Fetching today leads from: $uri');
 
@@ -395,7 +396,7 @@ class TodayLeadsService {
       debugPrint('🌐 Fetching fresh leads from API for user $currentUserId (page $page)');
 
       // Use the assigned leads endpoint with caller_id and pagination
-      final uri = Uri.parse('https://truckmitr.com/api/telehead/today-leads/assigned/$currentUserId?page=$page');
+      final uri = Uri.parse(ApiConfig.getLaravelApiUrl('today-leads/assigned/$currentUserId?page=$page'));
 
       final response = await http.get(
         uri,

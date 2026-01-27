@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/real_auth_service.dart';
+import '../../../core/config/api_config.dart';
 import '../../../routes/app_router.dart';
 import '../../auth/login_page.dart';
 
@@ -30,11 +31,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Contact Information - HR
   static const String _hrPhone = '+917678361308';
-  static const String _hrEmail = 'hr@truckmitr.com';
+  static String get _hrEmail => 'hr@${ApiConfig.domain}';
 
   // Contact Information - Command Centre
   static const String _commandCentrePhone = '+917678361237';
-  static const String _commandCentreEmail = 'harneet.kaur@truckmitr.com';
+  static String get _commandCentreEmail => 'harneet.kaur@${ApiConfig.domain}';
 
   @override
   Widget build(BuildContext context) {
