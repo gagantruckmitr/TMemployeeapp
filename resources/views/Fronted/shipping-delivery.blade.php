@@ -40,7 +40,7 @@
     </ul>
 
     <p>If you have any questions or require further assistance, please contact our support team:<br>
-    📧 <a href="mailto:contact@truckmitr.com">contact@truckmitr.com</a></p>
+    📧 <a href="mailto:contact@development.truckmitr.com">contact@development.truckmitr.com</a></p>
   </div>
 
 @include('Fronted.footer')

@@ -48,7 +48,7 @@ class CallFeedbackGuardService {
 
       final assignedToId = currentUser.id;
       final url =
-          'https://truckmitr.com/api/telehead/call-history/$assignedToId';
+          'https://development.truckmitr.com/api/telehead/call-history/$assignedToId';
 
       final response = await http
           .get(

@@ -226,7 +226,7 @@
   <!-- Email -->
   <p class="d-flex align-items-center mb-3">
     <img src="{{url('public/front/assets/images/mail.png')}}" width="20px" class="me-2" alt="Email">
-    <a href="mailto:contact@truckmitr.com">contact@truckmitr.com</a>
+    <a href="mailto:contact@development.truckmitr.com">contact@development.truckmitr.com</a>
   </p>
 
   <!-- Address 1 -->
@@ -278,7 +278,7 @@
   
 
 <!--<div class="whtsp-icon">-->
-<!--	    <a href="https://truckmitr.com/register" target="">-->
+<!--	    <a href="https://development.truckmitr.com/register" target="">-->
 <!--	    New Member Registration</a> -->
 <!--</div>-->
 
@@ -307,7 +307,7 @@
 
 
 document.getElementById('memberReg').addEventListener('click', function() {
-    window.location.href = 'https://truckmitr.com/register'; 
+    window.location.href = 'https://development.truckmitr.com/register'; 
 });
 
 document.getElementById('call').addEventListener('click', function() {
@@ -440,6 +440,6 @@ function validate(event) {
 <a href="#next-section" class="fixed-down-arrow">
     <i class="fas fa-chevron-down"></i>
 </a>
-<a href="https://truckmitr.com/career/" class="HRNG-BTN clr-change" style="cursor: pointer;" id="myBtn">WE ARE HIRING</a>
+<a href="https://development.truckmitr.com/career/" class="HRNG-BTN clr-change" style="cursor: pointer;" id="myBtn">WE ARE HIRING</a>
 </body>
 </html>

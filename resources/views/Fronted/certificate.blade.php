@@ -8,17 +8,17 @@
     <style>
         @font-face {
             font-family: 'Season';
-            src: url('https://truckmitr.com/storage/fonts/Season.otf') format('truetype');
+            src: url('https://development.truckmitr.com/storage/fonts/Season.otf') format('truetype');
         }
 
         @font-face {
             font-family: 'Lora';
-            src: url('https://truckmitr.com/storage/fonts/Lora-SemiBold.ttf') format('truetype');
+            src: url('https://development.truckmitr.com/storage/fonts/Lora-SemiBold.ttf') format('truetype');
         }
 
         @font-face {
             font-family: 'AnastasiaScript';
-            src: url('https://truckmitr.com/storage/fonts/AnastasiaScript.ttf') format('truetype');
+            src: url('https://development.truckmitr.com/storage/fonts/AnastasiaScript.ttf') format('truetype');
         }
 
         body {

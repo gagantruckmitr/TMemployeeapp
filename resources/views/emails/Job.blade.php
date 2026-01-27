@@ -40,7 +40,7 @@
         </tr>
         <tr>
             <td align="center">
-                <a href="https://www.truckmitr.com/login" style="display: inline-block; background: #ff6600; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">👨‍💻 लॉगिन करें और जॉब एडिट करें</a>
+                <a href="https://www.development.truckmitr.com/login" style="display: inline-block; background: #ff6600; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">👨‍💻 लॉगिन करें और जॉब एडिट करें</a>
             </td>
         </tr>
         <tr>

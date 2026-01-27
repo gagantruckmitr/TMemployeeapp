@@ -102,7 +102,7 @@
         <p>
             <strong>TruckMitr Corporate Services Pvt. Ltd.</strong><br>
             B3-0102, Sector - 10, Shree Vardhman Gardenia, Sonipat, Haryana 131001<br>
-            GST # 06AAKCT8410G1ZB || Email : contact@truckmitr.com
+            GST # 06AAKCT8410G1ZB || Email : contact@development.truckmitr.com
         </p>
     </div>
 

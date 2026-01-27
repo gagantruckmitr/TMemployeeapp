@@ -121,7 +121,7 @@ if ((request('rating') && $res['rating'] != request('rating')) ||
                 src="{{ $list->images != '' ? url('/public/'.$list->images) : url('/public/noimg.png') }}" 
                 alt="User Image" 
                 loading="lazy"
-                onerror="this.onerror=null;this.src='https://truckmitr.com/public/noimg.png';"
+                onerror="this.onerror=null;this.src='https://development.truckmitr.com/public/noimg.png';"
             >
         </a>
     </h2>

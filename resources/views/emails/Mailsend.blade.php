@@ -51,7 +51,7 @@
         <p>Thank you for registering with us.</p>
         <p>Namaste <strong>{{ $user->name }} ji</strong>,</p>
         <p>You will receive access to the dashboard within 24 hours. Once you get access, please visit the link below, enter your mobile number, and use the OTP to log in.</p>
-        <a href="https://www.truckmitr.com/login" class="btn">Login to Dashboard</a>
+        <a href="https://www.development.truckmitr.com/login" class="btn">Login to Dashboard</a>
         <p>Post login, please complete your profile to get full access to the dashboard features.</p>
         <p>If you need any support, please contact us at <strong>+91 9315487776</strong>.</p>
         <div class="footer">

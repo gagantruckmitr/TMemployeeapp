@@ -27,7 +27,7 @@
 <div class="container">
 <div class="loginbox">
 <div class="login-left">
-<img class="img-fluid" src="https://truckmitr.com/public/assets/img/drvr-new.png" alt="Logo">
+<img class="img-fluid" src="https://development.truckmitr.com/public/assets/img/drvr-new.png" alt="Logo">
 </div>
 <div class="login-right">
 <div class="login-right-wrap">

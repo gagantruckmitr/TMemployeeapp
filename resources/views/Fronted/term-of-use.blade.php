@@ -69,7 +69,7 @@ Jurisdiction, notwithstanding any conflict of law rules.</p>
 <h5>Contact Us</h5>
 <p>
 If you have any questions or issues regarding our Terms of Service, don’t hesitate to get in touch
-with us at contact@truckmitr.com
+with us at contact@development.truckmitr.com
 </p>
 <p class="py-5">Thank you for selecting TruckMitr.com. Please enjoy browsing our website!</p>
 

@@ -30,19 +30,19 @@
 <meta property="og:type" content="website" />
 <meta property="og:title" content="TruckMitr - Elevating the Indian Trucking Ecosystem" />
 <meta property="og:description" content="Join TruckMitr to transform trucking and support truck drivers with smart solutions, seamless logistics, and trusted services. Drive efficiency and success now. " />
-<meta property="og:url" content="https://truckmitr.com/" />
-<meta property="og:image" content="https://truckmitr.com/public/front/assets/images/logotrick.png" />
+<meta property="og:url" content="https://development.truckmitr.com/" />
+<meta property="og:image" content="https://development.truckmitr.com/public/front/assets/images/logotrick.png" />
 <meta property="og:site_name" content="TruckMitr" />
 <script src="https://analytics.ahrefs.com/analytics.js" data-key="pAavcHSqyxL81UxrY8pTqQ" async></script>
 <meta name="ahrefs-site-verification" content="18cafc2eb5db34efdd94812fd1d27600c06ebd9b12b2e5b32797f3ce847cebf0">
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:description" content="Join TruckMitr to transform trucking and support truck drivers with smart solutions, seamless logistics, and trusted services. Drive efficiency and success now." />
 <meta name="twitter:title" content="TruckMitr - Elevating the Indian Trucking Ecosystem" />
-<meta name="twitter:image" content="https://truckmitr.com/public/front/assets/images/logotrick.png" />
+<meta name="twitter:image" content="https://development.truckmitr.com/public/front/assets/images/logotrick.png" />
 
 <meta name="author" content="TruckMitr Admin" />
 <meta name="copyright" content="TruckMitr" />
-<meta name="publisher" content="https://truckmitr.com/" />
+<meta name="publisher" content="https://development.truckmitr.com/" />
 <meta name="distribution" content="global" />
 <meta name="Content-Language" content="en" />
 
@@ -103,8 +103,8 @@ function googleTranslateElementInit() {
   "@context": "https://schema.org",
   "@type": "Corporation",
   "name": "Truck Mitr",
-  "url": "https://truckmitr.com/",
-  "logo": "https://truckmitr.com/public/front/assets/images/logotrick.png",
+  "url": "https://development.truckmitr.com/",
+  "logo": "https://development.truckmitr.com/public/front/assets/images/logotrick.png",
   "contactPoint": {
     "@type": "ContactPoint",
     "telephone": "9315487776",
@@ -136,7 +136,7 @@ function googleTranslateElementInit() {
       
       <span class="d-mobile" style="font-size:30px;cursor:pointer" onclick="openNav()">&#9776;</span>
       <div class="mob-doc d-mobile">
-        <button type="button" class="mb-3 mx-2 btn btn-outline-secondary" onclick="document.location='https://truckmitr.com/register'">New Member Registration</button>
+        <button type="button" class="mb-3 mx-2 btn btn-outline-secondary" onclick="document.location='https://development.truckmitr.com/register'">New Member Registration</button>
        <a style="margin-left:20px;background-color:#3f6ac2;" href="{{url('login')}}" class="mb-3 mx-2 btn btn-outline-secondary">Sign in</a>
       </div>
       
@@ -164,7 +164,7 @@ function googleTranslateElementInit() {
 			
         </ul>
         
-        <button type="button" class="mobile-new mx-2 btn btn-outline-secondary" onclick="document.location='https://truckmitr.com/register'">New Member Registration</button>
+        <button type="button" class="mobile-new mx-2 btn btn-outline-secondary" onclick="document.location='https://development.truckmitr.com/register'">New Member Registration</button>
         <div id="google_translate_element"></div>
             <a style="margin-left: 20px;background-color:#3f6ac2;" href="{{url('login')}}" class="mobile-new mx-2 btn btn-outline-secondary">Sign in</a>
 
@@ -203,7 +203,7 @@ function googleTranslateElementInit() {
         
       <div class="d-mobile">
           <div class="navtor mt-4">
-            <button type="button" class="mx-2 btn btn-outline-secondary" onclick="document.location='https://truckmitr.com/register'">New Member Registration</button>
+            <button type="button" class="mx-2 btn btn-outline-secondary" onclick="document.location='https://development.truckmitr.com/register'">New Member Registration</button>
         <!--<div id="google_translate_element"></div>-->
         <a style="margin-left:0px;background-color:#3f6ac2;color:#fff;font-size:14px;" href="{{url('login')}}" class="mx-2 btn btn-outline-secondary">Sign in</a>
       </div>

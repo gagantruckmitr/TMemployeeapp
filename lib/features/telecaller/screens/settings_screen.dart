@@ -30,11 +30,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // Contact Information - HR
   static const String _hrPhone = '+917678361308';
-  static const String _hrEmail = 'hr@truckmitr.com';
+  static const String _hrEmail = 'hr@development.truckmitr.com';
 
   // Contact Information - Command Centre
   static const String _commandCentrePhone = '+917678361237';
-  static const String _commandCentreEmail = 'harneet.kaur@truckmitr.com';
+  static const String _commandCentreEmail = 'harneet.kaur@development.truckmitr.com';
 
   @override
   Widget build(BuildContext context) {

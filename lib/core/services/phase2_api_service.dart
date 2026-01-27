@@ -27,9 +27,7 @@ class Phase2ApiService {
       }
 
       // Use Laravel API endpoint
-      final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/agent-jobs/${user.id}',
-      );
+      final uri = Uri.parse('${ApiConfig.agentJobsApi}/${user.id}');
 
       print('🔵 Fetching jobs from Laravel API: $uri');
       print('🔵 Filter: $filter');
@@ -88,20 +86,20 @@ class Phase2ApiService {
         List<JobModel> filteredJobs;
         switch (filter) {
           case 'approved':
-            // Exclude expired jobs from approved section
+            // Exclude expired and closed jobs from approved section
             filteredJobs = allJobs
-                .where((job) => job.isApproved && !job.isExpiredByDeadline)
+                .where((job) => job.isApproved && !job.isExpiredByDeadline && !job.isClosed)
                 .toList();
             break;
           case 'active':
             filteredJobs = allJobs
-                .where((job) => job.isActive && !job.isExpiredByDeadline)
+                .where((job) => job.isActive && !job.isExpiredByDeadline && !job.isClosed)
                 .toList();
             break;
           case 'pending':
-            // Exclude expired jobs from pending section
+            // Exclude expired and closed jobs from pending section
             filteredJobs = allJobs
-                .where((job) => !job.isApproved && !job.isExpiredByDeadline)
+                .where((job) => !job.isApproved && !job.isExpiredByDeadline && !job.isClosed)
                 .toList();
             break;
           case 'inactive':
@@ -239,9 +237,7 @@ class Phase2ApiService {
         throw Exception('Authentication token not found');
       }
 
-      final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/drivers/$driverId/applied-jobs-with-assigned-to',
-      );
+      final uri = Uri.parse('${ApiConfig.driversApi}/$driverId/applied-jobs-with-assigned-to');
 
       print('=== FETCHING DRIVER DETAILED INFO ===');
       print('Driver ID: $driverId');
@@ -327,9 +323,7 @@ class Phase2ApiService {
       }
 
       // Use Laravel API endpoint with numeric job ID (HTTPS required for auth)
-      final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/jobs/$numericJobId/applicants',
-      );
+      final uri = Uri.parse('${ApiConfig.jobsApi}/$numericJobId/applicants');
 
       print('=== FETCHING JOB APPLICANTS ===');
       print('Original Job ID: $jobId');
@@ -515,11 +509,11 @@ class Phase2ApiService {
       };
 
       print('🔴 SENDING REJECTION TO LARAVEL API:');
-      print('   URL: https://truckmitr.com/api/telehead/rejected-apply-jobs');
+      print('   URL: ${ApiConfig.rejectedApplyJobsApi}');
       print('   Body: $requestBody');
 
       final response = await http.post(
-        Uri.parse('https://truckmitr.com/api/telehead/rejected-apply-jobs'),
+        Uri.parse(ApiConfig.rejectedApplyJobsApi),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -606,11 +600,11 @@ class Phase2ApiService {
       }
 
       print(
-        'URL: http://truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
+        'URL: https://development.truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
       );
 
       final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
+        'https://development.truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
       );
 
       // Use Bearer token
@@ -862,11 +856,11 @@ class Phase2ApiService {
       }
 
       print(
-        'URL: https://truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
+        'URL: https://development.truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
       );
 
       final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
+        'https://development.truckmitr.com/api/telehead/jobs/assigned-to/$callerId',
       );
 
       final response = await http.get(uri);
@@ -1275,12 +1269,12 @@ class Phase2ApiService {
       }
 
       print(
-        'URL: https://truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
+        'URL: https://development.truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
       );
 
       final response = await http.get(
         Uri.parse(
-          'https://truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
+          'https://development.truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
         ),
         headers: {
           'Authorization': 'Bearer $token',
@@ -1418,12 +1412,12 @@ class Phase2ApiService {
       }
 
       print(
-        'URL: http://truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
+        'URL: https://development.truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
       );
 
       final response = await http.get(
         Uri.parse(
-          'https://truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
+          'https://development.truckmitr.com/api/telehead/call-logs/assigned-to/$callerId',
         ),
         headers: {
           'Authorization': 'Bearer $token',
@@ -1835,7 +1829,7 @@ class Phase2ApiService {
       };
 
       print('=== IVR CALL JOB MATCHING API ===');
-      print('URL: https://truckmitr.com/api/telehead/ivr-call-jobMatching');
+      print('URL: ${ApiConfig.ivrCallJobMatchingApi}');
       print('Request Body: ${json.encode(requestBody)}');
 
       // Get auth token from RealAuthService
@@ -1860,7 +1854,7 @@ class Phase2ApiService {
       );
 
       final response = await http.post(
-        Uri.parse('https://truckmitr.com/api/telehead/ivr-call-jobMatching'),
+        Uri.parse(ApiConfig.ivrCallJobMatchingApi),
         headers: headers,
         body: json.encode(requestBody),
       );
@@ -1907,7 +1901,7 @@ class Phase2ApiService {
 
       print('=== UPDATE IVR CALL JOB MATCHING FEEDBACK API ===');
       print(
-        'URL: https://truckmitr.com/api/telehead/ivr-call-update-jobMatching',
+        'URL: ${ApiConfig.ivrCallUpdateJobMatchingApi}',
       );
       print('Request Body: ${json.encode(requestBody)}');
 
@@ -1937,9 +1931,7 @@ class Phase2ApiService {
       print('Auth Token :  $authToken');
 
       final response = await http.post(
-        Uri.parse(
-          'https://truckmitr.com/api/telehead/ivr-call-update-jobMatching',
-        ),
+        Uri.parse(ApiConfig.ivrCallUpdateJobMatchingApi),
         headers: headers,
         body: json.encode(requestBody),
       );
@@ -2042,7 +2034,7 @@ class Phase2ApiService {
       };
 
       print('=== IVR CALL JOB BRIEF API ===');
-      print('URL: https://truckmitr.com/api/telehead/ivr-call-jobBrief');
+      print('URL: ${ApiConfig.ivrCallJobBriefApi}');
       print('Request Body: ${json.encode(requestBody)}');
 
       // Get auth token from RealAuthService
@@ -2068,7 +2060,7 @@ class Phase2ApiService {
       );
 
       final response = await http.post(
-        Uri.parse('https://truckmitr.com/api/telehead/ivr-call-jobBrief'),
+        Uri.parse(ApiConfig.ivrCallJobBriefApi),
         headers: headers,
         body: json.encode(requestBody),
       );
@@ -2194,7 +2186,7 @@ class Phase2ApiService {
       };
 
       print('=== UPDATE IVR CALL JOB BRIEF FEEDBACK API ===');
-      print('URL: https://truckmitr.com/api/telehead/ivr-call-update-jobBrief');
+      print('URL: ${ApiConfig.ivrCallUpdateJobBriefApi}');
       print('Request Body: ${json.encode(requestBody)}');
 
       // Get auth token from RealAuthService
@@ -2221,9 +2213,7 @@ class Phase2ApiService {
       print('Auth token is set: ${authToken != null && authToken.isNotEmpty}');
 
       final response = await http.post(
-        Uri.parse(
-          'https://truckmitr.com/api/telehead/ivr-call-update-jobBrief',
-        ),
+        Uri.parse(ApiConfig.ivrCallUpdateJobBriefApi),
         headers: headers,
         body: json.encode(requestBody),
       );
@@ -2307,7 +2297,7 @@ class Phase2ApiService {
         throw Exception('Authentication token not found');
       }
 
-      final uri = Uri.parse('https://truckmitr.com/api/telehead/driver-bucket');
+      final uri = Uri.parse(ApiConfig.driverBucketApi);
 
       // Extract numeric job ID from string like "TMJB00593" -> "593"
       String numericJobId = jobId;
@@ -2383,7 +2373,7 @@ class Phase2ApiService {
       }
 
       final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/driver-buckets',
+        'https://development.truckmitr.com/api/telehead/driver-buckets',
       );
 
       print('=== FETCHING DRIVER BUCKETS ===');

@@ -13,7 +13,7 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController(text: 'Arjun Sharma');
-  final _emailController = TextEditingController(text: 'arjun.sharma@truckmitr.com');
+  final _emailController = TextEditingController(text: 'arjun.sharma@development.truckmitr.com');
   final _phoneController = TextEditingController(text: '+91 9876543210');
   final _addressController = TextEditingController(text: 'Mumbai, Maharashtra');
 

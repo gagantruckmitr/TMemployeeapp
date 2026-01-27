@@ -63,7 +63,7 @@
                         </div>
                         <div class="mail d-flex align-items-center pb-4">
                             <img src="{{url('public/front/assets/images/contact/mail.png')}}" class="img-fluid cntct-img">
-                            <p class="m-0 mx-3"><b>Mail:</b> contact@truckmitr.com</p>
+                            <p class="m-0 mx-3"><b>Mail:</b> contact@development.truckmitr.com</p>
                         </div>
                         <div class="maps d-flex align-items-center">
                             <img src="{{url('public/front/assets/images/contact/maps.png')}}" class="img-fluid cntct-img1">

@@ -33,10 +33,10 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
   // Calculated KPI stats from jobs - matches Phase2ApiService.fetchJobs filter logic exactly
   int get _totalJobs => _allJobs.length;
   int get _approvedJobs => _allJobs
-      .where((job) => job.isApproved && !job.isExpiredByDeadline)
+      .where((job) => job.isApproved && !job.isExpiredByDeadline && !job.isClosed)
       .length;
   int get _pendingJobs => _allJobs
-      .where((job) => !job.isApproved && !job.isExpiredByDeadline)
+      .where((job) => !job.isApproved && !job.isExpiredByDeadline && !job.isClosed)
       .length;
   int get _expiredJobs =>
       _allJobs.where((job) => job.isExpiredByDeadline).length;
@@ -70,7 +70,8 @@ class _DynamicDashboardScreenState extends State<DynamicDashboardScreen> {
             (job) =>
                 job.isApproved == true &&
                 job.isActive == true &&
-                !job.isExpiredByDeadline,
+                !job.isExpiredByDeadline &&
+                !job.isClosed,
           )
           .toList();
 

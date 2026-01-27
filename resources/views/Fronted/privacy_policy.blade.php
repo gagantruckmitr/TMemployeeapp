@@ -66,7 +66,7 @@
 
   <h2>11. Contact Information</h2>
   <p><strong>Name:</strong> Mr. Sachin Gupta<br/>
-     <strong>Email:</strong> <a href="mailto:contact@truckmitr.com">contact@truckmitr.com</a><br/>
+     <strong>Email:</strong> <a href="mailto:contact@development.truckmitr.com">contact@development.truckmitr.com</a><br/>
      <strong>Phone:</strong> +91 9315487776<br/>
      <strong>Address:</strong> Rohtak Rd, Surya Nagar, Bahadurgarh, Sankhol, Haryana 124507</p>
 

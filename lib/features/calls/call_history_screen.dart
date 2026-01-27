@@ -1526,7 +1526,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
       print('🔵 Job ID: ${log.jobId}');
 
       // Use EasyGo IVR with job matching API for driver calls
-      // API: http://truckmitr.com/api/telehead/ivr-call-jobMatching
+      // API: https://development.truckmitr.com/api/telehead/ivr-call-jobMatching
       await EasyGoIVRCallHelper.initiateCall(
         context: context,
         clientName: log.contactName,
@@ -1795,11 +1795,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
             final effectiveMatchId = matchId ?? _currentMatchId;
 
             // If matchId is available, use the job matching feedback API
-            // API: http://truckmitr.com/api/telehead/ivr-call-update-jobMatching
+            // API: https://development.truckmitr.com/api/telehead/ivr-call-update-jobMatching
             if (effectiveMatchId != null && effectiveMatchId.isNotEmpty) {
               print('🔵 Using IVR Job Matching Feedback API');
               print(
-                '🔵 API: http://truckmitr.com/api/telehead/ivr-call-update-jobMatching',
+                '🔵 API: https://development.truckmitr.com/api/telehead/ivr-call-update-jobMatching',
               );
 
               // Extract call_status from feedback string

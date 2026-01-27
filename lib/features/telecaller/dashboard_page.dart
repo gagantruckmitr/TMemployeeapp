@@ -225,7 +225,7 @@ class _DashboardPageState extends State<DashboardPage>
 
       // Use Laravel API - same as backlog_screen.dart
       final url =
-          'https://truckmitr.com/api/telehead/withoutCallHistory?admin_id=$callerId';
+          'https://development.truckmitr.com/api/telehead/withoutCallHistory?admin_id=$callerId';
 
       print('🔍 Loading backlog count from Laravel API: $url');
 
@@ -578,7 +578,7 @@ class _DashboardPageState extends State<DashboardPage>
                                 const SizedBox(height: 4),
                                 const Center(
                                   child: Text(
-                                    'V. 06',
+                                    'V. 10',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Color.fromARGB(255, 0, 0, 0),

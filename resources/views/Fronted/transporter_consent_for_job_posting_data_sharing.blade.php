@@ -104,7 +104,7 @@
     <p>If you have any concerns about data privacy or this consent, please contact:</p>
     <p>
         <strong>Grievance Officer:</strong> Deepak Arora<br>
-        <strong>Email:</strong> privacy@truckmitr.com<br>
+        <strong>Email:</strong> privacy@development.truckmitr.com<br>
         <strong>Phone:</strong> +91 92549 72811<br>
         <strong>Address:</strong> Suite No-G05, Plot No- C-104, Block-C, Sector-65, Noida – 201301
     </p>

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/config/api_config.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
 import '../../core/services/smart_calling_service.dart';
@@ -268,7 +269,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
     if (imagePath.startsWith('http')) return imagePath;
     if (imagePath.isNotEmpty) {
       if (imagePath.startsWith('/')) imagePath = imagePath.substring(1);
-      return 'https://truckmitr.com/public/$imagePath';
+      return ApiConfig.getPublicUrl(imagePath);
     }
     return null;
   }
@@ -1969,7 +1970,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
         await _handleManualCall(driver, callerId);
       } else if (callType == 'easygo_ivr') {
         // Use job matching IVR API for job applicants
-        // API: https://truckmitr.com/api/telehead/ivr-call-jobMatching
+        // API: ${ApiConfig.ivrCallJobMatchingApi}
         await EasyGoIVRCallHelper.initiateCall(
           context: context,
           clientName: driver.name,
@@ -2065,7 +2066,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
   }
 
   // Show feedback modal with match_id for job matching IVR calls
-  // Uses API: https://truckmitr.com/api/telehead/ivr-call-update-jobMatching
+  // Uses API: https://development.truckmitr.com/api/telehead/ivr-call-update-jobMatching
   void _showCallFeedbackModalWithMatchId(
     DriverApplicant driver,
     String? matchId,

@@ -61,7 +61,7 @@
 <h5>Contact Information for Challenges and Queries</h5>
 <p>For any questions, challenges, or rights exercised regarding the above information, please contact our redressal officer in charge:</p>
 <p>Name: Mr. Sachin Gupta</p>
-<p>Email: contact@truckmitr.com</p>
+<p>Email: contact@development.truckmitr.com</p>
 <p>Phone: +91 9315487776</p>
 <p>Address: Rohtak Rd, Surya Nagar, Bahadurgarh, Sankhol, Haryana 124507</p>
 
@@ -76,7 +76,7 @@
 <!--</p>-->
 <!--<h5>Contact Us</h5>-->
 <!--<p>If you have any questions or issues regarding our Privacy Policy or our privacy practices, don’t-->
-<!--hesitate to get in touch with us at contact@truckmitr.com-->
+<!--hesitate to get in touch with us at contact@development.truckmitr.com-->
 <!--</p>-->
 <!--<p class="pt-3">Thank you for trusting TruckMitr.com with your private information.</p>-->
                 </div>

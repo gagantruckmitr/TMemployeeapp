@@ -1,5 +1,5 @@
 /// Centralized API Configuration
-/// Update the IP address here and it will reflect across all services
+/// Update the base domain here and it will reflect across all services
 class ApiConfig {
   // ⚠️ DEPLOYMENT MODE: Switch between LOCAL and ONLINE
   // LOCAL DEVELOPMENT: (Removed)
@@ -8,9 +8,39 @@ class ApiConfig {
   // static const String publicUrl = 'http://$serverIp/TMemployeeApp/public';
 
   // PRODUCTION: Plesk Server (Active)
-  static const String baseUrl = 'https://truckmitr.com/truckmitr-app/api';
-  static const String serverIp = 'truckmitr.com';
-  static const String publicUrl = 'https://truckmitr.com/public';
+  static const String domain = 'development.truckmitr.com';
+  static const String baseUrl = 'https://$domain/truckmitr-app/api';
+  static const String serverIp = domain;
+  static const String publicUrl = 'https://$domain/public';
+  
+  // Laravel API Base URLs
+  static const String laravelApiBase = 'https://$domain/api/telehead';
+  static const String storageBase = 'https://$domain/storage/app/public';
+  
+  // TaskSuite HRMS Base URL
+  static const String taskSuiteBase = 'https://tasksuite.$domain/backend/public/api';
+
+  
+  // Laravel API Endpoints
+  static const String loginApi = '$laravelApiBase/login';
+  static const String forgotPasswordApi = '$laravelApiBase/forgot-password';
+  static const String resetPasswordApi = '$laravelApiBase/reset-password';
+  static const String agentJobsApi = '$laravelApiBase/agent-jobs';
+  static const String driversApi = '$laravelApiBase/drivers';
+  static const String jobsApi = '$laravelApiBase/jobs';
+  static const String rejectedApplyJobsApi = '$laravelApiBase/rejected-apply-jobs';
+  static const String callLogsApi = '$laravelApiBase/call-logs';
+  static const String ivrCallJobMatchingApi = '$laravelApiBase/ivr-call-jobMatching';
+  static const String ivrCallUpdateJobMatchingApi = '$laravelApiBase/ivr-call-update-jobMatching';
+  static const String ivrCallJobBriefApi = '$laravelApiBase/ivr-call-jobBrief';
+  static const String ivrCallUpdateJobBriefApi = '$laravelApiBase/ivr-call-update-jobBrief';
+  static const String driverBucketApi = '$laravelApiBase/driver-bucket';
+  static const String driverBucketsApi = '$laravelApiBase/driver-buckets';
+  static const String paymentsSearchApi = '$laravelApiBase/payments/search';
+  static const String withoutCallHistoryApi = '$laravelApiBase/withoutCallHistory';
+  static const String reportsApi = '$laravelApiBase/reports/assigned-to-wise-summary';
+  static const String socialMediaLeadsApi = '$laravelApiBase/social-media-leads';
+  static const String socialMediaCallHistoryApi = '$laravelApiBase/social-media-call-history';
 
   // ONLINE PRODUCTION: InfinityFree hosting (Commented out)
   // static const String baseUrl = 'https://truckmitr.gt.tc/api';
@@ -22,7 +52,7 @@ class ApiConfig {
       '$baseUrl/telecaller_dashboard_stats.php';
   // REMOVED: fresh_leads_api.php has been deleted from server\n  // static const String freshLeadsApi = '$baseUrl/fresh_leads_api.php';
   static const String backlogLeadsApi = '$baseUrl/backlog_leads_api.php';
-  static const String driversApi = '$baseUrl/simple_drivers_api.php';
+  static const String legacyDriversApi = '$baseUrl/simple_drivers_api.php';
   static const String managerDashboardApi =
       '$baseUrl/manager_dashboard_api.php';
   static const String telecallerAnalyticsApi =
@@ -34,9 +64,30 @@ class ApiConfig {
   static const Duration timeout = Duration(seconds: 30);
   static const Duration shortTimeout = Duration(seconds: 10);
 
-  // Helper method to get full API URL
-  static String getApiUrl(String endpoint) {
-    return '$baseUrl/$endpoint';
+  // Helper method to get storage URL for images
+  static String getStorageUrl(String path) {
+    if (path.isEmpty) return '';
+    // Remove leading slash if present
+    final cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    return '$storageBase/$cleanPath';
+  }
+
+  // Helper method to get public URL for assets
+  static String getPublicUrl(String path) {
+    if (path.isEmpty) return '';
+    // Remove leading slash if present
+    final cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    return '$publicUrl/$cleanPath';
+  }
+
+  // Helper method to get Laravel API URL with endpoint
+  static String getLaravelApiUrl(String endpoint) {
+    return '$laravelApiBase/$endpoint';
+  }
+
+  // Helper method to get TaskSuite API URL with endpoint
+  static String getTaskSuiteUrl(String endpoint) {
+    return '$taskSuiteBase/$endpoint';
   }
 
   // Helper method to check if using localhost

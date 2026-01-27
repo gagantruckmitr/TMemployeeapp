@@ -41,7 +41,7 @@
 
   <h2>Contact Us</h2>
   <p>If you have any questions or concerns regarding our Terms of Service, feel free to contact us at:</p>
-  <p><strong>Email:</strong> <a href="mailto:contact@truckmitr.com">contact@truckmitr.com</a></p>
+  <p><strong>Email:</strong> <a href="mailto:contact@development.truckmitr.com">contact@development.truckmitr.com</a></p>
 
   <p>Thank you for selecting TruckMitr.com. Please enjoy browsing our website!</p> --}}
     <header>
@@ -162,7 +162,7 @@
         <ul>
             <li>You have the <strong>right to access, correct, and erase</strong> your personal data at any time.</li>
             <li>You may <strong>withdraw consent</strong> at any stage by contacting our Grievance Officer at <a
-                    href="mailto:privacy@truckmitr.com"><strong>privacy@truckmitr.com</strong></a>.</li>
+                    href="mailto:privacy@development.truckmitr.com"><strong>privacy@development.truckmitr.com</strong></a>.</li>
             <li>You may <strong>nominate a person</strong> to exercise your data rights in the event of your incapacity or death.
             </li>
         </ul>
@@ -251,7 +251,7 @@
         <h2>11. GRIEVANCE REDRESSAL</h2>
         <p>For data privacy or other concerns:</p>
         <p><strong>Grievance Officer:</strong> Deepak Arora<br>
-            <strong>Email:</strong> <a href="mailto:privacy@truckmitr.com">privacy@truckmitr.com</a><br>
+            <strong>Email:</strong> <a href="mailto:privacy@development.truckmitr.com">privacy@development.truckmitr.com</a><br>
             <strong>Phone:</strong> +91 92549 72811<br>
             <strong>Address:</strong> Suite No-G05, Plot No- C-104, Block-C, Sector-65, Noida – 201301
         </p>

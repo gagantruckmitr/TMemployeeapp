@@ -2,20 +2,20 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'real_auth_service.dart';
 
+import '../config/api_config.dart';
+
 /// Social Media IVR Service for Live API Integration
-/// Uses https://truckmitr.com/api/telehead/social-media-ivr-call
-/// and https://truckmitr.com/api/telehead/social-media-ivr-call-update
+/// Uses ${ApiConfig.laravelApiBase}/social-media-ivr-call
+/// and ${ApiConfig.laravelApiBase}/social-media-ivr-call-update
 class SocialMediaIVRService {
   // Live API Endpoints
-  static const String _initiateCallUrl =
-      'https://truckmitr.com/api/telehead/social-media-ivr-call';
-  static const String _updateCallUrl =
-      'https://truckmitr.com/api/telehead/social-media-ivr-call-update';
+  static String get _initiateCallUrl => '${ApiConfig.laravelApiBase}/social-media-ivr-call';
+  static String get _updateCallUrl => '${ApiConfig.laravelApiBase}/social-media-ivr-call-update';
 
   static const Duration _timeout = Duration(seconds: 30);
 
   /// Initiate Social Media IVR call using Live API
-  /// API Endpoint: POST https://truckmitr.com/api/telehead/social-media-ivr-call
+  /// API Endpoint: POST https://development.truckmitr.com/api/telehead/social-media-ivr-call
   /// Request Body:
   /// {
   ///   "assigned_id": 12,
@@ -148,7 +148,7 @@ class SocialMediaIVRService {
   }
 
   /// Update Social Media IVR Call Feedback using Live API
-  /// API Endpoint: POST https://truckmitr.com/api/telehead/social-media-ivr-call-update
+  /// API Endpoint: POST ${ApiConfig.laravelApiBase}/social-media-ivr-call-update
   /// Request Body:
   /// {
   ///   "id": 1,
@@ -268,7 +268,7 @@ class SocialMediaIVRService {
   }
 
   /// Fetch Social Media IVR Call History
-  /// API Endpoint: GET https://truckmitr.com/api/telehead/social-media-ivr-calls?assigned_id={id}
+  /// API Endpoint: GET https://development.truckmitr.com/api/telehead/social-media-ivr-calls?assigned_id={id}
   static Future<Map<String, dynamic>> fetchCallHistory({
     required int assignedId,
     int page = 1,
@@ -280,7 +280,7 @@ class SocialMediaIVRService {
       }
 
       final url =
-          'https://truckmitr.com/api/telehead/social-media-ivr-calls?assigned_id=$assignedId&page=$page';
+          'https://development.truckmitr.com/api/telehead/social-media-ivr-calls?assigned_id=$assignedId&page=$page';
 
       print('🔵 [Social Media IVR] Fetching History: $url');
 

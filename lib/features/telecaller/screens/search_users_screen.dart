@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+// import '../../core/config/api_config.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -71,7 +72,7 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
 
       // Build URL with search query
       final uri = Uri.parse(
-        'https://truckmitr.com/api/telehead/payments/search',
+        'https://development.truckmitr.com/api/telehead/payments/search',
       ).replace(queryParameters: {'search': query.trim()});
 
       print('🔍 Searching users: $uri');

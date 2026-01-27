@@ -365,7 +365,7 @@ class _DriverBucketScreenState extends State<DriverBucketScreen>
     if (imagePath.startsWith('http')) return imagePath;
     if (imagePath.isNotEmpty) {
       if (imagePath.startsWith('/')) imagePath = imagePath.substring(1);
-      return 'https://truckmitr.com/public/$imagePath';
+      return 'https://development.truckmitr.com/public/$imagePath';
     }
     return null;
   }

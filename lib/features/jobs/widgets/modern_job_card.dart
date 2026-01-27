@@ -332,7 +332,7 @@ class _ModernJobCardState extends State<ModernJobCard> {
       
       // Call the API to update job brief with call status
       final response = await http.post(
-        Uri.parse('https://truckmitr.com/api/telehead/ivr-call-update-jobBrief'),
+        Uri.parse('https://development.truckmitr.com/api/telehead/ivr-call-update-jobBrief'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',

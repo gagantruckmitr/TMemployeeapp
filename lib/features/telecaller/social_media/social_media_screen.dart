@@ -30,16 +30,29 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
 
   List<SocialMediaLead> _leads = [];
   List<Map<String, dynamic>> _history = [];
+  List<Map<String, dynamic>> _filteredHistory = [];
 
   bool _isLoadingLeads = true;
   bool _isLoadingHistory = true;
   bool _isRefreshing = false;
+  bool _isLoadingMore = false;
 
   String? _leadsError;
   String? _historyError;
 
+  // Search functionality
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  bool _isSearching = false;
+
   bool _hasAccess = false;
   bool _checkingAccess = true;
+
+  // Pagination variables
+  int _currentPage = 1;
+  int _lastPage = 1;
+  int _totalLeads = 0;
+  bool _hasMorePages = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -48,6 +61,17 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) {
+        setState(() {
+          // Clear search when switching to leads tab
+          if (_tabController.index == 0 && _searchController.text.isNotEmpty) {
+            _clearSearch();
+          }
+        });
+      }
+    });
+    _searchController.addListener(_onSearchChanged);
     _checkAccess();
     _loadHistory();
   }
@@ -55,6 +79,8 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -76,22 +102,44 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     }
   }
 
-  Future<void> _loadLeads() async {
+  Future<void> _loadLeads({bool loadMore = false}) async {
     if (!mounted) return;
-    setState(() {
-      _isLoadingLeads = true;
-      _leadsError = null;
-    });
+    
+    if (loadMore) {
+      if (_isLoadingMore || !_hasMorePages) return;
+      setState(() => _isLoadingMore = true);
+    } else {
+      setState(() {
+        _isLoadingLeads = true;
+        _leadsError = null;
+        _currentPage = 1;
+      });
+    }
 
     try {
-      final results = await _service.fetchSocialMediaLeads();
+      final page = loadMore ? _currentPage + 1 : 1;
+      final result = await _service.fetchSocialMediaLeads(page: page);
+      
       if (!mounted) return;
 
-      results.sort((a, b) => b.chatDateTime.compareTo(a.chatDateTime));
+      final leads = result['leads'] as List<SocialMediaLead>;
+      leads.sort((a, b) => b.chatDateTime.compareTo(a.chatDateTime));
 
       setState(() {
-        _leads = results;
+        if (loadMore) {
+          _leads.addAll(leads);
+          _currentPage = result['current_page'] ?? _currentPage + 1;
+        } else {
+          _leads = leads;
+          _currentPage = result['current_page'] ?? 1;
+        }
+        
+        _lastPage = result['last_page'] ?? 1;
+        _totalLeads = result['total'] ?? 0;
+        _hasMorePages = result['has_more_pages'] ?? false;
+        
         _isLoadingLeads = false;
+        _isLoadingMore = false;
       });
     } catch (error) {
       if (!mounted) return;
@@ -102,12 +150,14 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
         setState(() {
           _hasAccess = false;
           _isLoadingLeads = false;
+          _isLoadingMore = false;
           _leadsError = null;
         });
       } else {
         setState(() {
           _leadsError = errorMessage;
           _isLoadingLeads = false;
+          _isLoadingMore = false;
         });
       }
     }
@@ -121,29 +171,21 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     });
 
     try {
-      final currentUser = RealAuthService.instance.currentUser;
-      if (currentUser == null) {
-        throw Exception('User not logged in');
-      }
-      final assignedId = int.tryParse(currentUser.id) ?? 0;
-
-      final result = await SocialMediaIVRService.fetchCallHistory(
-        assignedId: assignedId,
-      );
+      final result = await _service.fetchSocialMediaCallHistory();
 
       if (!mounted) return;
 
-      if (result['success'] == true) {
-        final data = result['data'];
-        final List<dynamic> historyList = data['data']['data'] ?? [];
-
-        setState(() {
-          _history = List<Map<String, dynamic>>.from(historyList);
-          _isLoadingHistory = false;
-        });
-      } else {
-        throw Exception(result['error'] ?? 'Failed to load history');
+      print('🔍 [Social Media Screen] History result type: ${result.runtimeType}');
+      print('🔍 [Social Media Screen] History result length: ${result.length}');
+      if (result.isNotEmpty) {
+        print('🔍 [Social Media Screen] First history item: ${result[0]}');
       }
+
+      setState(() {
+        _history = result;
+        _filteredHistory = result;
+        _isLoadingHistory = false;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -172,6 +214,37 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     }
   }
 
+  void _onSearchChanged() {
+    final query = _searchController.text.toLowerCase().trim();
+    
+    if (query.isEmpty) {
+      setState(() {
+        _filteredHistory = _history;
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+      _filteredHistory = _history.where((call) {
+        final name = call['name']?.toString().toLowerCase() ?? '';
+        final mobile = call['mobile']?.toString() ?? '';
+        
+        return name.contains(query) || mobile.contains(query);
+      }).toList();
+    });
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _searchFocusNode.unfocus();
+    setState(() {
+      _filteredHistory = _history;
+      _isSearching = false;
+    });
+  }
+
   void _copyNumber(String phoneNumber) {
     Clipboard.setData(ClipboardData(text: phoneNumber));
     HapticFeedback.lightImpact();
@@ -188,6 +261,34 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
 
   Future<void> _onCallPressed(SocialMediaLead lead) async {
     await _startCall(lead);
+  }
+
+  Future<void> _onHistoryCallPressed(Map<String, dynamic> call) async {
+    // Convert call history data to SocialMediaLead for compatibility
+    final lead = _convertHistoryCallToLead(call);
+    await _startCall(lead);
+  }
+
+  SocialMediaLead _convertHistoryCallToLead(Map<String, dynamic> call) {
+    final name = call['name']?.toString() ?? 'Unknown';
+    final mobile = call['mobile']?.toString() ?? '';
+    final source = call['source']?.toString() ?? 'Social Media';
+    final role = call['role']?.toString() ?? 'driver';
+    final createdAt = call['created_at']?.toString() ?? DateTime.now().toIso8601String();
+    final leadId = call['lead_id'] ?? call['id'] ?? 0;
+
+    return SocialMediaLead(
+      id: int.tryParse(leadId.toString()) ?? 0,
+      assignedId: int.tryParse(call['assigned_id']?.toString() ?? '0') ?? 0,
+      name: name,
+      mobile: mobile,
+      source: source,
+      remarks: call['lead_remarks']?.toString() ?? call['call_remarks']?.toString(),
+      chatDateTime: DateTime.tryParse(createdAt) ?? DateTime.now(),
+      role: role,
+      createdAt: DateTime.tryParse(createdAt) ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(call['updated_at']?.toString() ?? createdAt) ?? DateTime.now(),
+    );
   }
 
   Future<void> _startCall(SocialMediaLead lead) async {
@@ -430,7 +531,7 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
                       );
                     }
                   });
-                },
+                }, 
               ),
             ),
           ),
@@ -717,6 +818,8 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
         child: Column(
           children: [
             _buildAppleHeader(),
+            // Show search bar only on history tab
+            if (_tabController.index == 1) _buildSearchBar(),
             _buildSegmentedControl(),
             Expanded(
               child: TabBarView(
@@ -731,7 +834,7 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
   }
 
   Widget _buildAppleHeader() {
-    final count = _tabController.index == 0 ? _leads.length : _history.length;
+    final count = _tabController.index == 0 ? _totalLeads : _filteredHistory.length;
     final isLoading = _tabController.index == 0
         ? _isLoadingLeads
         : _isLoadingHistory;
@@ -758,7 +861,9 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
                 Text(
                   isLoading
                       ? 'Loading...'
-                      : '$count ${_tabController.index == 0 ? 'leads' : 'calls'}',
+                      : _tabController.index == 0
+                          ? '$count total leads${_hasMorePages ? ' (${_leads.length} loaded)' : ''}'
+                          : '$count calls',
                   style: const TextStyle(
                     fontSize: 15,
                     color: Color(0xFF8E8E93),
@@ -793,6 +898,71 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFE8E8E8),
+          width: 1,
+        ),
+      ),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        style: const TextStyle(
+          fontSize: 15,
+          color: Color(0xFF000000),
+          letterSpacing: -0.3,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Search by name or phone...',
+          hintStyle: TextStyle(
+            fontSize: 15,
+            color: Colors.black.withValues(alpha: 0.4),
+            letterSpacing: -0.3,
+          ),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Icon(
+              Icons.search_rounded,
+              color: Colors.black.withValues(alpha: 0.4),
+              size: 20,
+            ),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 28),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _clearSearch();
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  ),
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        onTap: () => HapticFeedback.selectionClick(),
       ),
     );
   }
@@ -866,7 +1036,7 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     }
 
     if (_leadsError != null) {
-      return _AppleErrorView(message: _leadsError!, onRetry: _loadLeads);
+      return _AppleErrorView(message: _leadsError!, onRetry: () => _loadLeads());
     }
 
     if (_leads.isEmpty) {
@@ -878,21 +1048,103 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
     }
 
     return RefreshIndicator(
-      onRefresh: _loadLeads,
+      onRefresh: () => _loadLeads(),
       color: const Color(0xFF007AFF),
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        itemCount: _leads.length,
-        itemBuilder: (context, index) {
-          final lead = _leads[index];
-          return _AppleLeadCard(
-            lead: lead,
-            onCall: () => _onCallPressed(lead),
-            onCopyNumber: _copyNumber,
-          );
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification scrollInfo) {
+          // Trigger load more when user is near the bottom (80% scrolled)
+          if (!_isLoadingMore && _hasMorePages && scrollInfo is ScrollUpdateNotification) {
+            final threshold = scrollInfo.metrics.maxScrollExtent * 0.8;
+            if (scrollInfo.metrics.pixels >= threshold) {
+              _loadLeads(loadMore: true);
+            }
+          }
+          return false;
         },
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          itemCount: _leads.length + (_hasMorePages || _isLoadingMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == _leads.length) {
+              // Load more indicator
+              return _buildLoadMoreIndicator();
+            }
+
+            final lead = _leads[index];
+            return _AppleLeadCard(
+              lead: lead,
+              onCall: () => _onCallPressed(lead),
+              onCopyNumber: _copyNumber,
+            );
+          },
+        ),
       ),
     );
+  }
+
+  Widget _buildLoadMoreIndicator() {
+    if (_isLoadingMore) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFF007AFF),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Loading more leads...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (_hasMorePages) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.keyboard_arrow_up_rounded,
+              size: 32,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Swipe up to load more',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${_leads.length} of $_totalLeads leads',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return const SizedBox.shrink();
   }
 
   Widget _buildHistoryTab() {
@@ -912,15 +1164,27 @@ class _SocialMediaScreenState extends State<SocialMediaScreen>
       );
     }
 
+    if (_filteredHistory.isEmpty && _searchController.text.isNotEmpty) {
+      return const _AppleEmptyView(
+        icon: Icons.search_off_rounded,
+        title: 'No Results Found',
+        message: 'Try adjusting your search terms.',
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: _loadHistory,
       color: const Color(0xFF007AFF),
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        itemCount: _history.length,
+        itemCount: _filteredHistory.length,
         itemBuilder: (context, index) {
-          final call = _history[index];
-          return _AppleHistoryCard(call: call, onCopyNumber: _copyNumber);
+          final call = _filteredHistory[index];
+          return _AppleHistoryCard(
+            call: call, 
+            onCopyNumber: _copyNumber,
+            onCall: () => _onHistoryCallPressed(call),
+          );
         },
       ),
     );
@@ -1172,10 +1436,15 @@ class _AppleLeadCard extends StatelessWidget {
 
 // Apple-style History Card
 class _AppleHistoryCard extends StatelessWidget {
-  const _AppleHistoryCard({required this.call, required this.onCopyNumber});
+  const _AppleHistoryCard({
+    required this.call, 
+    required this.onCopyNumber,
+    required this.onCall,
+  });
 
   final Map<String, dynamic> call;
   final ValueChanged<String> onCopyNumber;
+  final VoidCallback onCall;
 
   String _maskPhone(String phone) {
     if (phone.length <= 4) return phone;
@@ -1229,21 +1498,16 @@ class _AppleHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // New API Fields Mapping
+    // New Laravel API Fields Mapping
     final name = call['name']?.toString() ?? 'Unknown';
     final mobile = call['mobile']?.toString() ?? '';
-    final feedback =
-        call['call_feedbacks']?.toString() ??
-        call['feedback']?.toString() ?? // Fallback
-        'No feedback';
-    final remarks =
-        call['call_remarks']?.toString() ??
-        call['remarks']?.toString() ??
-        ''; // Fallback
+    final feedback = call['call_feedbacks']?.toString() ?? 'No feedback';
+    final remarks = call['call_remarks']?.toString() ?? '';
     final createdAt = call['created_at']?.toString() ?? '';
     final source = call['source']?.toString() ?? 'Social Media';
     final role = call['role']?.toString() ?? '';
     final status = call['call_status']?.toString() ?? '';
+    final callDuration = call['call_duration']?.toString() ?? '';
 
     DateTime? callDate;
     try {
@@ -1346,6 +1610,35 @@ class _AppleHistoryCard extends StatelessWidget {
                     ],
                   ),
                 ),
+
+                // Call Button - Only show if mobile number exists and is valid
+                if (mobile.isNotEmpty && mobile.length >= 10)
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      onCall();
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF34C759),
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF34C759).withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.phone,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
               ],
             ),
 
@@ -1428,6 +1721,36 @@ class _AppleHistoryCard extends StatelessWidget {
                         fontWeight: FontWeight.w500,
                         color: Color(0xFF8E8E93),
                       ),
+                    ),
+                  ),
+                if (callDuration.isNotEmpty && callDuration != '0')
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF007AFF).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.timer_outlined,
+                          size: 12,
+                          color: Color(0xFF007AFF),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${callDuration}s',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF007AFF),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],

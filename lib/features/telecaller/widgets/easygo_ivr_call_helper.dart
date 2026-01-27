@@ -104,7 +104,7 @@ class EasyGoIVRCallHelper {
       }
 
       // For job applicants, use ONLY the job matching API (don't call generic IVR)
-      // API: truckmitr.com/api/telehead/ivr-call-jobMatching
+      // API: https://development.truckmitr.com/api/telehead/ivr-call-jobMatching
       String? matchId;
       Map<String, dynamic> result;
 
@@ -120,7 +120,7 @@ class EasyGoIVRCallHelper {
           assignedTo != null) {
         try {
           print('🔵 Calling Job Matching IVR API (job_applicants)...');
-          print('🔵 API: truckmitr.com/api/telehead/ivr-call-jobMatching');
+          print('🔵 API: https://development.truckmitr.com/api/telehead/ivr-call-jobMatching');
           print('🔵 Request Data:');
           print('   unique_id_transporter: $transporterTmid');
           print('   unique_id_driver: $tmid');

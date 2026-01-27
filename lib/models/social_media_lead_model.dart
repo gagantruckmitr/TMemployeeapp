@@ -27,7 +27,7 @@ class SocialMediaLead {
     return SocialMediaLead(
       id: int.parse(json['id'].toString()),
       assignedId: int.parse(json['assigned_id'].toString()),
-      name: json['name'] ?? '',
+      name: json['name']?.toString() ?? 'Unknown', // Handle null names
       mobile: json['mobile'] ?? '',
       source: json['source'] ?? '',
       remarks: json['remarks'],

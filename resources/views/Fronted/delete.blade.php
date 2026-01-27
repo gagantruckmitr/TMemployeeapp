@@ -7,7 +7,7 @@
                 <div class="col-lg-12 col-sm-12">
                     <h1 class="text-white">Delete Account</h1>
                     <ul class="breadcrumb">
-                        <li><a href="https://truckmitr.com">Home</a></li>
+                        <li><a href="https://development.truckmitr.com">Home</a></li>
                         <li class="text-white">Delete Account</li>
                     </ul>
                 </div>
