@@ -59,7 +59,7 @@ class _OnboardingPageState extends State<OnboardingPage> with TickerProviderStat
                   onPressed: () async {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setBool('has_seen_onboarding', true);
-                    if (mounted) context.go(AppRouter.login);
+                    if (mounted) context.go(AppRouter.roleSelection);
                   },
                   style: TextButton.styleFrom(
                     foregroundColor: AppTheme.gray,
@@ -440,7 +440,7 @@ class _OnboardingPageState extends State<OnboardingPage> with TickerProviderStat
                     onTap: () async {
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setBool('has_seen_onboarding', true);
-                      if (mounted) context.go(AppRouter.login);
+                      if (mounted) context.go(AppRouter.roleSelection);
                     },
                     borderRadius: BorderRadius.circular(16),
                     child: const Center(

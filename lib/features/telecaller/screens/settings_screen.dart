@@ -547,7 +547,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onLogout: () async {
           await RealAuthService.instance.logout();
           if (mounted) {
-            context.go(AppRouter.login);
+            context.go(AppRouter.roleSelection);
           }
         },
       ),

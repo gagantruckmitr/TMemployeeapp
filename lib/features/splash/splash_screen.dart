@@ -56,28 +56,36 @@ class _SplashScreenState extends State<SplashScreen>
     if (isLoggedIn) {
       // User is logged in, check their role and route accordingly
       final user = RealAuthService.instance.currentUser;
-      final userRole = user?.role ?? '';
+      final userRole = user?.role.toLowerCase() ?? '';
+
+      print('🔍 Splash: User role is "$userRole"');
 
       // Set caller ID for API calls
       if (user?.id != null) {
         ApiService.setCallerId(user!.id);
-        
+
         // Initialize status tracking for telecallers
-        if (userRole.toLowerCase() == 'telecaller') {
-          await TelecallerStatusService.instance.initialize(user!.id);
+        if (userRole == 'telecaller') {
+          await TelecallerStatusService.instance.initialize(user.id);
         }
       }
 
       if (userRole == 'manager') {
         // Manager goes to manager dashboard
+        print('🔀 Navigating to Manager Dashboard');
         context.go('/manager-dashboard');
+      } else if (userRole == 'margdarshak') {
+        // Margdarshak goes to margdarshak dashboard
+        print('🔀 Navigating to Margdarshak Dashboard');
+        context.go('/margdarshak-dashboard');
       } else {
         // Telecaller or other roles go to telecaller dashboard
+        print('🔀 Navigating to Telecaller Dashboard');
         context.go('/dashboard');
       }
     } else if (hasSeenOnboarding) {
-      // User has seen onboarding, go to login
-      context.go('/login');
+      // User has seen onboarding, go to role selection
+      context.go('/role-selection');
     } else {
       // First time user, show onboarding
       context.go('/onboarding');

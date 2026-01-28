@@ -122,7 +122,7 @@ class _NavigationDrawerWidgetState extends State<NavigationDrawerWidget>
     HapticFeedback.mediumImpact();
     await RealAuthService.instance.logout();
     if (mounted) {
-      context.go(AppRouter.login);
+      context.go(AppRouter.roleSelection);
     }
   }
 

@@ -324,6 +324,46 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             ),
           ).animate().fadeIn(duration: 600.ms, delay: 900.ms),
 
+          // Debug: Clear Role Button (Remove in production)
+          TextButton(
+            onPressed: () async {
+              await RealAuthService.instance.clearSavedUserRole();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Saved role cleared for testing'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            child: const Text(
+              'Clear Saved Role (Debug)',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+
+          // Debug: Check Current Role Button
+          TextButton(
+            onPressed: () async {
+              final savedRole = await RealAuthService.instance.getSavedUserRole();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Current saved role: ${savedRole ?? 'None'}'),
+                  backgroundColor: Colors.blue,
+                ),
+              );
+            },
+            child: const Text(
+              'Check Current Role (Debug)',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+
           const SizedBox(height: 32),
 
           // Sign In Button
@@ -513,16 +553,24 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
           // Navigate based on user role
           final userRole = result.user?.role.toLowerCase() ?? 'telecaller';
+          final savedRole = await RealAuthService.instance.getSavedUserRole();
 
-          if (userRole == 'manager' || userRole == 'admin') {
-            // Managers go to manager dashboard
-            context.go(AppRouter.managerDashboard);
-          } else if (userRole == 'telecaller') {
-            // Telecallers go to main dashboard
-            context.go(AppRouter.dashboard);
+          print('🔍 Debug: userRole = $userRole, savedRole = $savedRole');
+
+          if (savedRole != null) {
+            // User has previously selected a role, navigate directly
+            print('🔍 Debug: Navigating to saved role: $savedRole');
+            if (savedRole == 'telecaller') {
+              context.go(AppRouter.dashboard);
+            } else if (savedRole == 'margdarshak') {
+              context.go(AppRouter.margdarshakDashboard);
+            } else {
+              context.go(AppRouter.dashboard);
+            }
           } else {
-            // Default to dashboard
-            context.go(AppRouter.dashboard);
+            // First time login or no role selected, show role selection
+            print('🔍 Debug: No saved role, showing role selection');
+            context.go(AppRouter.roleSelection);
           }
         } else {
           setState(() => _isLoading = false);

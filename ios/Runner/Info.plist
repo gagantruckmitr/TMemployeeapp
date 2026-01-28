@@ -65,6 +65,12 @@
 	<!-- Permissions for file access -->
 	<key>NSDocumentsFolderUsageDescription</key>
 	<string>This app needs access to save and retrieve documents</string>
+
+	<!-- Permissions for location -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs access to location to capture shop coordinates.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app needs access to location to capture shop coordinates.</string>
 	
 	<!-- Network usage -->
 	<key>NSAppTransportSecurity</key>

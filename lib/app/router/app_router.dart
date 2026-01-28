@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_page.dart';
-import '../../features/auth/login_page.dart';
+import '../../features/auth/role_selection_page.dart';
+import '../../features/auth/telecaller_login_page.dart';
+import '../../features/auth/margdarshak_login_page.dart';
 import '../../features/telecaller/main_navigation_container.dart';
+import '../../features/margdarshak/screens/navigation/index.dart';
 import '../../features/telecaller/smart_calling_page.dart';
 import '../../features/telecaller/performance_analytics_page.dart';
 import '../../features/telecaller/subscriptions/subscriptions_screen.dart';
@@ -38,8 +41,11 @@ class ManagerDashboardWrapper extends StatelessWidget {
 class AppRouter {
   static const String splash = '/';
   static const String onboarding = '/onboarding';
-  static const String login = '/login';
+  static const String roleSelection = '/role-selection';
+  static const String telecallerLogin = '/telecaller-login';
+  static const String margdarshakLogin = '/margdarshak-login';
   static const String dashboard = '/dashboard';
+  static const String margdarshakDashboard = '/margdarshak-dashboard';
   static const String managerDashboard = '/manager-dashboard';
   static const String smartCalling = '/dashboard/smart-calling';
   static const String subscriptions = '/dashboard/subscriptions';
@@ -59,16 +65,21 @@ class AppRouter {
     initialLocation: splash,
     redirect: (context, state) async {
       final isLoggedIn = await RealAuthService.instance.isLoggedIn();
-      final isOnLoginPage = state.matchedLocation == login;
+      final isOnRoleSelectionPage = state.matchedLocation == roleSelection;
+      final isOnTelecallerLoginPage = state.matchedLocation == telecallerLogin;
+      final isOnMargdarshakLoginPage =
+          state.matchedLocation == margdarshakLogin;
       final isOnSplashPage = state.matchedLocation == splash;
       final isOnOnboardingPage = state.matchedLocation == onboarding;
 
-      // If not logged in and trying to access protected routes, redirect to login
+      // If not logged in and trying to access protected routes, redirect to role selection
       if (!isLoggedIn &&
-          !isOnLoginPage &&
+          !isOnRoleSelectionPage &&
+          !isOnTelecallerLoginPage &&
+          !isOnMargdarshakLoginPage &&
           !isOnSplashPage &&
           !isOnOnboardingPage) {
-        return login;
+        return roleSelection;
       }
 
       return null; // No redirect needed
@@ -103,11 +114,45 @@ class AppRouter {
         ),
       ),
       GoRoute(
-        path: login,
-        name: 'login',
+        path: roleSelection,
+        name: 'role-selection',
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: const LoginPage(),
+          child: const RoleSelectionPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(1.0, 0.0),
+                end: Offset.zero,
+              ).animate(CurveTween(curve: Curves.easeInOut).animate(animation)),
+              child: child,
+            );
+          },
+        ),
+      ),
+      GoRoute(
+        path: telecallerLogin,
+        name: 'telecaller-login',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const TelecallerLoginPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(1.0, 0.0),
+                end: Offset.zero,
+              ).animate(CurveTween(curve: Curves.easeInOut).animate(animation)),
+              child: child,
+            );
+          },
+        ),
+      ),
+      GoRoute(
+        path: margdarshakLogin,
+        name: 'margdarshak-login',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const MargdarshakLoginPage(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
               position: Tween<Offset>(
@@ -352,6 +397,23 @@ class AppRouter {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: margdarshakDashboard,
+        name: 'margdarshak-dashboard',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: MargdarshakNavigationContainer(key: margdarshakNavigationKey),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.0, 1.0),
+                end: Offset.zero,
+              ).animate(CurveTween(curve: Curves.easeInOut).animate(animation)),
+              child: child,
+            );
+          },
+        ),
       ),
       // Database Test Route
       GoRoute(

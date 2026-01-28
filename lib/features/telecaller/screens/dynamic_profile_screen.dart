@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:math' as math;
 import '../../../core/services/real_auth_service.dart';
 import '../../../app/router/app_router.dart';
 
@@ -316,7 +315,7 @@ class _DynamicProfileScreenState extends State<DynamicProfileScreen> {
       try {
         await RealAuthService.instance.logout();
         if (mounted) {
-          context.go(AppRouter.login);
+          context.go(AppRouter.roleSelection);
         }
       } catch (e) {
         if (mounted) {
@@ -902,48 +901,4 @@ class _DynamicProfileScreenState extends State<DynamicProfileScreen> {
   }
 }
 
-class _CircularProgressPainter extends CustomPainter {
-  final double progress;
-  final Color progressColor;
-  final Color backgroundColor;
 
-  _CircularProgressPainter({
-    required this.progress,
-    required this.progressColor,
-    required this.backgroundColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2;
-    const strokeWidth = 6.0;
-
-    final backgroundPaint = Paint()
-      ..color = backgroundColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawCircle(center, radius - strokeWidth / 2, backgroundPaint);
-
-    final progressPaint = Paint()
-      ..color = progressColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final sweepAngle = 2 * math.pi * progress;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
-      -math.pi / 2,
-      sweepAngle,
-      false,
-      progressPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_CircularProgressPainter oldDelegate) =>
-      oldDelegate.progress != progress;
-}

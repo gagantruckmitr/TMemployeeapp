@@ -1,4 +1,5 @@
 import '../core/config/api_config.dart';
+
 enum CallStatus {
   connected,
   callBack,
@@ -648,8 +649,8 @@ class DriverContact {
       return imagePath;
     }
     // Build full URL with base path
-    const baseUrl = '${ApiConfig.publicUrl}/';
-    return '$baseUrl$imagePath';
+    final baseUrl = ApiConfig.publicUrl;
+    return '$baseUrl/$imagePath';
   }
 
   // Factory method to create DriverContact from backlog API JSON (telehead API)

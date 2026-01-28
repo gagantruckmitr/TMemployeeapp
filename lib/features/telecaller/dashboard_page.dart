@@ -224,7 +224,9 @@ class _DashboardPageState extends State<DashboardPage>
       final callerId = int.tryParse(currentUser.id) ?? 1;
 
       // Use Laravel API - same as backlog_screen.dart
-      final url = ApiConfig.getLaravelApiUrl('withoutCallHistory?admin_id=$callerId');
+      final url = ApiConfig.getLaravelApiUrl(
+        'withoutCallHistory?admin_id=$callerId',
+      );
 
       print('🔍 Loading backlog count from Laravel API: $url');
 

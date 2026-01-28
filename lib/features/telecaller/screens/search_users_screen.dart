@@ -1,10 +1,10 @@
-import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../app/theme/app_theme.dart';
 import '../../../core/services/real_auth_service.dart';
+import '../../../core/config/api_config.dart';
 import '../../../models/smart_calling_models.dart';
 import '../widgets/driver_contact_card.dart';
 import '../widgets/search_filter_sheet.dart';
@@ -71,8 +71,7 @@ class _SearchUsersScreenState extends State<SearchUsersScreen> {
       }
 
       // Build URL with search query
-      const baseUrl = 'https://truckmitr.com/api/telehead';
-      final uri = Uri.parse('$baseUrl/payments/search').replace(queryParameters: {'search': query.trim()});
+      final uri = Uri.parse(ApiConfig.paymentsSearchApi).replace(queryParameters: {'search': query.trim()});
 
       print('🔍 Searching users: $uri');
 

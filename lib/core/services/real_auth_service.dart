@@ -474,6 +474,38 @@ class RealAuthService {
     await prefs.setBool(_keyRememberMe, false);
   }
 
+  // Update user role
+  Future<void> updateUserRole(String role) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('selected_user_role', role);
+
+    // Update current user role if available
+    if (_currentUser != null) {
+      _currentUser = UserProfile(
+        id: _currentUser!.id,
+        name: _currentUser!.name,
+        email: _currentUser!.email,
+        mobile: _currentUser!.mobile,
+        role: role,
+        createdAt: _currentUser!.createdAt,
+        updatedAt: DateTime.now().toIso8601String(),
+        employeeDetails: _currentUser!.employeeDetails,
+      );
+    }
+  }
+
+  // Get saved user role
+  Future<String?> getSavedUserRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('selected_user_role');
+  }
+
+  // Clear saved user role (for testing)
+  Future<void> clearSavedUserRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('selected_user_role');
+  }
+
   // Update user session
   Future<void> _updateUserSession(UserProfile user) async {
     final prefs = await SharedPreferences.getInstance();
@@ -554,6 +586,7 @@ class RealAuthService {
   bool isTelecaller() => _currentUser?.role == 'telecaller';
   bool isAdmin() => _currentUser?.role == 'admin';
   bool isManager() => _currentUser?.role == 'manager';
+  bool isMargdarshak() => _currentUser?.role == 'margdarshak';
 }
 
 // User Profile Model

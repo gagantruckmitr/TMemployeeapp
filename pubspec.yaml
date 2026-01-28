@@ -46,6 +46,17 @@ dependencies:
   # Navigation
   go_router: ^14.2.7
   
+  # Location & GPS
+  geolocator: ^12.0.0
+  geocoding: ^3.0.0
+  permission_handler: ^11.3.1
+  
+  # Image handling
+  image_picker: ^1.0.7
+  
+  # JSON serialization
+  json_annotation: ^4.8.1
+  
   # Icons
   cupertino_icons: ^1.0.8
   flutter_svg: ^2.0.10+1
@@ -56,7 +67,6 @@ dependencies:
   # Screenshot functionality
   screenshot: ^3.0.0
   path_provider: ^2.1.4
-  permission_handler: ^11.3.1
   
   # URL launcher for phone calls
   url_launcher: ^6.3.0
@@ -78,23 +88,24 @@ dependencies:
   
   # State Management for Attendance
   flutter_riverpod: ^2.4.9
-  
-  # Location services for Attendance
-  geolocator: ^12.0.0
-  geocoding: ^3.0.0
-  
-  # Camera for Attendance Selfie
-  image_picker: ^1.0.7
+  flutter_map: ^8.2.2
+
+  latlong2: ^0.9.1
+
+  # Firebase & Notifications
+  firebase_core: ^3.10.1
+  firebase_messaging: ^15.2.1
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
+  
+  # JSON code generation
+  build_runner: ^2.4.7
+  json_serializable: ^6.7.1
+  
+  # Linting
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.13.1
 
