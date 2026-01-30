@@ -4,9 +4,12 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import '../../services/margdarshak_api_service.dart';
 
 class AddShopScreen extends StatefulWidget {
   const AddShopScreen({super.key});
@@ -20,6 +23,9 @@ class _AddShopScreenState extends State<AddShopScreen>
   final _formKey = GlobalKey<FormState>();
   final _pageController = PageController();
   late TabController _tabController;
+
+  // API Service
+  final _apiService = MargdarshakApiService();
 
   // Form Controllers
   final _shopNameController = TextEditingController();
@@ -48,6 +54,7 @@ class _AddShopScreenState extends State<AddShopScreen>
   List<File> _shopImages = [];
   bool _consentGiven = false;
   bool _isLoading = false;
+  bool _isFetchingPincode = false;
 
   // OTP & Verification State
   bool _isVerifyingOtp = false;
@@ -60,37 +67,10 @@ class _AddShopScreenState extends State<AddShopScreen>
   double? _longitude;
   bool _isLocationCaptured = false;
 
-  // Indian States List
-  final List<String> _indianStates = [
-    'Andhra Pradesh',
-    'Arunachal Pradesh',
-    'Assam',
-    'Bihar',
-    'Chhattisgarh',
-    'Goa',
-    'Gujarat',
-    'Haryana',
-    'Himachal Pradesh',
-    'Jharkhand',
-    'Karnataka',
-    'Kerala',
-    'Madhya Pradesh',
-    'Maharashtra',
-    'Manipur',
-    'Meghalaya',
-    'Mizoram',
-    'Nagaland',
-    'Odisha',
-    'Punjab',
-    'Rajasthan',
-    'Sikkim',
-    'Tamil Nadu',
-    'Telangana',
-    'Tripura',
-    'Uttar Pradesh',
-    'Uttarakhand',
-    'West Bengal',
-  ];
+  // States Data from API
+  List<Map<String, dynamic>> _statesData = [];
+  String? _selectedStateId;
+  bool _isLoadingStates = false;
 
   final List<String> _dhabaServices = [
     'Food Service',
@@ -118,6 +98,98 @@ class _AddShopScreenState extends State<AddShopScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+    _loadStates();
+  }
+
+  Future<void> _loadStates() async {
+    setState(() => _isLoadingStates = true);
+    try {
+      final states = await _apiService.getStates();
+      setState(() {
+        _statesData = states;
+        _isLoadingStates = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingStates = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load states: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _fetchPincodeData(String pincode) async {
+    if (pincode.length != 6) return;
+
+    setState(() => _isFetchingPincode = true);
+
+    try {
+      final url = Uri.parse('https://api.postalpincode.in/pincode/$pincode');
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        if (data is List && data.isNotEmpty) {
+          final result = data[0];
+          
+          if (result['Status'] == 'Success' && result['PostOffice'] != null) {
+            final postOffices = result['PostOffice'] as List;
+            
+            if (postOffices.isNotEmpty) {
+              final firstOffice = postOffices[0];
+              final district = firstOffice['District'] as String?;
+              
+              if (district != null && district.isNotEmpty) {
+                setState(() {
+                  _districtController.text = district;
+                  _isFetchingPincode = false;
+                });
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('District auto-filled: $district'),
+                      backgroundColor: const Color(0xFF34C759),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+                return;
+              }
+            }
+          }
+        }
+      }
+      
+      // If we reach here, pincode lookup failed
+      setState(() => _isFetchingPincode = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid pincode or district not found'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isFetchingPincode = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to fetch pincode data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -244,6 +316,7 @@ class _AddShopScreenState extends State<AddShopScreen>
                   icon: Icons.person_rounded,
                   iconColor: const Color(0xFF34C759),
                   isFirst: true,
+                  isDisabled: _isPhoneVerified, // Disable after verification
                 ),
                 _buildAppleDivider(),
                 _buildAppleStateDropdown(),
@@ -387,6 +460,182 @@ class _AddShopScreenState extends State<AddShopScreen>
     );
   }
 
+  Widget _buildPincodeField() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF9500).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.pin_drop_rounded,
+              color: Color(0xFFFF9500),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pincode',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF8E8E93),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: _pincodeController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1C1C1E),
+                  ),
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (value) {
+                    if (value.length == 6) {
+                      _fetchPincodeData(value);
+                    } else if (value.length < 6) {
+                      // Clear district if pincode is incomplete
+                      setState(() {
+                        _districtController.clear();
+                      });
+                    }
+                  },
+                  decoration: InputDecoration(
+                    hintText: '6-digit pincode',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                    counterText: '',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isFetchingPincode)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation(Color(0xFFFF9500)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDistrictField() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: _districtController.text.isNotEmpty 
+            ? const Color(0xFF34C759).withValues(alpha: 0.05)
+            : Colors.white,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF5856D6).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.location_city_rounded,
+              color: Color(0xFF5856D6),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'District',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF8E8E93),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (_districtController.text.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF34C759),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Auto-filled',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: _districtController,
+                  enabled: _districtController.text.isEmpty, // Allow manual entry if not auto-filled
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: _districtController.text.isNotEmpty
+                        ? const Color(0xFF34C759)
+                        : const Color(0xFF1C1C1E),
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Enter pincode to auto-fill',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_districtController.text.isNotEmpty)
+            const Icon(
+              Icons.check_circle,
+              color: Color(0xFF34C759),
+              size: 20,
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAppleShopTypeCard(
     String type,
     String label,
@@ -394,8 +643,10 @@ class _AddShopScreenState extends State<AddShopScreen>
     Color color,
   ) {
     final isSelected = _selectedShopType == type;
+    final isDisabled = _isPhoneVerified; // Disable after phone verification
+    
     return GestureDetector(
-      onTap: () {
+      onTap: isDisabled ? null : () {
         HapticFeedback.lightImpact();
         setState(() {
           _selectedShopType = type;
@@ -407,13 +658,17 @@ class _AddShopScreenState extends State<AddShopScreen>
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: isSelected ? color : Colors.white,
+          color: isDisabled 
+              ? Colors.grey.shade100 
+              : (isSelected ? color : Colors.white),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? color : const Color(0xFFE5E5EA),
-            width: isSelected ? 2 : 1,
+            color: isDisabled
+                ? Colors.grey.shade300
+                : (isSelected ? color : const Color(0xFFE5E5EA)),
+            width: isSelected && !isDisabled ? 2 : 1,
           ),
-          boxShadow: isSelected
+          boxShadow: isSelected && !isDisabled
               ? [
                   BoxShadow(
                     color: color.withValues(alpha: 0.3),
@@ -431,16 +686,32 @@ class _AddShopScreenState extends State<AddShopScreen>
         ),
         child: Column(
           children: [
-            Icon(icon, size: 32, color: isSelected ? Colors.white : color),
+            Icon(
+              icon, 
+              size: 32, 
+              color: isDisabled
+                  ? Colors.grey.shade400
+                  : (isSelected ? Colors.white : color),
+            ),
             const SizedBox(height: 10),
             Text(
               label,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : const Color(0xFF1C1C1E),
+                color: isDisabled
+                    ? Colors.grey.shade500
+                    : (isSelected ? Colors.white : const Color(0xFF1C1C1E)),
               ),
             ),
+            if (isDisabled) ...[
+              const SizedBox(height: 4),
+              Icon(
+                Icons.lock_rounded,
+                size: 14,
+                color: Colors.grey.shade400,
+              ),
+            ],
           ],
         ),
       ),
@@ -462,10 +733,12 @@ class _AddShopScreenState extends State<AddShopScreen>
     required Color iconColor,
     bool isFirst = false,
     bool isLast = false,
+    bool isDisabled = false, // Add disabled parameter
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
+        color: isDisabled ? Colors.grey.shade50 : Colors.white,
         borderRadius: BorderRadius.vertical(
           top: isFirst ? const Radius.circular(16) : Radius.zero,
           bottom: isLast ? const Radius.circular(16) : Radius.zero,
@@ -497,10 +770,11 @@ class _AddShopScreenState extends State<AddShopScreen>
                 const SizedBox(height: 4),
                 TextField(
                   controller: controller,
-                  style: const TextStyle(
+                  enabled: !isDisabled,
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF1C1C1E),
+                    color: isDisabled ? Colors.grey.shade600 : const Color(0xFF1C1C1E),
                   ),
                   decoration: InputDecoration(
                     hintText: placeholder,
@@ -516,6 +790,12 @@ class _AddShopScreenState extends State<AddShopScreen>
               ],
             ),
           ),
+          if (isDisabled)
+            Icon(
+              Icons.lock_rounded,
+              color: Colors.grey.shade400,
+              size: 18,
+            ),
         ],
       ),
     );
@@ -586,8 +866,13 @@ class _AddShopScreenState extends State<AddShopScreen>
   }
 
   Widget _buildAppleStateDropdown() {
+    final isDisabled = _isPhoneVerified; // Disable after phone verification
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDisabled ? Colors.grey.shade50 : Colors.white,
+      ),
       child: Row(
         children: [
           Container(
@@ -617,7 +902,7 @@ class _AddShopScreenState extends State<AddShopScreen>
                 ),
                 const SizedBox(height: 4),
                 GestureDetector(
-                  onTap: () => _showStatePickerModal(),
+                  onTap: isDisabled ? null : () => _showStatePickerModal(),
                   child: Row(
                     children: [
                       Expanded(
@@ -635,9 +920,9 @@ class _AddShopScreenState extends State<AddShopScreen>
                         ),
                       ),
                       Icon(
-                        Icons.chevron_right_rounded,
+                        isDisabled ? Icons.lock_rounded : Icons.chevron_right_rounded,
                         color: Colors.grey.shade400,
-                        size: 22,
+                        size: isDisabled ? 18 : 22,
                       ),
                     ],
                   ),
@@ -656,8 +941,9 @@ class _AddShopScreenState extends State<AddShopScreen>
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+      decoration: BoxDecoration(
+        color: _isPhoneVerified ? Colors.grey.shade50 : Colors.white,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
       ),
       child: Row(
         children: [
@@ -689,12 +975,15 @@ class _AddShopScreenState extends State<AddShopScreen>
                 const SizedBox(height: 4),
                 TextField(
                   controller: _mobileController,
+                  enabled: !_isPhoneVerified, // Disable after verification
                   keyboardType: TextInputType.phone,
                   maxLength: 10,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF1C1C1E),
+                    color: _isPhoneVerified 
+                        ? Colors.grey.shade600 
+                        : const Color(0xFF1C1C1E),
                   ),
                   onChanged: (value) => setState(() {}),
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -739,17 +1028,27 @@ class _AddShopScreenState extends State<AddShopScreen>
                 .fadeIn(duration: 300.ms)
                 .scale(begin: const Offset(0.9, 0.9)),
           if (_isPhoneVerified)
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                color: Color(0xFF34C759),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_rounded,
-                color: Colors.white,
-                size: 16,
-              ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF34C759),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.lock_rounded,
+                  color: Colors.grey.shade400,
+                  size: 18,
+                ),
+              ],
             ),
         ],
       ),
@@ -810,53 +1109,83 @@ class _AddShopScreenState extends State<AddShopScreen>
             Divider(height: 1, color: Colors.grey.shade200),
             // States List
             Expanded(
-              child: ListView.builder(
-                itemCount: _indianStates.length,
-                itemBuilder: (context, index) {
-                  final state = _indianStates[index];
-                  final isSelected = _stateController.text == state;
-                  return ListTile(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _stateController.text = state);
-                      Navigator.pop(context);
-                    },
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF007AFF).withValues(alpha: 0.1)
-                            : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.location_on_rounded,
-                        color: isSelected
-                            ? const Color(0xFF007AFF)
-                            : Colors.grey.shade600,
-                        size: 20,
-                      ),
-                    ),
-                    title: Text(
-                      state,
-                      style: TextStyle(
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: isSelected
-                            ? const Color(0xFF007AFF)
-                            : const Color(0xFF1C1C1E),
-                      ),
-                    ),
-                    trailing: isSelected
-                        ? const Icon(
-                            Icons.check_circle,
-                            color: Color(0xFF007AFF),
-                          )
-                        : null,
-                  );
-                },
-              ),
+              child: _isLoadingStates
+                  ? const Center(child: CircularProgressIndicator())
+                  : _statesData.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No states available',
+                                style: TextStyle(color: Colors.grey.shade600),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _loadStates();
+                                },
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _statesData.length,
+                          itemBuilder: (context, index) {
+                            final state = _statesData[index];
+                            final stateName = state['name'] as String;
+                            final stateId = state['id'].toString();
+                            final isSelected = _selectedStateId == stateId;
+                            
+                            return ListTile(
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                setState(() {
+                                  _stateController.text = stateName;
+                                  _selectedStateId = stateId;
+                                });
+                                Navigator.pop(context);
+                              },
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? const Color(0xFF007AFF).withValues(alpha: 0.1)
+                                      : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.location_on_rounded,
+                                  color: isSelected
+                                      ? const Color(0xFF007AFF)
+                                      : Colors.grey.shade600,
+                                  size: 20,
+                                ),
+                              ),
+                              title: Text(
+                                stateName,
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? const Color(0xFF007AFF)
+                                      : const Color(0xFF1C1C1E),
+                                ),
+                              ),
+                              trailing: isSelected
+                                  ? const Icon(
+                                      Icons.check_circle,
+                                      color: Color(0xFF007AFF),
+                                    )
+                                  : null,
+                            );
+                          },
+                        ),
             ),
           ],
         ),
@@ -864,22 +1193,100 @@ class _AddShopScreenState extends State<AddShopScreen>
     );
   }
 
-  void _showOtpVerificationModal() {
-    // Clear previous OTP
-    for (var controller in _otpControllers) {
-      controller.clear();
+  void _showOtpVerificationModal() async {
+    // Validate required fields
+    if (_ownerNameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter owner name'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
     }
-    _otpResendTimer = 30;
 
-    // Start resend timer
-    _resendTimer?.cancel();
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_otpResendTimer > 0) {
-        setState(() => _otpResendTimer--);
+    if (_selectedStateId == null || _stateController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a state'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_mobileController.text.length != 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid 10-digit mobile number'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Show loading
+    setState(() => _isLoading = true);
+
+    try {
+      // Send OTP via API - use different endpoint based on shop type
+      final response = _selectedShopType == 'dhaba'
+          ? await _apiService.sendDhabaRegistrationOtp(
+              mobile: _mobileController.text,
+              name: _ownerNameController.text,
+              stateId: _selectedStateId!,
+            )
+          : await _apiService.sendPunctureRegistrationOtp(
+              mobile: _mobileController.text,
+              name: _ownerNameController.text,
+              stateId: _selectedStateId!,
+            );
+
+      setState(() => _isLoading = false);
+
+      if (response['success'] == true) {
+        // Clear previous OTP
+        for (var controller in _otpControllers) {
+          controller.clear();
+        }
+        _otpResendTimer = 30;
+
+        // Start resend timer
+        _resendTimer?.cancel();
+        _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (_otpResendTimer > 0) {
+            setState(() => _otpResendTimer--);
+          } else {
+            timer.cancel();
+          }
+        });
+
+        // Show OTP modal
+        _showOtpModal();
       } else {
-        timer.cancel();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response['message'] ?? 'Failed to send OTP'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
-    });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending OTP: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showOtpModal() {
 
     showModalBottomSheet(
       context: context,
@@ -1125,9 +1532,42 @@ class _AddShopScreenState extends State<AddShopScreen>
                 ),
                 GestureDetector(
                   onTap: _otpResendTimer == 0
-                      ? () {
+                      ? () async {
                           setModalState(() => _otpResendTimer = 30);
-                          // Resend OTP logic here
+                          
+                          // Resend OTP logic - use correct API based on shop type
+                          try {
+                            final response = _selectedShopType == 'dhaba'
+                                ? await _apiService.sendDhabaRegistrationOtp(
+                                    mobile: _mobileController.text,
+                                    name: _ownerNameController.text,
+                                    stateId: _selectedStateId!,
+                                  )
+                                : await _apiService.sendPunctureRegistrationOtp(
+                                    mobile: _mobileController.text,
+                                    name: _ownerNameController.text,
+                                    stateId: _selectedStateId!,
+                                  );
+                            
+                            if (response['success'] == true && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('OTP resent successfully'),
+                                  backgroundColor: Color(0xFF34C759),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to resend OTP: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
                         }
                       : null,
                   child: Text(
@@ -1152,55 +1592,111 @@ class _AddShopScreenState extends State<AddShopScreen>
   }
 
   void _verifyOtp(StateSetter setModalState) async {
-    setModalState(() => _isVerifyingOtp = true);
-
-    // Simulate OTP verification
-    await Future.delayed(const Duration(seconds: 2));
-
-    // For demo, accept any 6-digit OTP
-    setModalState(() => _isVerifyingOtp = false);
-
-    setState(() {
-      _isPhoneVerified = true;
-    });
-
-    // Close keyboard before closing modal
-    FocusManager.instance.primaryFocus?.unfocus();
-
-    // Small delay to ensure keyboard closes before modal dismisses
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    if (mounted) {
-      Navigator.pop(context);
+    final otpCode = _getOtpString();
+    
+    if (otpCode.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter complete 6-digit OTP'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
     }
 
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_rounded,
-                color: Color(0xFF34C759),
-                size: 16,
-              ),
+    setModalState(() => _isVerifyingOtp = true);
+
+    try {
+      // Verify OTP via API
+      final response = await _apiService.verifyDhabaRegistrationOtp(
+        mobile: _mobileController.text,
+        otp: otpCode,
+      );
+
+      setModalState(() => _isVerifyingOtp = false);
+
+      if (response['success'] == true) {
+        setState(() {
+          _isPhoneVerified = true;
+        });
+
+        // Close keyboard before closing modal
+        FocusManager.instance.primaryFocus?.unfocus();
+
+        // Small delay to ensure keyboard closes before modal dismisses
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        if (mounted) {
+          Navigator.pop(context);
+        }
+
+        // Show success message with user info
+        final userData = response['user'];
+        final uniqueId = userData?['unique_id'] ?? '';
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check_rounded,
+                        color: Color(0xFF34C759),
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text('Registration successful!'),
+                    ),
+                  ],
+                ),
+                if (uniqueId.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Unique ID: $uniqueId',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(width: 12),
-            const Text('Phone number verified successfully!'),
-          ],
-        ),
-        backgroundColor: const Color(0xFF34C759),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
+            backgroundColor: const Color(0xFF34C759),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response['message'] ?? 'Invalid OTP'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setModalState(() => _isVerifyingOtp = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error verifying OTP: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildLocationTab() {
@@ -1237,21 +1733,9 @@ class _AddShopScreenState extends State<AddShopScreen>
                   isFirst: true,
                 ),
                 _buildAppleDivider(),
-                _buildAppleTextField(
-                  controller: _districtController,
-                  label: 'District',
-                  placeholder: 'Enter district name',
-                  icon: Icons.location_city_rounded,
-                  iconColor: const Color(0xFF5856D6),
-                ),
+                _buildPincodeField(), // Pincode field with auto-fetch
                 _buildAppleDivider(),
-                _buildAppleTextField(
-                  controller: _pincodeController,
-                  label: 'Pincode',
-                  placeholder: '6-digit pincode',
-                  icon: Icons.pin_drop_rounded,
-                  iconColor: const Color(0xFFFF9500),
-                ),
+                _buildDistrictField(), // District field (auto-filled)
                 _buildAppleDivider(),
                 _buildAppleTextField(
                   controller: _landmarkController,

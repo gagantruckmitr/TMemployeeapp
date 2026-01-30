@@ -8,15 +8,15 @@ class ApiConfig {
   // static const String publicUrl = 'http://$serverIp/TMemployeeApp/public';
 
   // PRODUCTION: Plesk Server (Active)
-  static const String domain = 'truckmitr.com';
-  // static const String domain = 'devtruckmitr.in';
+  // static const String domain = 'truckmitr.com';
+  static const String domain = 'devtruckmitr.in';
   static const String baseUrl = 'https://$domain/truckmitr-app/api';
   static const String serverIp = domain;
   static const String publicUrl = 'https://$domain/public';
   
   // Laravel API Base URLs
-  static const String laravelApiBase = 'https://truckmitr.com/api';
-  // static const String laravelApiBase = 'https://devtruckmitr.in/api';
+  // static const String laravelApiBase = 'https://truckmitr.com/api';
+  static const String laravelApiBase = 'https://$domain/api';
   static const String teleheadApiBase = 'https://$domain/api/telehead';
   static const String storageBase = 'https://$domain/storage/app/public';
   
@@ -29,6 +29,7 @@ class ApiConfig {
   
   // Laravel API Endpoints (Telehead)
   static const String loginApi = '$teleheadApiBase/login';
+  static const String getStates = '$laravelApiBase/states';
   static const String forgotPasswordApi = '$teleheadApiBase/forgot-password';
   static const String resetPasswordApi = '$teleheadApiBase/reset-password';
   static const String agentJobsApi = '$teleheadApiBase/agent-jobs';

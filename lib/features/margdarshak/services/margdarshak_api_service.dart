@@ -271,4 +271,158 @@ class MargdarshakApiService {
       rethrow;
     }
   }
+
+  /// Get states list
+  Future<List<Map<String, dynamic>>> getStates() async {
+    try {
+      final url = Uri.parse(ApiConfig.getStates);
+
+      print('🔵 Fetching states...');
+
+      final response = await http.get(url).timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ States fetched successfully');
+        return List<Map<String, dynamic>>.from(data['data'] ?? []);
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch states: $e');
+      rethrow;
+    }
+  }
+
+  /// Send OTP for dhaba registration
+  Future<Map<String, dynamic>> sendDhabaRegistrationOtp({
+    required String mobile,
+    required String name,
+    required String stateId,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/add-dhaba');
+
+      print('🔵 Sending dhaba registration OTP...');
+      print('   Mobile: $mobile');
+      print('   Name: $name');
+      print('   State ID: $stateId');
+
+      final response = await http
+          .post(
+            url,
+            headers: _authService.getAuthHeaders(),
+            body: json.encode({
+              'mobile': mobile,
+              'name': name,
+              'states': stateId,
+            }),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Send OTP Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ OTP sent successfully');
+        }
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to send OTP: $e');
+      rethrow;
+    }
+  }
+
+  /// Send OTP for puncture shop registration
+  Future<Map<String, dynamic>> sendPunctureRegistrationOtp({
+    required String mobile,
+    required String name,
+    required String stateId,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/add-puncture');
+
+      print('🔵 Sending puncture registration OTP...');
+      print('   Mobile: $mobile');
+      print('   Name: $name');
+      print('   State ID: $stateId');
+
+      final response = await http
+          .post(
+            url,
+            headers: _authService.getAuthHeaders(),
+            body: json.encode({
+              'mobile': mobile,
+              'name': name,
+              'states': stateId,
+            }),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Send OTP Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ OTP sent successfully');
+        }
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to send OTP: $e');
+      rethrow;
+    }
+  }
+
+  /// Verify OTP for dhaba registration
+  Future<Map<String, dynamic>> verifyDhabaRegistrationOtp({
+    required String mobile,
+    required String otp,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/verifyOtp');
+
+      print('🔵 Verifying OTP...');
+      print('   Mobile: $mobile');
+      print('   OTP: $otp');
+
+      final response = await http
+          .post(
+            url,
+            headers: _authService.getAuthHeaders(),
+            body: json.encode({
+              'mobile': mobile,
+              'otp': otp,
+            }),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Verify OTP Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ OTP verified successfully');
+        }
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to verify OTP: $e');
+      rethrow;
+    }
+  }
 }

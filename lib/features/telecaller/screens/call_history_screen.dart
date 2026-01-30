@@ -536,7 +536,7 @@ class _CallHistoryScreenState extends State<CallHistoryScreen>
 
       // Call the new API endpoint
       final url =
-          '${ApiConfig.laravelApiBase}/call-history/$assignedToId';
+          '${ApiConfig.laravelApiBase}/$assignedToId';
 
       final response = await http
           .get(
