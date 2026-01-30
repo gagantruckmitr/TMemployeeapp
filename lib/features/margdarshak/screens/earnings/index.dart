@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../navigation/index.dart';
-import '../../providers/profile_provider.dart';
-import '../bank-details/index.dart';
 
 class MargdarshakEarningsPage extends ConsumerStatefulWidget {
   const MargdarshakEarningsPage({super.key});
@@ -359,21 +357,12 @@ class _MargdarshakEarningsPageState
     final summary = _earningsData['summary'] ?? {};
     final eligibleAmount = summary['eligibleEarnings'] ?? 0;
     final threshold = _earningsData['payoutThreshold'] ?? 500;
-    final canRequestPayout = eligibleAmount >= threshold;
-    final bankDetails = ref.watch(profileProvider).bankDetails;
-    final hasBankDetails = bankDetails.isValid || bankDetails.upiId.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: canRequestPayout
-              ? const Color(0xFF4CAF50).withValues(alpha: 0.3)
-              : Colors.grey.shade200,
-          width: 1,
-        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -401,7 +390,7 @@ class _MargdarshakEarningsPageState
               ),
               const SizedBox(width: 12),
               const Text(
-                'Payout Request',
+                'Payout Information',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -410,6 +399,33 @@ class _MargdarshakEarningsPageState
               ),
             ],
           ),
+          const SizedBox(height: 16),
+
+          // Info Banner
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Payouts are processed automatically by admin',
+                    style: TextStyle(
+                      color: Color(0xFF1565C0),
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           const SizedBox(height: 16),
 
           // Progress Bar
@@ -438,7 +454,7 @@ class _MargdarshakEarningsPageState
                 value: (eligibleAmount / threshold).clamp(0.0, 1.0),
                 backgroundColor: Colors.grey.shade200,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  canRequestPayout
+                  eligibleAmount >= threshold
                       ? const Color(0xFF4CAF50)
                       : const Color(0xFFFF9800),
                 ),
@@ -446,139 +462,47 @@ class _MargdarshakEarningsPageState
             ],
           ),
 
-          const SizedBox(height: 16),
-
-          // Bank Details Preview
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  hasBankDetails
-                      ? Icons.check_circle_rounded
-                      : Icons.error_rounded,
-                  color: hasBankDetails
-                      ? const Color(0xFF4CAF50)
-                      : Colors.orange,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        hasBankDetails
-                            ? 'Payout Account'
-                            : 'Missing Bank Details',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF2D2D5F),
-                        ),
-                      ),
-                      Text(
-                        hasBankDetails
-                            ? (bankDetails.upiId.isNotEmpty
-                                  ? 'UPI: ${bankDetails.upiId}'
-                                  : 'Bank: ${bankDetails.bankName} - ${bankDetails.accountNumber.substring(bankDetails.accountNumber.length > 4 ? bankDetails.accountNumber.length - 4 : 0)}')
-                            : 'Please add bank details for withdrawal',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const BankDetailsScreen(),
-                      ),
-                    );
-                  },
-                  child: Text(hasBankDetails ? 'Change' : 'Add'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          if (canRequestPayout) ...[
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: hasBankDetails
-                    ? () => _showPayoutRequestModal()
-                    : () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please add bank details first'),
-                          ),
-                        );
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const BankDetailsScreen(),
-                          ),
-                        );
-                      },
-                icon: const Icon(Icons.request_quote_rounded),
-                label: const Text('Request Payout'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: hasBankDetails
-                      ? const Color(0xFF4CAF50)
-                      : Colors.grey,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-          ] else ...[
+          if (_earningsData['nextPayoutDate'] != null) ...[
+            const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.shade50,
+                color: Colors.green.shade50,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
                   Icon(
-                    Icons.info_outline_rounded,
-                    color: Colors.orange.shade600,
+                    Icons.calendar_today_rounded,
+                    color: Colors.green.shade700,
                     size: 20,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      'You need ₹${threshold - eligibleAmount} more to request payout',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange.shade700,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Next Scheduled Payout',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF2D2D5F),
+                          ),
+                        ),
+                        Text(
+                          _earningsData['nextPayoutDate'] ?? 'N/A',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
-
-          if (_earningsData['nextPayoutDate'] != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              'Next scheduled payout: ${_earningsData['nextPayoutDate']}',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
           ],
         ],
@@ -924,15 +848,6 @@ class _MargdarshakEarningsPageState
       builder: (context) => const EarningsRulesModal(),
     );
   }
-
-  void _showPayoutRequestModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => const PayoutRequestModal(),
-    );
-  }
 }
 
 class EarningsRulesModal extends StatelessWidget {
@@ -1006,9 +921,10 @@ class EarningsRulesModal extends StatelessWidget {
 
                   _buildRuleSection('Payout Process', [
                     'Minimum payout threshold: ₹500',
-                    'Payouts processed twice a month (1st and 15th)',
-                    'Request payout when threshold is reached',
+                    'Payouts processed automatically by admin',
+                    'Payouts scheduled twice a month (1st and 15th)',
                     'Earnings verified before payout approval',
+                    'Payment sent to registered bank account/UPI',
                   ]),
 
                   const SizedBox(height: 24),
@@ -1017,7 +933,39 @@ class EarningsRulesModal extends StatelessWidget {
                     'UPI (Instant transfer)',
                     'Bank transfer (1-2 business days)',
                     'Update payment details in profile settings',
+                    'Ensure bank details are correct to avoid delays',
                   ]),
+
+                  const SizedBox(height: 24),
+
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: Colors.blue.shade700,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Note: Payouts are processed automatically by admin. You cannot request payouts manually.',
+                            style: TextStyle(
+                              color: Color(0xFF1565C0),
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
                   const SizedBox(height: 20),
                 ],
@@ -1076,341 +1024,5 @@ class EarningsRulesModal extends StatelessWidget {
             .toList(),
       ],
     );
-  }
-}
-
-class PayoutRequestModal extends StatefulWidget {
-  const PayoutRequestModal({super.key});
-
-  @override
-  State<PayoutRequestModal> createState() => _PayoutRequestModalState();
-}
-
-class _PayoutRequestModalState extends State<PayoutRequestModal> {
-  String _selectedMethod = 'upi';
-  final _upiController = TextEditingController();
-  final _accountController = TextEditingController();
-  final _ifscController = TextEditingController();
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _upiController.dispose();
-    _accountController.dispose();
-    _ifscController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.8,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          // Handle
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                const Text(
-                  'Request Payout',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2D2D5F),
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
-            ),
-          ),
-
-          // Content
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Amount Info
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.account_balance_wallet_rounded,
-                          color: Color(0xFF4CAF50),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Eligible Amount',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF4CAF50),
-                                ),
-                              ),
-                              Text(
-                                '₹1,890',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF4CAF50),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Payment Method Selection
-                  const Text(
-                    'Payment Method',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D2D5F),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildPaymentMethodOption(
-                          'upi',
-                          'UPI',
-                          Icons.payment_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildPaymentMethodOption(
-                          'bank',
-                          'Bank Transfer',
-                          Icons.account_balance_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Payment Details Form
-                  if (_selectedMethod == 'upi') ...[
-                    _buildTextField(
-                      controller: _upiController,
-                      label: 'UPI ID',
-                      hint: 'Enter your UPI ID',
-                      icon: Icons.payment_rounded,
-                    ),
-                  ] else ...[
-                    _buildTextField(
-                      controller: _accountController,
-                      label: 'Account Number',
-                      hint: 'Enter account number',
-                      icon: Icons.account_balance_rounded,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      controller: _ifscController,
-                      label: 'IFSC Code',
-                      hint: 'Enter IFSC code',
-                      icon: Icons.code_rounded,
-                    ),
-                  ],
-
-                  const SizedBox(height: 32),
-
-                  // Submit Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handlePayoutRequest,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text(
-                              'Request Payout',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentMethodOption(String value, String label, IconData icon) {
-    final isSelected = _selectedMethod == value;
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedMethod = value;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
-              : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade300,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              color: isSelected
-                  ? const Color(0xFF4CAF50)
-                  : Colors.grey.shade600,
-              size: 32,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected
-                    ? const Color(0xFF4CAF50)
-                    : Colors.grey.shade700,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF2D2D5F),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: hint,
-            prefixIcon: Icon(icon, color: Colors.grey.shade600),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 2),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _handlePayoutRequest() async {
-    setState(() => _isLoading = true);
-
-    try {
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 2));
-
-      if (!mounted) return;
-
-      Navigator.pop(context);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Payout request submitted successfully!'),
-          backgroundColor: Color(0xFF4CAF50),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() => _isLoading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
-    }
   }
 }

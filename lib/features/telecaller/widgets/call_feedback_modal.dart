@@ -1288,6 +1288,14 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
             controller: _remarksController,
             maxLines: 4,
             maxLength: 500,
+            inputFormatters: [
+              // Only allow alphanumeric, spaces, and common punctuation (no emojis)
+              FilteringTextInputFormatter.allow(
+                RegExp(
+                  r'[a-zA-Z0-9\s.,!?@#$%^&*()_+=\-\[\]{}|\\:;"<>/~`\n\r\t]',
+                ),
+              ),
+            ],
             decoration: InputDecoration(
               hintText: isRequired
                   ? 'Required: Add important details, feedback notes, or follow-up information...'
@@ -1463,7 +1471,10 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
               onTap: (canSubmit && !_isSubmitting) ? _submitFeedback : null,
               borderRadius: BorderRadius.circular(16),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 20,
+                  horizontal: 24,
+                ),
                 decoration: BoxDecoration(
                   gradient: (canSubmit && !_isSubmitting)
                       ? AppTheme.primaryGradient

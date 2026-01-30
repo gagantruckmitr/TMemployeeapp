@@ -117,7 +117,7 @@ class _AddShopScreenState extends State<AddShopScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -140,7 +140,7 @@ class _AddShopScreenState extends State<AddShopScreen>
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text(
-          'Add New Shop',
+          'Add New Partner',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Color(0xFF2D2D5F),
@@ -160,6 +160,7 @@ class _AddShopScreenState extends State<AddShopScreen>
           unselectedLabelColor: Colors.grey,
           indicatorColor: const Color(0xFFE65100),
           tabs: const [
+            Tab(text: 'Registration'),
             Tab(text: 'Basic Info'),
             Tab(text: 'Location'),
             Tab(text: 'Services'),
@@ -172,6 +173,7 @@ class _AddShopScreenState extends State<AddShopScreen>
         child: TabBarView(
           controller: _tabController,
           children: [
+            _buildRegistrationTab(),
             _buildBasicInfoTab(),
             _buildLocationTab(),
             _buildServicesTab(),
@@ -183,78 +185,14 @@ class _AddShopScreenState extends State<AddShopScreen>
     );
   }
 
-  Widget _buildBasicInfoTab() {
+  Widget _buildRegistrationTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Apple-style Header Card
-          // Container(
-          //   padding: const EdgeInsets.all(20),
-          //   decoration: BoxDecoration(
-          //     gradient: LinearGradient(
-          //       begin: Alignment.topLeft,
-          //       end: Alignment.bottomRight,
-          //       colors: [const Color(0xFF1C1C1E), const Color(0xFF2C2C2E)],
-          //     ),
-          //     borderRadius: BorderRadius.circular(20),
-          //     boxShadow: [
-          //       BoxShadow(
-          //         color: Colors.black.withValues(alpha: 0.2),
-          //         blurRadius: 20,
-          //         offset: const Offset(0, 10),
-          //       ),
-          //     ],
-          //   ),
-          //   // child: Row(
-          //   //   children: [
-          //   //     Container(
-          //   //       padding: const EdgeInsets.all(12),
-          //   //       decoration: BoxDecoration(
-          //   //         color: Colors.white.withValues(alpha: 0.1),
-          //   //         borderRadius: BorderRadius.circular(14),
-          //   //       ),
-          //   //       child: Icon(
-          //   //         _selectedShopType == 'dhaba'
-          //   //             ? Icons.restaurant_rounded
-          //   //             : Icons.build_rounded,
-          //   //         color: Colors.white,
-          //   //         size: 28,
-          //   //       ),
-          //   //     ),
-          //   //     const SizedBox(width: 16),
-          //   //     // Expanded(
-          //   //     //   child: Column(
-          //   //     //     crossAxisAlignment: CrossAxisAlignment.start,
-          //   //     //     children: [
-          //   //     //       const Text(
-          //   //     //         'New Shop Registration',
-          //   //     //         style: TextStyle(
-          //   //     //           color: Colors.white,
-          //   //     //           fontSize: 18,
-          //   //     //           fontWeight: FontWeight.w600,
-          //   //     //           letterSpacing: -0.5,
-          //   //     //         ),
-          //   //     //       ),
-          //   //     //       const SizedBox(height: 4),
-          //   //     //       Text(
-          //   //     //         'Fill in the details carefully',
-          //   //     //         style: TextStyle(
-          //   //     //           color: Colors.white.withValues(alpha: 0.7),
-          //   //     //           fontSize: 14,
-          //   //     //         ),
-          //   //     //       ),
-          //   //     //     ],
-          //   //     //   ),
-          //   //     // ),
-          //   //   ],
-          //   // ),
-          // ).animate().fadeIn(duration: 500.ms).slideY(begin: -0.2, end: 0),
-          // const SizedBox(height: 28),
-
-          // Shop Type Selection - Apple Style
-          _buildAppleStyleSectionTitle('Shop Type'),
+          // Partner Type Selection - Apple Style
+          _buildAppleStyleSectionTitle('Partner Type'),
           const SizedBox(height: 14),
           Row(
             children: [
@@ -280,8 +218,8 @@ class _AddShopScreenState extends State<AddShopScreen>
 
           const SizedBox(height: 28),
 
-          // Shop Details Section - Apple Style
-          _buildAppleStyleSectionTitle('Shop Details'),
+          // Owner Details Section - Apple Style
+          _buildAppleStyleSectionTitle('Owner Details'),
           const SizedBox(height: 14),
 
           // Apple-style grouped input card
@@ -300,20 +238,12 @@ class _AddShopScreenState extends State<AddShopScreen>
             child: Column(
               children: [
                 _buildAppleTextField(
-                  controller: _shopNameController,
-                  label: 'Shop Name',
-                  placeholder: 'Enter shop name',
-                  icon: Icons.store_rounded,
-                  iconColor: const Color(0xFFFF9500),
-                  isFirst: true,
-                ),
-                _buildAppleDivider(),
-                _buildAppleTextField(
                   controller: _ownerNameController,
                   label: 'Owner Name',
                   placeholder: 'Enter owner full name',
                   icon: Icons.person_rounded,
                   iconColor: const Color(0xFF34C759),
+                  isFirst: true,
                 ),
                 _buildAppleDivider(),
                 _buildAppleStateDropdown(),
@@ -380,6 +310,64 @@ class _AddShopScreenState extends State<AddShopScreen>
                 .fadeIn(duration: 400.ms)
                 .scale(begin: const Offset(0.95, 0.95)),
           ],
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms);
+  }
+
+  Widget _buildBasicInfoTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Partner Details Section - Apple Style
+          _buildAppleStyleSectionTitle('Partner Details'),
+          const SizedBox(height: 14),
+
+          // Apple-style grouped input card
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                _buildAppleTextFieldReadOnly(
+                  controller: _ownerNameController,
+                  label: 'Owner Name',
+                  icon: Icons.person_rounded,
+                  iconColor: const Color(0xFF34C759),
+                  isFirst: true,
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _shopNameController,
+                  label: 'Partner Name',
+                  placeholder: 'Enter partner name',
+                  icon: Icons.store_rounded,
+                  iconColor: const Color(0xFFFF9500),
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextFieldReadOnly(
+                  controller: _mobileController,
+                  label: 'Mobile Number',
+                  icon: Icons.phone_rounded,
+                  iconColor: const Color(0xFF5856D6),
+                  isLast: true,
+                ),
+              ],
+            ),
+          ),
 
           const SizedBox(height: 32),
         ],
@@ -527,6 +515,70 @@ class _AddShopScreenState extends State<AddShopScreen>
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppleTextFieldReadOnly({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required Color iconColor,
+    bool isFirst = false,
+    bool isLast = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.vertical(
+          top: isFirst ? const Radius.circular(16) : Radius.zero,
+          bottom: isLast ? const Radius.circular(16) : Radius.zero,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF8E8E93),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  controller.text.isEmpty ? 'Not set' : controller.text,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: controller.text.isEmpty 
+                        ? Colors.grey.shade400 
+                        : const Color(0xFF1C1C1E),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.lock_rounded,
+            color: Colors.grey.shade400,
+            size: 18,
           ),
         ],
       ),
@@ -1578,7 +1630,7 @@ class _AddShopScreenState extends State<AddShopScreen>
           _buildSectionTitle('Services Offered'),
           const SizedBox(height: 8),
           Text(
-            'Select all services available at this ${_selectedShopType == 'dhaba' ? 'dhaba' : 'puncture shop'}',
+            'Select all services available at this ${_selectedShopType == 'dhaba' ? 'dhaba' : 'puncture partner'}',
             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 16),
@@ -1763,10 +1815,10 @@ class _AddShopScreenState extends State<AddShopScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Photos Section
-          _buildSectionTitle('Shop Photos'),
+          _buildSectionTitle('Partner Photos'),
           const SizedBox(height: 8),
           Text(
-            'Add photos of shop front and signboard (minimum 2 photos required)',
+            'Add photos of partner front and signboard (minimum 2 photos required)',
             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 16),
@@ -1808,11 +1860,11 @@ class _AddShopScreenState extends State<AddShopScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildSummaryRow(
-                  'Shop Type',
+                  'Partner Type',
                   _selectedShopType == 'dhaba' ? 'Dhaba' : 'Puncture Shop',
                 ),
                 _buildSummaryRow(
-                  'Shop Name',
+                  'Partner Name',
                   _shopNameController.text.isEmpty
                       ? 'Not entered'
                       : _shopNameController.text,
@@ -1842,6 +1894,12 @@ class _AddShopScreenState extends State<AddShopScreen>
                       : '${_selectedServices.length} services',
                 ),
                 _buildSummaryRow('Photos', '${_shopImages.length} photos'),
+                _buildSummaryRow(
+                  'State',
+                  _stateController.text.isEmpty
+                      ? 'Not entered'
+                      : _stateController.text,
+                ),
                 _buildSummaryRow(
                   'GPS Location',
                   _latitude != null ? 'Captured' : 'Not captured',
@@ -2131,6 +2189,9 @@ class _AddShopScreenState extends State<AddShopScreen>
 
   // Missing Methods Implementation
   Widget _buildBottomNavigation() {
+    // Check if phone is verified for Registration tab (index 0)
+    final bool canProceedFromRegistration = _tabController.index != 0 || _isPhoneVerified;
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2165,10 +2226,10 @@ class _AddShopScreenState extends State<AddShopScreen>
           Expanded(
             flex: _tabController.index == 0 ? 1 : 1,
             child: ElevatedButton(
-              onPressed: _isLoading
+              onPressed: (_isLoading || !canProceedFromRegistration)
                   ? null
                   : () {
-                      if (_tabController.index < 3) {
+                      if (_tabController.index < 4) {
                         _tabController.animateTo(_tabController.index + 1);
                       } else {
                         _handleSubmit();
@@ -2190,7 +2251,7 @@ class _AddShopScreenState extends State<AddShopScreen>
                       ),
                     )
                   : Text(
-                      _tabController.index < 3 ? 'Next' : 'Submit Shop',
+                      _tabController.index < 4 ? 'Next' : 'Submit Partner',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
             ),
@@ -2459,12 +2520,12 @@ class _AddShopScreenState extends State<AddShopScreen>
               color: Color(0xFF4CAF50),
               size: 48,
             ),
-            title: const Text('Shop Submitted Successfully!'),
+            title: const Text('Partner Submitted Successfully!'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Your ${_selectedShopType == 'dhaba' ? 'dhaba' : 'puncture shop'} "${_shopNameController.text}" has been submitted for approval.',
+                  'Your ${_selectedShopType == 'dhaba' ? 'dhaba' : 'puncture partner'} "${_shopNameController.text}" has been submitted for approval.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
@@ -2482,7 +2543,7 @@ class _AddShopScreenState extends State<AddShopScreen>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '• Shop will be reviewed within 24-48 hours\n• You will receive notification on approval\n• Once approved, drivers can be linked to this shop',
+                        '• Partner will be reviewed within 24-48 hours\n• You will receive notification on approval\n• Once approved, drivers can be linked to this partner',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade700,
@@ -2497,7 +2558,7 @@ class _AddShopScreenState extends State<AddShopScreen>
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop(); // Close dialog
-                  Navigator.of(context).pop(); // Go back to shops page
+                  Navigator.of(context).pop(); // Go back to partners page
                 },
                 child: const Text('Continue'),
               ),
@@ -2513,7 +2574,7 @@ class _AddShopScreenState extends State<AddShopScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Failed to submit shop. Please try again.'),
+            content: Text('Failed to submit partner. Please try again.'),
             backgroundColor: Colors.red,
           ),
         );

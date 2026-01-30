@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import '../../../../core/services/real_auth_service.dart';
+import '../../services/margdarshak_auth_service.dart';
+import '../../services/margdarshak_api_service.dart';
 import '../../widgets/dashboard_stats_card.dart';
 import '../../widgets/quick_action_card.dart';
 import '../../widgets/recent_activity_card.dart';
@@ -10,7 +9,6 @@ import '../../widgets/duty_tracking_widget.dart';
 import '../add_shop/index.dart';
 import '../navigation/index.dart';
 import '../../services/notification_service.dart';
-import '../../utils/fcm_token_helper.dart';
 
 class MargdarshakDashboardPage extends StatefulWidget {
   const MargdarshakDashboardPage({super.key});
@@ -21,9 +19,12 @@ class MargdarshakDashboardPage extends StatefulWidget {
 }
 
 class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
+  final _authService = MargdarshakAuthService();
+  final _apiService = MargdarshakApiService();
+
   bool _isLoading = true;
   Map<String, dynamic> _dashboardData = {};
-  String? _fcmToken;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -34,59 +35,50 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
 
   Future<void> _initNotifications() async {
     await MargdarshakNotificationService.instance.initialize();
-    // Get FCM token for testing
-    _getFCMTokenForTesting();
-  }
-
-  Future<void> _getFCMTokenForTesting() async {
-    final token = await FCMTokenHelper.getTokenForTesting();
-    if (token != null) {
-      setState(() {
-        _fcmToken = token;
-      });
-    }
   }
 
   Future<void> _loadDashboardData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     try {
-      // Simulate API call - replace with actual API
-      await Future.delayed(const Duration(seconds: 1));
+      // Fetch real dashboard data from API
+      final data = await _apiService.getDashboardStats();
 
       setState(() {
-        _dashboardData = {
-          'territory': {'state': 'Maharashtra', 'districts': 3},
-          'shops': {'total': 45, 'dhabhas': 28, 'puncture': 17, 'pending': 5},
-          'drivers': {'today': 12, 'week': 78, 'month': 234, 'total': 1456},
-          'earnings': {
-            'today': 120,
-            'week': 780,
-            'month': 2340,
-            'pending': 450,
-          },
-          'teleActivity': {
-            'contacted': 156,
-            'notContacted': 89,
-            'followUp': 23,
-          },
-          'subscriptions': {
-            'active': 234,
-            'expired': 45,
-            'trial': 67,
-            'notSubscribed': 123,
-          },
-        };
+        _dashboardData = data;
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      print('❌ Dashboard error: $e');
+
+      // Fallback to demo data if API fails
+      setState(() {
+        _dashboardData = {
+          'territory': {
+            'state': _authService.currentUser?.stateName ?? 'N/A',
+            'districts': 3,
+          },
+          'shops': {'total': 0, 'dhabhas': 0, 'puncture': 0, 'pending': 0},
+          'drivers': {'today': 0, 'week': 0, 'month': 0, 'total': 0},
+          'earnings': {
+            'today': 0,
+            'week': 0,
+            'month': 0,
+            'pending': 0,
+          },
+        };
+        // _errorMessage = 'Using offline mode';
+        _isLoading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = RealAuthService.instance.currentUser;
+    final user = _authService.currentUser;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -106,8 +98,8 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
 
                       const SizedBox(height: 24),
 
-                      // Debug FCM Token (only in debug mode)
-                      // if (kDebugMode && _fcmToken != null) _buildFCMTokenDebug(),
+                      // Error message if any
+                      if (_errorMessage != null) _buildErrorBanner(),
 
                       // Duty Tracking
                       const DutyTrackingWidget(),
@@ -138,18 +130,39 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                 ),
               ),
       ),
-      // floatingActionButton: kDebugMode
-      //     ? FloatingActionButton.extended(
-      //         onPressed: () => FCMTokenHelper.showTokenDialog(context),
-      //         icon: const Icon(Icons.notifications_active),
-      //         label: const Text('FCM Token'),
-      //         backgroundColor: Colors.orange,
-      //       )
-      //     : null,
+    );
+  }
+
+  Widget _buildErrorBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: TextStyle(
+                color: Colors.orange.shade900,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildHeader(String userName) {
+    final user = _authService.currentUser;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -198,9 +211,9 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const Text(
-                  'Field Agent',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                Text(
+                  user?.employeeId ?? 'Field Agent',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
             ),
@@ -275,7 +288,7 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                           ),
                         ),
                         Text(
-                          territory['state'] ?? 'N/A',
+                          territory['state']?.toString() ?? 'N/A',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -393,8 +406,8 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
               children: [
                 Expanded(
                   child: QuickActionCard(
-                    title: 'Add Dhaba',
-                    icon: Icons.restaurant_rounded,
+                    title: 'Add Partner',
+                    icon: Icons.add_business_rounded,
                     color: const Color(0xFFFF6B35),
                     onTap: () {
                       Navigator.push(
@@ -409,26 +422,6 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: QuickActionCard(
-                    title: 'Add Puncture Shop',
-                    icon: Icons.build_rounded,
-                    color: const Color(0xFF6C5CE7),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AddShopScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: QuickActionCard(
                     title: 'View Drivers',
                     icon: Icons.people_outline_rounded,
                     color: const Color(0xFF00B894),
@@ -438,7 +431,11 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
                 Expanded(
                   child: QuickActionCard(
                     title: 'View Earnings',
@@ -450,11 +447,7 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                     },
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
+                const SizedBox(width: 12),
                 Expanded(
                   child: QuickActionCard(
                     title: 'My Territory',
@@ -466,7 +459,11 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
                 Expanded(
                   child: QuickActionCard(
                     title: 'My Shops',
@@ -478,6 +475,8 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                     },
                   ),
                 ),
+                const SizedBox(width: 12),
+                const Expanded(child: SizedBox()), // Empty space for symmetry
               ],
             ),
             const SizedBox(height: 12),

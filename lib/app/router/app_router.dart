@@ -71,6 +71,7 @@ class AppRouter {
           state.matchedLocation == margdarshakLogin;
       final isOnSplashPage = state.matchedLocation == splash;
       final isOnOnboardingPage = state.matchedLocation == onboarding;
+      final isOnMargdarshakDashboard = state.matchedLocation == margdarshakDashboard;
 
       // If not logged in and trying to access protected routes, redirect to role selection
       if (!isLoggedIn &&
@@ -78,7 +79,8 @@ class AppRouter {
           !isOnTelecallerLoginPage &&
           !isOnMargdarshakLoginPage &&
           !isOnSplashPage &&
-          !isOnOnboardingPage) {
+          !isOnOnboardingPage &&
+          !isOnMargdarshakDashboard) {
         return roleSelection;
       }
 

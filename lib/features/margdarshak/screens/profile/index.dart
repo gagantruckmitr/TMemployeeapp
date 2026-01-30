@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/services/real_auth_service.dart';
+import '../../services/margdarshak_auth_service.dart';
+import '../../services/margdarshak_api_service.dart';
 import '../navigation/index.dart';
 import '../../providers/profile_provider.dart';
 import '../bank-details/index.dart';
+import 'edit_profile_screen.dart';
 
 class MargdarshakProfilePage extends ConsumerStatefulWidget {
   const MargdarshakProfilePage({super.key});
@@ -18,8 +20,12 @@ class MargdarshakProfilePage extends ConsumerStatefulWidget {
 
 class _MargdarshakProfilePageState
     extends ConsumerState<MargdarshakProfilePage> {
+  final _authService = MargdarshakAuthService();
+  final _apiService = MargdarshakApiService();
+
   bool _isLoading = true;
   Map<String, dynamic> _profileData = {};
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -30,37 +36,97 @@ class _MargdarshakProfilePageState
   }
 
   Future<void> _loadProfileData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     try {
-      final user = RealAuthService.instance.currentUser;
+      // Fetch profile from API
+      final response = await _apiService.getProfile();
 
-      // Simulate API call for additional profile data
-      await Future.delayed(const Duration(seconds: 1));
+      if (response['status'] == true && response['data'] != null) {
+        final data = response['data'];
 
-      setState(() {
-        _profileData = {
-          'name': user?.name ?? 'Margdarshak',
-          'email': user?.email ?? 'margdarshak@truckmitr.com',
-          'mobile': user?.mobile ?? '+91 98765 43210',
-          'employeeId': user?.id ?? 'MG001',
-          'role': 'Field Agent',
-          'territory': {
-            'state': 'Maharashtra',
-            'districts': ['Pune', 'Mumbai', 'Nashik'],
-          },
-          'joinDate': '2024-01-01',
-          'stats': {
-            'totalShops': 45,
-            'totalDrivers': 234,
-            'totalEarnings': 2340,
-            'activeDays': 25,
-          },
-        };
-        _isLoading = false;
-      });
+        // Parse territory info
+        final territoryInfo = data['territory_info']?.toString() ?? '';
+        final districts = territoryInfo.isNotEmpty
+            ? territoryInfo.split(',').map((e) => e.trim()).toList()
+            : <String>[];
+
+        setState(() {
+          _profileData = {
+            'name': data['name'] ?? 'Margdarshak',
+            'email': data['email'] ?? 'Not provided',
+            'mobile': data['mobile'] ?? 'N/A',
+            'employeeId': data['employee_id'] ?? 'N/A',
+            'role': data['role'] == 'field_agent' ? 'Field Agent' : 'Margdarshak',
+            'territory': {
+              'state': data['state_name'] ?? data['working_state_name'] ?? 'N/A',
+              'districts': districts,
+            },
+            'joinDate': data['join_date'] ?? 'N/A',
+            'status': data['status'] ?? 'active',
+            'profileImage': data['profile_image'],
+            'bankDetails': {
+              'accountHolderName': data['account_holder_name'],
+              'accountNumber': data['account_number'],
+              'ifscCode': data['ifsc_code'],
+              'bankName': data['bank_name'],
+              'upiId': data['upi_id'],
+            },
+            // Stats will come from dashboard API
+            'stats': {
+              'totalShops': 0,
+              'totalDrivers': 0,
+              'totalEarnings': 0,
+              'activeDays': 0,
+            },
+          };
+          _isLoading = false;
+        });
+      } else {
+        throw Exception('Invalid response format');
+      }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      print('❌ Profile error: $e');
+
+      // Fallback to auth service data
+      final user = _authService.currentUser;
+
+      if (mounted) {
+        setState(() {
+          _profileData = {
+            'name': user?.name ?? 'Margdarshak',
+            'email': user?.email ?? 'Not provided',
+            'mobile': user?.mobile ?? 'N/A',
+            'employeeId': user?.employeeId ?? 'N/A',
+            'role': 'Field Agent',
+            'territory': {
+              'state': user?.stateName ?? 'N/A',
+              'districts': <String>[],
+            },
+            'joinDate': user?.joinDate?.toString().split(' ')[0] ?? 'N/A',
+            'status': user?.status ?? 'active',
+            'profileImage': user?.profileImage,
+            'bankDetails': {
+              'accountHolderName': user?.accountHolderName,
+              'accountNumber': user?.accountNumber,
+              'ifscCode': user?.ifscCode,
+              'bankName': user?.bankName,
+              'upiId': user?.upiId,
+            },
+            'stats': {
+              'totalShops': 0,
+              'totalDrivers': 0,
+              'totalEarnings': 0,
+              'activeDays': 0,
+            },
+          };
+          _errorMessage = 'Using offline data';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -88,10 +154,14 @@ class _MargdarshakProfilePageState
         ),
         actions: [
           IconButton(
-            onPressed: () {
-              _showEditProfileModal();
-            },
+            onPressed: _navigateToEditProfile,
             icon: const Icon(Icons.edit_rounded, color: Color(0xFF2D2D5F)),
+            tooltip: 'Edit Profile',
+          ),
+          IconButton(
+            onPressed: _loadProfileData,
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF2D2D5F)),
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -105,6 +175,9 @@ class _MargdarshakProfilePageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Error banner if any
+                    if (_errorMessage != null) _buildErrorBanner(),
+
                     // Profile Header
                     _buildProfileHeader(),
 
@@ -138,6 +211,57 @@ class _MargdarshakProfilePageState
                 ),
               ),
             ),
+    );
+  }
+
+  Future<void> _navigateToEditProfile() async {
+    if (_profileData.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please wait for profile to load'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProfileScreen(profileData: _profileData),
+      ),
+    );
+
+    // If profile was updated, reload
+    if (result == true) {
+      _loadProfileData();
+    }
+  }
+
+  Widget _buildErrorBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: TextStyle(
+                color: Colors.orange.shade900,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -490,8 +614,6 @@ class _MargdarshakProfilePageState
   }
 
   Widget _buildPaymentDetails() {
-    final bankDetails = ref.watch(profileProvider).bankDetails;
-
     return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -550,24 +672,22 @@ class _MargdarshakProfilePageState
 
               _buildInfoRow(
                 'UPI ID',
-                bankDetails.upiId.isEmpty ? 'Not set' : bankDetails.upiId,
+                _profileData['bankDetails']?['upiId'] ?? 'Not set',
               ),
               const SizedBox(height: 12),
               _buildInfoRow(
                 'Account Number',
-                bankDetails.accountNumber.isEmpty
-                    ? 'Not set'
-                    : bankDetails.accountNumber,
+                _profileData['bankDetails']?['accountNumber'] ?? 'Not set',
               ),
               const SizedBox(height: 12),
               _buildInfoRow(
                 'Bank Name',
-                bankDetails.bankName.isEmpty ? 'Not set' : bankDetails.bankName,
+                _profileData['bankDetails']?['bankName'] ?? 'Not set',
               ),
               const SizedBox(height: 12),
               _buildInfoRow(
                 'IFSC Code',
-                bankDetails.ifscCode.isEmpty ? 'Not set' : bankDetails.ifscCode,
+                _profileData['bankDetails']?['ifscCode'] ?? 'Not set',
               ),
             ],
           ),
@@ -693,10 +813,6 @@ class _MargdarshakProfilePageState
     );
   }
 
-  void _showEditProfileModal() {
-    // Implement edit profile modal
-  }
-
   void _showLogoutConfirmation() {
     print('_showLogoutConfirmation called'); // Debug log
     showDialog(
@@ -738,10 +854,10 @@ class _MargdarshakProfilePageState
               }
               
               try {
-                print('Calling RealAuthService.logout()...'); // Debug log
+                print('Calling MargdarshakAuthService.logout()...'); // Debug log
                 
                 // Perform logout
-                await RealAuthService.instance.logout();
+                await _authService.logout();
                 
                 print('Logout successful, navigating to login...'); // Debug log
                 

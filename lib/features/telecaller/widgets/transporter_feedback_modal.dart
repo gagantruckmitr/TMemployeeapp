@@ -380,7 +380,9 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
             ),
             child: Center(
               child: Text(
-                widget.contact.name.isNotEmpty ? widget.contact.name.substring(0, 1).toUpperCase() : '?',
+                widget.contact.name.isNotEmpty
+                    ? widget.contact.name.substring(0, 1).toUpperCase()
+                    : '?',
                 style: AppTheme.titleMedium.copyWith(
                   color: AppTheme.primaryBlue,
                   fontWeight: FontWeight.bold,
@@ -764,6 +766,14 @@ class _TransporterFeedbackModalState extends State<TransporterFeedbackModal>
             controller: _remarksController,
             maxLines: 4,
             maxLength: 500,
+            inputFormatters: [
+              // Only allow alphanumeric, spaces, and common punctuation (no emojis)
+              FilteringTextInputFormatter.allow(
+                RegExp(
+                  r'[a-zA-Z0-9\s.,!?@#$%^&*()_+=\-\[\]{}|\\:;"<>/~`\n\r\t]',
+                ),
+              ),
+            ],
             decoration: InputDecoration(
               hintText: 'Add any important details or notes...',
               hintStyle: AppTheme.bodyLarge.copyWith(

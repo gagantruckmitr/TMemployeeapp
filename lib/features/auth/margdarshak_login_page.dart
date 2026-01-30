@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/router/app_router.dart';
-import '../../core/services/real_auth_service.dart';
+import '../margdarshak/services/margdarshak_auth_service.dart';
 
 class MargdarshakLoginPage extends StatefulWidget {
   const MargdarshakLoginPage({super.key});
@@ -27,10 +26,12 @@ class _MargdarshakLoginPageState extends State<MargdarshakLoginPage> {
   static const Color _textColor = Color(0xFF333333);
   static const Color _borderColor = Color(0xFFE0E0E0);
 
+  final _authService = MargdarshakAuthService();
+
   @override
   void initState() {
     super.initState();
-    _loadSavedCredentials();
+    _checkExistingSession();
   }
 
   @override
@@ -40,16 +41,12 @@ class _MargdarshakLoginPageState extends State<MargdarshakLoginPage> {
     super.dispose();
   }
 
-  Future<void> _loadSavedCredentials() async {
-    final credentials = await RealAuthService.instance.getSavedCredentials();
-    if (credentials['mobile'] != null && credentials['password'] != null) {
-      if (mounted) {
-        setState(() {
-          _mobileController.text = credentials['mobile']!;
-          _passwordController.text = credentials['password']!;
-          _rememberMe = true;
-        });
-      }
+  Future<void> _checkExistingSession() async {
+    // Check if already logged in via MargdarshakAuthService
+    final hasSession = await _authService.loadSession();
+    if (hasSession && mounted) {
+      // Already logged in, go to dashboard
+      context.goNamed('margdarshak-dashboard');
     }
   }
 
@@ -249,14 +246,14 @@ class _MargdarshakLoginPageState extends State<MargdarshakLoginPage> {
                     ),
                   ),
 
-                  // Simple Demo Link
+                  // Demo credentials hint
                   const SizedBox(height: 20),
                   Center(
                     child: InkWell(
                       onTap: () {
                         setState(() {
-                          _mobileController.text = '1234567890';
-                          _passwordController.text = 'demo123';
+                          _mobileController.text = '6394752222';
+                          _passwordController.text = '12345678';
                         });
                       },
                       child: const Padding(
@@ -290,63 +287,39 @@ class _MargdarshakLoginPageState extends State<MargdarshakLoginPage> {
       final mobile = _mobileController.text.trim();
       final password = _passwordController.text;
 
-      final result = await RealAuthService.instance.login(mobile, password);
+      final result = await _authService.login(
+        mobile: mobile,
+        password: password,
+      );
 
-      if (result.isSuccess && result.user != null) {
-        final user = result.user!;
-
-        if (user.role != 'margdarshak' && user.role != 'field_agent') {
-          await RealAuthService.instance.logout();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Access denied. Margdarshak only.')),
-            );
-          }
-          setState(() => _isLoading = false);
-          return;
-        }
-
-        if (_rememberMe) {
-          await RealAuthService.instance.saveCredentials(mobile, password);
-        }
-
+      if (result.isSuccess) {
         if (mounted) {
-          context.go(AppRouter.margdarshakDashboard);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Welcome, ${result.user?.name ?? 'Margdarshak'}!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Use pushReplacement to prevent going back to login
+          context.goNamed('margdarshak-dashboard');
         }
       } else {
-        // Demo fallback
-        if (mobile == '1234567890' && password == 'demo123') {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('is_logged_in', true);
-          await prefs.setString('user_id', 'demo_margdarshak');
-          await prefs.setString('user_name', 'Demo Margdarshak');
-          await prefs.setString('user_email', 'demo@margdarshak.com');
-          await prefs.setString('user_role', 'margdarshak');
-          await prefs.setString('user_mobile', mobile);
-          await prefs.setString('auth_token', 'demo_token');
-          await RealAuthService.instance.isLoggedIn();
-
-          if (_rememberMe) {
-            await RealAuthService.instance.saveCredentials(mobile, password);
-          }
-
-          if (mounted) {
-            context.go(AppRouter.margdarshakDashboard);
-          }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(result.errorMessage ?? 'Invalid credentials'),
-              ),
-            );
-          }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login failed: ${e.toString()}')),
+          SnackBar(
+            content: Text('Login failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {

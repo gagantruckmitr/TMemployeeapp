@@ -74,8 +74,8 @@ class _SplashScreenState extends State<SplashScreen>
         // Manager goes to manager dashboard
         print('🔀 Navigating to Manager Dashboard');
         context.go('/manager-dashboard');
-      } else if (userRole == 'margdarshak') {
-        // Margdarshak goes to margdarshak dashboard
+      } else if (userRole == 'margdarshak' || userRole == 'field_agent') {
+        // Margdarshak/Field Agent goes to margdarshak dashboard
         print('🔀 Navigating to Margdarshak Dashboard');
         context.go('/margdarshak-dashboard');
       } else {

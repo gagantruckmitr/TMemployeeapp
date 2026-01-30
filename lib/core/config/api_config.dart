@@ -9,46 +9,52 @@ class ApiConfig {
 
   // PRODUCTION: Plesk Server (Active)
   static const String domain = 'truckmitr.com';
+  // static const String domain = 'devtruckmitr.in';
   static const String baseUrl = 'https://$domain/truckmitr-app/api';
   static const String serverIp = domain;
   static const String publicUrl = 'https://$domain/public';
   
   // Laravel API Base URLs
-  static const String laravelApiBase = 'https://$domain/api/telehead';
+  static const String laravelApiBase = 'https://truckmitr.com/api';
+  // static const String laravelApiBase = 'https://devtruckmitr.in/api';
+  static const String teleheadApiBase = 'https://$domain/api/telehead';
   static const String storageBase = 'https://$domain/storage/app/public';
+  
+  // Margdarshak uses laravelApiBase
+  static String get margdarshakApiBase => laravelApiBase;
   
   // TaskSuite HRMS Base URL
   static const String taskSuiteBase = 'https://tasksuite.$domain/backend/public/api';
 
   
-  // Laravel API Endpoints
-  static const String loginApi = '$laravelApiBase/login';
-  static const String forgotPasswordApi = '$laravelApiBase/forgot-password';
-  static const String resetPasswordApi = '$laravelApiBase/reset-password';
-  static const String agentJobsApi = '$laravelApiBase/agent-jobs';
-  static const String driversApi = '$laravelApiBase/drivers';
-  static const String jobsApi = '$laravelApiBase/jobs';
-  static const String rejectedApplyJobsApi = '$laravelApiBase/rejected-apply-jobs';
-  static const String callLogsApi = '$laravelApiBase/call-logs';
-  static const String ivrCallJobMatchingApi = '$laravelApiBase/ivr-call-jobMatching';
-  static const String ivrCallUpdateJobMatchingApi = '$laravelApiBase/ivr-call-update-jobMatching';
-  static const String ivrCallJobBriefApi = '$laravelApiBase/ivr-call-jobBrief';
-  static const String ivrCallUpdateJobBriefApi = '$laravelApiBase/ivr-call-update-jobBrief';
-  static const String driverBucketApi = '$laravelApiBase/driver-bucket';
-  static const String driverBucketsApi = '$laravelApiBase/driver-buckets';
-  static const String paymentsSearchApi = '$laravelApiBase/payments/search';
-  static const String withoutCallHistoryApi = '$laravelApiBase/withoutCallHistory';
-  static const String reportsApi = '$laravelApiBase/reports/assigned-to-wise-summary';
-  static const String socialMediaLeadsApi = '$laravelApiBase/social-media-leads';
-  static const String socialMediaCallHistoryApi = '$laravelApiBase/social-media-call-history';
-  static const String todayLeadsApi = '$laravelApiBase/today-leads';
-  static const String callHistoryApi = '$laravelApiBase/call-history';
-  static const String matchMakingHistoryApi = '$laravelApiBase/match-making-history';
-  static const String socialMediaIvrCallsApi = '$laravelApiBase/social-media-ivr-calls';
-  static const String breakLogsApi = '$laravelApiBase/break-logs';
-  static const String analyticsApi = '$laravelApiBase/analytics';
-  static const String ivrCallUpdateApi = '$laravelApiBase/ivr-call-update';
-  static const String socialMediaIvrCallApi = '$laravelApiBase/social-media-ivr-call';
+  // Laravel API Endpoints (Telehead)
+  static const String loginApi = '$teleheadApiBase/login';
+  static const String forgotPasswordApi = '$teleheadApiBase/forgot-password';
+  static const String resetPasswordApi = '$teleheadApiBase/reset-password';
+  static const String agentJobsApi = '$teleheadApiBase/agent-jobs';
+  static const String driversApi = '$teleheadApiBase/drivers';
+  static const String jobsApi = '$teleheadApiBase/jobs';
+  static const String rejectedApplyJobsApi = '$teleheadApiBase/rejected-apply-jobs';
+  static const String callLogsApi = '$teleheadApiBase/call-logs';
+  static const String ivrCallJobMatchingApi = '$teleheadApiBase/ivr-call-jobMatching';
+  static const String ivrCallUpdateJobMatchingApi = '$teleheadApiBase/ivr-call-update-jobMatching';
+  static const String ivrCallJobBriefApi = '$teleheadApiBase/ivr-call-jobBrief';
+  static const String ivrCallUpdateJobBriefApi = '$teleheadApiBase/ivr-call-update-jobBrief';
+  static const String driverBucketApi = '$teleheadApiBase/driver-bucket';
+  static const String driverBucketsApi = '$teleheadApiBase/driver-buckets';
+  static const String paymentsSearchApi = '$teleheadApiBase/payments/search';
+  static const String withoutCallHistoryApi = '$teleheadApiBase/withoutCallHistory';
+  static const String reportsApi = '$teleheadApiBase/reports/assigned-to-wise-summary';
+  static const String socialMediaLeadsApi = '$teleheadApiBase/social-media-leads';
+  static const String socialMediaCallHistoryApi = '$teleheadApiBase/social-media-call-history';
+  static const String todayLeadsApi = '$teleheadApiBase/today-leads';
+  static const String callHistoryApi = '$teleheadApiBase/call-history';
+  static const String matchMakingHistoryApi = '$teleheadApiBase/match-making-history';
+  static const String socialMediaIvrCallsApi = '$teleheadApiBase/social-media-ivr-calls';
+  static const String breakLogsApi = '$teleheadApiBase/break-logs';
+  static const String analyticsApi = '$teleheadApiBase/analytics';
+  static const String ivrCallUpdateApi = '$teleheadApiBase/ivr-call-update';
+  static const String socialMediaIvrCallApi = '$teleheadApiBase/social-media-ivr-call';
 
   // Email Configuration
   static const String hrEmail = 'hr@$domain';
