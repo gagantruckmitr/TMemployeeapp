@@ -1,4 +1,3 @@
-import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +15,7 @@ import 'widgets/call_feedback_modal.dart';
 import 'widgets/transporter_feedback_modal.dart';
 import 'widgets/call_type_selection_dialog.dart';
 import 'widgets/ivr_call_waiting_overlay.dart';
+import 'widgets/manual_call_helper.dart';
 
 class SmartCallingPage extends StatefulWidget {
   final String? tcFor; // 'match-making' or null for regular calling
@@ -921,85 +921,22 @@ class _SmartCallingPageState extends State<SmartCallingPage>
     String contactType = 'driver',
   }) async {
     try {
-      // Clean phone number
-      final cleanDriverMobile = contact.phoneNumber.replaceAll(
-        RegExp(r'[^\d]'),
-        '',
+      // Determine process based on contact type
+      final process = contactType == 'transporter'
+          ? 'Transporter Onboarding'
+          : 'Driver Onboarding';
+
+      // Use the new manual call helper
+      await ManualCallHelper.initiateManualCall(
+        context: context,
+        contact: contact,
+        process: process,
+        showRecordingUpload: true, // Show recording upload for smart calling
+        onFeedbackSubmitted: (feedback) async {
+          // Handle feedback submission using existing method
+          await _updateContactStatus(contact, feedback);
+        },
       );
-
-      debugPrint(
-        '📱 Manual Call - Contact: ${contact.name} ($contactType), Mobile: $cleanDriverMobile',
-      );
-
-      // Log manual call to database with correct contact type
-      final result = await SmartCallingService.instance.initiateManualCall(
-        driverMobile: cleanDriverMobile,
-        callerId: callerId,
-        driverId: contact.id,
-        contactType: contactType,
-      );
-
-      if (mounted) {
-        if (result['success'] == true) {
-          final referenceId = result['data']?['reference_id'];
-          final driverMobileRaw = result['data']?['driver_mobile_raw'];
-
-          debugPrint('✅ Manual call logged - Ref: $referenceId');
-
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('📱 Calling ${contact.name}...'),
-              backgroundColor: AppTheme.success,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-
-          // Make direct call using flutter_phone_direct_caller
-          // This will automatically return to app when call ends
-          try {
-            await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
-
-            debugPrint('📞 Direct call initiated to $driverMobileRaw');
-
-            // Show feedback modal immediately after call is initiated
-            // The modal will appear when user returns to app after call ends
-            if (mounted) {
-              // Small delay to ensure call screen has appeared
-              await Future.delayed(const Duration(milliseconds: 500));
-
-              if (mounted) {
-                _showFeedbackModal(
-                  contact,
-                  referenceId: referenceId,
-                  callDuration: 0,
-                );
-              }
-            }
-          } catch (callError) {
-            debugPrint('❌ Direct call error: $callError');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Failed to make call: $callError'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        } else {
-          final errorMsg = result['error'] ?? 'Unknown error';
-          debugPrint('❌ Manual call failed: $errorMsg');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to log call: $errorMsg'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      }
     } catch (e) {
       debugPrint('❌ Manual call error: $e');
       if (mounted) {

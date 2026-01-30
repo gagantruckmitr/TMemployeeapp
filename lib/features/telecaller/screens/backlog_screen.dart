@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../core/services/smart_calling_service.dart';
 import '../../../core/services/real_auth_service.dart';
@@ -13,6 +12,7 @@ import '../widgets/driver_contact_card.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/ivr_call_waiting_overlay.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/manual_call_helper.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../core/config/api_config.dart';
@@ -405,80 +405,29 @@ class _BacklogScreenState extends State<BacklogScreen>
 
   Future<void> _handleManualCall(DriverContact lead, int callerId) async {
     try {
-      final cleanMobile = lead.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
       final contactType = lead.role ?? 'driver';
-      final currentUser = RealAuthService.instance.currentUser;
-      if (currentUser == null) {
-        setState(() => _callingLeadId = null);
-        return;
-      }
-
-      final telecallerPhone = currentUser.mobile.replaceAll(
-        RegExp(r'[^\d]'),
-        '',
-      );
       final process = contactType == 'transporter'
           ? 'Transporter Onboarding'
           : 'Driver Onboarding';
 
-      final result = await SmartCallingService.instance.initiateEasyGoIVR(
-        telecallerPhone: telecallerPhone,
-        clientPhone: cleanMobile,
-        callerId: callerId.toString(),
-        contactId: lead.id,
-        tmid: lead.tmid,
-        contactType: contactType,
+      // Use the new manual call helper
+      await ManualCallHelper.initiateManualCall(
+        context: context,
+        contact: lead,
         process: process,
-        driverName: lead.name,
+        showRecordingUpload: false, // No recording upload for backlog
+        onFeedbackSubmitted: (feedback) async {
+          // Handle feedback submission using existing method
+          await _updateContactStatus(lead, feedback);
+        },
       );
-
-      // Clear loading state before showing feedback modal
-      if (mounted) {
-        setState(() => _callingLeadId = null);
-      }
-
-      if (mounted) {
-        if (result['success'] == true) {
-          final referenceId =
-              result['call_id']?.toString() ??
-              result['reference_id']?.toString() ??
-              result['data']?['call_history_id']?.toString();
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('📱 Calling ${lead.name}...'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-
-          await FlutterPhoneDirectCaller.callNumber(cleanMobile);
-          await Future.delayed(const Duration(milliseconds: 500));
-
-          if (mounted) {
-            _showFeedbackModal(lead, referenceId: referenceId);
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('📱 Calling ${lead.name}... (untracked)'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-
-          await FlutterPhoneDirectCaller.callNumber(cleanMobile);
-          await Future.delayed(const Duration(milliseconds: 500));
-
-          if (mounted) {
-            _showFeedbackModal(lead, referenceId: null);
-          }
-        }
-      }
     } catch (e) {
       if (mounted) {
-        setState(() => _callingLeadId = null);
         ErrorHandler.showError(context, e);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _callingLeadId = null);
       }
     }
   }

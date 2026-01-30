@@ -1,7 +1,5 @@
-import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../../core/services/today_leads_service.dart';
 import '../../../core/services/smart_calling_service.dart';
 import '../../../core/services/real_auth_service.dart';
@@ -15,6 +13,7 @@ import '../widgets/call_feedback_modal.dart';
 import '../widgets/transporter_feedback_modal.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/ivr_call_waiting_overlay.dart';
+import '../widgets/manual_call_helper.dart';
 import '../../../widgets/error_handler.dart';
 
 class FreshLeadsScreen extends StatefulWidget {
@@ -365,63 +364,22 @@ class _FreshLeadsScreenState extends State<FreshLeadsScreen> {
     TodayLead lead,
   ) async {
     try {
-      final cleanMobile = contact.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+      // Determine process based on role
+      final process = lead.role == 'driver' 
+          ? 'Driver Onboarding' 
+          : 'Transporter Onboarding';
 
-      final result = await SmartCallingService.instance.initiateManualCall(
-        driverMobile: cleanMobile,
-        callerId: callerId,
-        driverId: contact.id,
-        contactType: lead.role,
+      // Use the new manual call helper
+      await ManualCallHelper.initiateManualCall(
+        context: context,
+        contact: contact,
+        process: process,
+        showRecordingUpload: true, // Show recording upload for fresh leads
+        onFeedbackSubmitted: (feedback) async {
+          // Handle feedback submission using existing method
+          await _updateContactStatus(contact, lead, feedback);
+        },
       );
-
-      if (mounted) {
-        if (result['success'] == true) {
-          final referenceId = result['data']?['reference_id'];
-          final mobileRaw = result['data']?['driver_mobile_raw'];
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('📱 Calling ${contact.name}...'),
-              backgroundColor: AppTheme.success,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-
-          try {
-            await FlutterPhoneDirectCaller.callNumber(mobileRaw);
-
-            await Future.delayed(const Duration(milliseconds: 500));
-
-            if (mounted) {
-              _showFeedbackModal(
-                contact,
-                lead,
-                referenceId: referenceId,
-                callDuration: 0,
-              );
-            }
-          } catch (callError) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Failed to make call: $callError'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        } else {
-          final errorMsg = result['error'] ?? 'Unknown error';
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed: $errorMsg'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      }
     } catch (e) {
       if (mounted) {
         ErrorHandler.showError(context, e);
