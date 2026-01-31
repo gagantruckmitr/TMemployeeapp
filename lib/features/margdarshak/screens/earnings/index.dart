@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../navigation/index.dart';
+import '../../services/margdarshak_api_service.dart';
 
 class MargdarshakEarningsPage extends ConsumerStatefulWidget {
   const MargdarshakEarningsPage({super.key});
@@ -13,6 +14,7 @@ class MargdarshakEarningsPage extends ConsumerStatefulWidget {
 
 class _MargdarshakEarningsPageState
     extends ConsumerState<MargdarshakEarningsPage> {
+  final _apiService = MargdarshakApiService();
   bool _isLoading = true;
   Map<String, dynamic> _earningsData = {};
 
@@ -26,71 +28,24 @@ class _MargdarshakEarningsPageState
     setState(() => _isLoading = true);
 
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
+      final response = await _apiService.getEarnings();
 
-      setState(() {
-        _earningsData = {
-          'summary': {
-            'totalEarnings': 2340,
-            'eligibleEarnings': 1890,
-            'pendingVerification': 450,
-            'paidEarnings': 1440,
-            'thisMonth': 780,
-            'thisWeek': 120,
-            'today': 30,
-          },
-          'eligibleDrivers': 189,
-          'totalDrivers': 234,
-          'earningsPerDriver': 10,
-          'payoutThreshold': 500,
-          'nextPayoutDate': '2024-02-01',
-          'recentEarnings': [
-            {
-              'driverName': 'Rajesh Kumar',
-              'shopName': 'Sharma Dhaba',
-              'amount': 10,
-              'date': '2024-01-25',
-              'status': 'eligible',
-            },
-            {
-              'driverName': 'Suresh Patel',
-              'shopName': 'Highway Dhaba',
-              'amount': 10,
-              'date': '2024-01-24',
-              'status': 'eligible',
-            },
-            {
-              'driverName': 'Amit Singh',
-              'shopName': 'Quick Fix Puncture',
-              'amount': 10,
-              'date': '2024-01-23',
-              'status': 'pending',
-            },
-          ],
-          'payoutHistory': [
-            {
-              'id': 'PO001',
-              'amount': 500,
-              'date': '2024-01-15',
-              'status': 'paid',
-              'method': 'UPI',
-              'transactionId': 'TXN123456789',
-            },
-            {
-              'id': 'PO002',
-              'amount': 450,
-              'date': '2024-01-01',
-              'status': 'paid',
-              'method': 'Bank Transfer',
-              'transactionId': 'TXN987654321',
-            },
-          ],
-        };
-        _isLoading = false;
-      });
+      if (response['status'] == true && response['data'] != null) {
+        setState(() {
+          _earningsData = response['data'];
+          _isLoading = false;
+        });
+      } else {
+        throw Exception(response['message'] ?? 'Failed to load earnings');
+      }
     } catch (e) {
+      print('❌ Earnings load error: $e');
       setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load earnings: $e')));
+      }
     }
   }
 
@@ -154,11 +109,10 @@ class _MargdarshakEarningsPageState
                     // Recent Earnings
                     _buildRecentEarnings(),
 
-                    const SizedBox(height: 24),
+                    // const SizedBox(height: 24),
 
-                    // Payout History
-                    _buildPayoutHistory(),
-
+                    // Payout History (Hidden for now)
+                    // _buildPayoutHistory(),
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -224,7 +178,7 @@ class _MargdarshakEarningsPageState
           ),
           const SizedBox(height: 20),
           Text(
-            '₹${summary['thisMonth'] ?? 0}',
+            '₹${summary['month_earnings'] ?? 0}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 32,
@@ -235,12 +189,12 @@ class _MargdarshakEarningsPageState
           Row(
             children: [
               Text(
-                'Today: ₹${summary['today'] ?? 0}',
+                'Today: ₹${summary['today_earnings'] ?? 0}',
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
               const SizedBox(width: 16),
               Text(
-                'This Week: ₹${summary['thisWeek'] ?? 0}',
+                'This Week: ₹${summary['week_earnings'] ?? 0}',
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
             ],
@@ -251,7 +205,7 @@ class _MargdarshakEarningsPageState
   }
 
   Widget _buildStatsGrid() {
-    final summary = _earningsData['summary'] ?? {};
+    final cards = _earningsData['cards'] ?? {};
 
     return Column(
       children: [
@@ -260,7 +214,7 @@ class _MargdarshakEarningsPageState
             Expanded(
               child: _buildStatCard(
                 'Eligible Earnings',
-                '₹${summary['eligibleEarnings'] ?? 0}',
+                '₹${cards['eligible_amount'] ?? 0}',
                 Icons.check_circle_rounded,
                 const Color(0xFF4CAF50),
               ),
@@ -282,7 +236,7 @@ class _MargdarshakEarningsPageState
             Expanded(
               child: _buildStatCard(
                 'Paid Earnings',
-                '₹${summary['paidEarnings'] ?? 0}',
+                '₹${cards['paid_earnings'] ?? 0}',
                 Icons.payment_rounded,
                 const Color(0xFF2196F3),
               ),
@@ -362,9 +316,10 @@ class _MargdarshakEarningsPageState
   }
 
   Widget _buildPayoutSection() {
-    final summary = _earningsData['summary'] ?? {};
-    final eligibleAmount = summary['eligibleEarnings'] ?? 0;
-    final threshold = _earningsData['payoutThreshold'] ?? 500;
+    final cards = _earningsData['cards'] ?? {};
+    final payoutInfo = _earningsData['payout_info'] ?? {};
+    final eligibleAmount = (cards['eligible_amount'] ?? 0).toDouble();
+    final threshold = (cards['threshold_amount'] ?? 500).toDouble();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor =
@@ -496,7 +451,7 @@ class _MargdarshakEarningsPageState
                 ],
               ),
 
-              if (_earningsData['nextPayoutDate'] != null) ...[
+              if (payoutInfo['next_payout_date'] != null) ...[
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -525,7 +480,7 @@ class _MargdarshakEarningsPageState
                               ),
                             ),
                             Text(
-                              _earningsData['nextPayoutDate'] ?? 'N/A',
+                              _formatDate(payoutInfo['next_payout_date'] ?? ''),
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.green.shade700,
@@ -548,7 +503,7 @@ class _MargdarshakEarningsPageState
   }
 
   Widget _buildRecentEarnings() {
-    final recentEarnings = _earningsData['recentEarnings'] as List? ?? [];
+    final recentEarnings = _earningsData['recent_transactions'] as List? ?? [];
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor =
@@ -556,342 +511,172 @@ class _MargdarshakEarningsPageState
         const Color(0xFF2D2D5F);
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Recent Earnings',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardTheme.color,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.3)
-                    : Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Recent Earnings',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: textColor,
               ),
-            ],
-          ),
-          child: recentEarnings.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.all(40),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.account_balance_wallet_outlined,
-                          size: 48,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No recent earnings',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardTheme.color,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.3)
+                        : Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
                   ),
-                )
-              : Column(
-                  children: recentEarnings.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final earning = entry.value;
-                    final isLast = index == recentEarnings.length - 1;
-
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        border: isLast
-                            ? null
-                            : Border(
-                                bottom: BorderSide(
-                                  color: Colors.grey.shade100,
-                                  width: 1,
-                                ),
-                              ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(
-                                0xFF388E3C,
-                              ).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.person_rounded,
-                              color: Color(0xFF388E3C),
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  earning['driverName'] ?? 'Unknown Driver',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: textColor,
-                                  ),
-                                ),
-                                Text(
-                                  'via ${earning['shopName'] ?? 'Unknown Shop'}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color:
-                                        Theme.of(
-                                          context,
-                                        ).textTheme.bodyMedium?.color ??
-                                        Colors.grey.shade600,
-                                  ),
-                                ),
-                                Text(
-                                  earning['date'] ?? 'Unknown Date',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color:
-                                        Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall?.color ??
-                                        Colors.grey.shade500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                '₹${earning['amount'] ?? 0}',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF388E3C),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _getEarningStatusColor(
-                                    earning['status'],
-                                  ).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  earning['status'] ?? 'unknown',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: _getEarningStatusColor(
-                                      earning['status'],
-                                    ),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-        ),
-      ],
-    ).animate().fadeIn(duration: 600.ms, delay: 600.ms).slideY(begin: 0.2, end: 0);
-  }
-
-  Widget _buildPayoutHistory() {
-    final payoutHistory = _earningsData['payoutHistory'] as List? ?? [];
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor =
-        Theme.of(context).textTheme.titleLarge?.color ??
-        const Color(0xFF2D2D5F);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Payout History',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardTheme.color,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.3)
-                    : Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
+                ],
               ),
-            ],
-          ),
-          child: payoutHistory.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.all(40),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.history_rounded,
-                          size: 48,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No payout history',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : Column(
-                  children: payoutHistory.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final payout = entry.value;
-                    final isLast = index == payoutHistory.length - 1;
-
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        border: isLast
-                            ? null
-                            : Border(
-                                bottom: BorderSide(
-                                  color: Colors.grey.shade100,
-                                  width: 1,
-                                ),
+              child: recentEarnings.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.account_balance_wallet_outlined,
+                              size: 48,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No recent earnings',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 16,
                               ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(
-                                0xFF2196F3,
-                              ).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.payment_rounded,
-                              color: Color(0xFF2196F3),
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Payout ${payout['id'] ?? 'Unknown'}',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: textColor,
-                                  ),
-                                ),
-                                Text(
-                                  '${payout['method'] ?? 'Unknown Method'} • ${payout['date'] ?? 'Unknown Date'}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color:
-                                        Theme.of(
-                                          context,
-                                        ).textTheme.bodyMedium?.color ??
-                                        Colors.grey.shade600,
-                                  ),
-                                ),
-                                if (payout['transactionId'] != null)
-                                  Text(
-                                    'TXN: ${payout['transactionId']}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color:
-                                          Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall?.color ??
-                                          Colors.grey.shade500,
+                    )
+                  : Column(
+                      children: recentEarnings.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final earning = entry.value;
+                        final isLast = index == recentEarnings.length - 1;
+
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            border: isLast
+                                ? null
+                                : Border(
+                                    bottom: BorderSide(
+                                      color: Colors.grey.shade100,
+                                      width: 1,
                                     ),
                                   ),
-                              ],
-                            ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          child: Row(
                             children: [
-                              Text(
-                                '₹${payout['amount'] ?? 0}',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF2196F3),
-                                ),
-                              ),
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
+                                padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   color: const Color(
-                                    0xFF4CAF50,
+                                    0xFF388E3C,
                                   ).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(4),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Text(
-                                  payout['status'] ?? 'unknown',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Color(0xFF4CAF50),
-                                    fontWeight: FontWeight.w500,
+                                child: const Icon(
+                                  Icons.person_rounded,
+                                  color: Color(0xFF388E3C),
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      earning['title'] ?? 'Unknown',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                    Text(
+                                      earning['description'] ?? '',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium?.color ??
+                                            Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    Text(
+                                      _formatDate(earning['date'] ?? ''),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.color ??
+                                            Colors.grey.shade500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '₹${earning['amount'] ?? 0}',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF388E3C),
+                                    ),
                                   ),
-                                ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _getEarningStatusColor(
+                                        earning['status'],
+                                      ).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      earning['status'] ?? 'unknown',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: _getEarningStatusColor(
+                                          earning['status'],
+                                        ),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-        ),
-      ],
-    ).animate().fadeIn(duration: 600.ms, delay: 800.ms).slideY(begin: 0.2, end: 0);
+                        );
+                      }).toList(),
+                    ),
+            ),
+          ],
+        )
+        .animate()
+        .fadeIn(duration: 600.ms, delay: 600.ms)
+        .slideY(begin: 0.2, end: 0);
   }
 
   Color _getEarningStatusColor(String? status) {
@@ -914,6 +699,30 @@ class _MargdarshakEarningsPageState
       backgroundColor: Colors.transparent,
       builder: (context) => const EarningsRulesModal(),
     );
+  }
+
+  String _formatDate(String dateStr) {
+    if (dateStr.isEmpty) return 'N/A';
+    try {
+      final date = DateTime.parse(dateStr);
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      return '${date.day} ${months[date.month - 1]} ${date.year}';
+    } catch (e) {
+      return dateStr;
+    }
   }
 }
 

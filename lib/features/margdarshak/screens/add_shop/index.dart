@@ -12,7 +12,8 @@ import 'package:http/http.dart' as http;
 import '../../services/margdarshak_api_service.dart';
 
 class AddShopScreen extends StatefulWidget {
-  const AddShopScreen({super.key});
+  final Map<String, dynamic>? editData;
+  const AddShopScreen({super.key, this.editData});
 
   @override
   State<AddShopScreen> createState() => _AddShopScreenState();
@@ -162,6 +163,76 @@ class _AddShopScreenState extends State<AddShopScreen>
     super.initState();
     _tabController = TabController(length: 7, vsync: this);
     _loadStates();
+    if (widget.editData != null) {
+      _populateEditData();
+    }
+  }
+
+  void _populateEditData() {
+    final data = widget.editData!;
+    final userInfo = data['user_info'] ?? {};
+    final businessInfo = data['business_info'] ?? {};
+    final location = data['location'] ?? {};
+    final operation = data['operation'] ?? {};
+    final facilities = data['facilities'] ?? {};
+    final food = data['food'] ?? {};
+
+    // 1. User/Business Info
+    _dhabaUserId = userInfo['id']; // Important for updates
+    _shopNameController.text = businessInfo['dhaba_name'] ?? '';
+    _ownerNameController.text =
+        businessInfo['owner_name'] ?? userInfo['name'] ?? '';
+    _mobileController.text = businessInfo['mobile'] ?? userInfo['mobile'] ?? '';
+    _selectedShopType = businessInfo['dhaba_type'] ?? 'dhaba';
+
+    if (_mobileController.text.isNotEmpty) {
+      _isPhoneVerified = true;
+    }
+
+    // 2. Location
+    _addressController.text = location['full_address'] ?? '';
+    _landmarkController.text = location['landmark'] ?? '';
+    _districtController.text = location['district'] ?? userInfo['city'] ?? '';
+    _pincodeController.text = location['pincode'] ?? '';
+    _selectedStateId = location['state_id']?.toString();
+
+    if (location['latitude'] != null) {
+      _latitude = double.tryParse(location['latitude'].toString());
+      _longitude = double.tryParse(location['longitude'].toString());
+      _isLocationCaptured = _latitude != null && _longitude != null;
+    }
+
+    // 3. Operations
+    _is24x7 = operation['is_24x7'] == true;
+    if (!_is24x7) {
+      _operatingHours['opening'] = operation['opening_time'] ?? '06:00';
+      _operatingHours['closing'] = operation['closing_time'] ?? '22:00';
+    }
+
+    // 4. Facilities
+    _sittingFacility = facilities['sitting_facility'] == true;
+    _cleanRestrooms = facilities['clean_restrooms'] == true;
+    _drinkingWater = facilities['drinking_water'] == true;
+    _parkingSmall = facilities['parking_small'] == true;
+    _parkingLarge = facilities['parking_large'] == true;
+    _sleepingArea = facilities['sleeping_area'] == true;
+    _washingArea = facilities['washing_area'] == true;
+    _electricPoint = facilities['electric_point'] == true;
+    _cctv = facilities['cctv'] == true;
+    _securityStaff = facilities['security_staff'] == true;
+    _wheelAlignment = facilities['wheel_alignment'] == true;
+    _mechanicAvailable = facilities['mechanic'] == true;
+
+    // 5. Food
+    _mealBreakfast = food['meal_breakfast'] == true;
+    _mealLunch = food['meal_lunch'] == true;
+    _mealDinner = food['meal_dinner'] == true;
+    _mealNight = food['meal_night'] == true;
+    _specialDishesController.text = food['special_dishes'] ?? '';
+    _avgPriceRangeController.text = food['avg_price_range']?.toString() ?? '';
+
+    // Note: Photos and detailed lists like services might need more complex handling
+    // but this covers the essentials for editing.
   }
 
   Future<void> _loadStates() async {
@@ -822,6 +893,19 @@ class _AddShopScreenState extends State<AddShopScreen>
       onTap: isDisabled
           ? null
           : () {
+              if (type == 'puncture') {
+                HapticFeedback.mediumImpact();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Comming soon'),
+                    backgroundColor: Colors.grey.shade800,
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+                return;
+              }
+
               HapticFeedback.lightImpact();
               setState(() {
                 _selectedShopType = type;
@@ -1291,7 +1375,7 @@ class _AddShopScreenState extends State<AddShopScreen>
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
+        height: MediaQuery.of(context).size.height * 0.9,
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -1375,50 +1459,57 @@ class _AddShopScreenState extends State<AddShopScreen>
                         final stateId = state['id'].toString();
                         final isSelected = _selectedStateId == stateId;
 
-                        return ListTile(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            setState(() {
-                              _stateController.text = stateName;
-                              _selectedStateId = stateId;
-                            });
-                            Navigator.pop(context);
-                          },
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(
-                                      0xFF007AFF,
-                                    ).withValues(alpha: 0.1)
-                                  : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.location_on_rounded,
+                        return Container(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(
+                                    0xFF007AFF,
+                                  ).withValues(alpha: 0.05)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
                               color: isSelected
                                   ? const Color(0xFF007AFF)
-                                  : Colors.grey.shade600,
-                              size: 20,
+                                  : Colors.grey.shade300,
+                              width: isSelected ? 2 : 1,
                             ),
                           ),
-                          title: Text(
-                            stateName,
-                            style: TextStyle(
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: isSelected
-                                  ? const Color(0xFF007AFF)
-                                  : const Color(0xFF1C1C1E),
+                          child: RadioListTile<String>(
+                            value: stateId,
+                            groupValue: _selectedStateId,
+                            onChanged: (value) {
+                              if (value != null) {
+                                HapticFeedback.selectionClick();
+                                setState(() {
+                                  _stateController.text = stateName;
+                                  _selectedStateId = value;
+                                });
+                                Navigator.pop(context);
+                              }
+                            },
+                            title: Text(
+                              stateName,
+                              style: TextStyle(
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                color: const Color(0xFF1C1C1E),
+                              ),
+                            ),
+                            activeColor: const Color(0xFF007AFF),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 0,
+                            ),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          trailing: isSelected
-                              ? const Icon(
-                                  Icons.check_circle,
-                                  color: Color(0xFF007AFF),
-                                )
-                              : null,
                         );
                       },
                     ),

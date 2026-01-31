@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/drivers_provider.dart';
 import '../navigation/index.dart';
 
@@ -481,7 +482,7 @@ class _MargdarshakDriversPageState extends ConsumerState<MargdarshakDriversPage>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'From: ${driver.sourceShop} (${driver.shopType == 'dhaba' ? 'Dhaba' : 'Puncture Shop'})',
+                          'From: ${driver.sourceShop} ${driver.city.isNotEmpty ? '• ${driver.city}' : ''} (${driver.shopType == 'dhaba' ? 'Dhaba' : 'Puncture Shop'})',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey.shade600,
@@ -771,36 +772,51 @@ class _MargdarshakDriversPageState extends ConsumerState<MargdarshakDriversPage>
   }
 
   IconData _getOutcomeIcon(String? outcome) {
-    switch (outcome) {
-      case 'interested':
-        return Icons.thumb_up_rounded;
-      case 'not_interested':
-        return Icons.thumb_down_rounded;
-      case 'follow_up':
-        return Icons.schedule_rounded;
-      case 'not_reachable':
-        return Icons.phone_disabled_rounded;
-      default:
-        return Icons.help_outline_rounded;
+    if (outcome == null) return Icons.help_outline_rounded;
+    final o = outcome.toLowerCase();
+
+    if (o.contains('interested') && !o.contains('not')) {
+      return Icons.thumb_up_rounded;
     }
+    if (o.contains('not_interested') || o.contains('not interested')) {
+      return Icons.thumb_down_rounded;
+    }
+    if (o.contains('follow') ||
+        o.contains('callback') ||
+        o.contains('schedule')) {
+      return Icons.schedule_rounded;
+    }
+    if (o.contains('reach') || o.contains('disable')) {
+      return Icons.phone_disabled_rounded;
+    }
+
+    return Icons.info_outline_rounded;
   }
 
   Color _getOutcomeColor(String? outcome) {
-    switch (outcome) {
-      case 'interested':
-        return const Color(0xFF4CAF50);
-      case 'not_interested':
-        return Colors.red;
-      case 'follow_up':
-        return Colors.orange;
-      case 'not_reachable':
-        return Colors.grey;
-      default:
-        return Colors.grey;
+    if (outcome == null) return Colors.grey;
+    final o = outcome.toLowerCase();
+
+    if (o.contains('interested') && !o.contains('not')) {
+      return const Color(0xFF4CAF50);
     }
+    if (o.contains('not_interested') || o.contains('not interested')) {
+      return Colors.red;
+    }
+    if (o.contains('follow') ||
+        o.contains('callback') ||
+        o.contains('schedule')) {
+      return Colors.orange;
+    }
+    if (o.contains('reach') || o.contains('disable')) {
+      return Colors.grey;
+    }
+
+    return Colors.blueGrey;
   }
 
   String _getOutcomeText(String? outcome) {
+    if (outcome == null) return 'N/A';
     switch (outcome) {
       case 'interested':
         return 'Interested';
@@ -811,7 +827,7 @@ class _MargdarshakDriversPageState extends ConsumerState<MargdarshakDriversPage>
       case 'not_reachable':
         return 'Not Reachable';
       default:
-        return 'Unknown';
+        return outcome;
     }
   }
 
@@ -824,13 +840,15 @@ class _MargdarshakDriversPageState extends ConsumerState<MargdarshakDriversPage>
     );
   }
 
-  void _callDriver(Driver driver) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Calling ${driver.name}...'),
-        backgroundColor: const Color(0xFFE65100),
-      ),
-    );
+  Future<void> _callDriver(Driver driver) async {
+    final Uri launchUri = Uri(scheme: 'tel', path: driver.phone);
+    if (!await launchUrl(launchUri)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not launch dialer')),
+        );
+      }
+    }
   }
 }
 
@@ -958,17 +976,24 @@ class _DriverDetailsModal extends StatelessWidget {
               child: Column(
                 children: [
                   _buildSection('Driver Status', [
+                    if (driver.uniqueId.isNotEmpty)
+                      _row('Unique ID', driver.uniqueId),
+                    if (driver.referralCode.isNotEmpty)
+                      _row('Referral Code', driver.referralCode),
                     _row(
                       'Onboarding',
-                      driver.onboardingStatus == 'completed'
-                          ? 'Completed ✓'
-                          : 'Pending',
+                      driver.onboardingStatus == 'Active'
+                          ? 'Active ✓'
+                          : driver.onboardingStatus,
                     ),
                     _row(
                       'KYC Status',
                       driver.kycStatus == 'verified' ? 'Verified ✓' : 'Pending',
                     ),
                     _row('Profile Completion', '${driver.profileCompletion}%'),
+                    if (driver.city.isNotEmpty) _row('City', driver.city),
+                    if (driver.stateName.isNotEmpty)
+                      _row('State', driver.stateName),
                   ]),
 
                   _buildSection('Contact Timeline', [
@@ -1069,89 +1094,89 @@ class _DriverDetailsModal extends StatelessWidget {
   Widget _buildNotesSection() {
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blue.shade100),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.person_rounded,
-                    size: 16,
-                    color: Colors.blue.shade700,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Agent Notes',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.blue.shade700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Driver seems genuine and interested. Good candidate for subscription.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Added by: Field Agent • Jan 20',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.orange.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.shade100),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.admin_panel_settings_rounded,
-                    size: 16,
-                    color: Colors.orange.shade700,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Admin Notes',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.orange.shade700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Profile verified. KYC approved. Good track record.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Updated by: Admin Team • Jan 21',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-              ),
-            ],
-          ),
-        ),
+        // Container(
+        //   padding: const EdgeInsets.all(16),
+        //   margin: const EdgeInsets.only(bottom: 12),
+        //   decoration: BoxDecoration(
+        //     color: Colors.blue.shade50,
+        //     borderRadius: BorderRadius.circular(12),
+        //     border: Border.all(color: Colors.blue.shade100),
+        //   ),
+        //   child: Column(
+        //     crossAxisAlignment: CrossAxisAlignment.start,
+        //     children: [
+        //       Row(
+        //         // children: [
+        //         //   Icon(
+        //         //     Icons.person_rounded,
+        //         //     size: 16,
+        //         //     color: Colors.blue.shade700,
+        //         //   ),
+        //         //   const SizedBox(width: 8),
+        //         //   Text(
+        //         //     'Agent Notes',
+        //         //     style: TextStyle(
+        //         //       fontSize: 14,
+        //         //       fontWeight: FontWeight.w600,
+        //         //       color: Colors.blue.shade700,
+        //         //     ),
+        //         //   ),
+        //         // ],
+        //       ),
+        //       const SizedBox(height: 8),
+        //       const Text(
+        //         'Driver seems genuine and interested. Good candidate for subscription.',
+        //         style: TextStyle(fontSize: 13),
+        //       ),
+        //       const SizedBox(height: 6),
+        //       Text(
+        //         'Added by: Field Agent • Jan 20',
+        //         style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        //       ),
+        //     ],
+        //   ),
+        // ),
+        // Container(
+        //   padding: const EdgeInsets.all(16),
+        //   decoration: BoxDecoration(
+        //     color: Colors.orange.shade50,
+        //     borderRadius: BorderRadius.circular(12),
+        //     border: Border.all(color: Colors.orange.shade100),
+        //   ),
+        //   child: Column(
+        //     crossAxisAlignment: CrossAxisAlignment.start,
+        //     children: [
+        //       Row(
+        //         children: [
+        //           Icon(
+        //             Icons.admin_panel_settings_rounded,
+        //             size: 16,
+        //             color: Colors.orange.shade700,
+        //           ),
+        //           const SizedBox(width: 8),
+        //           Text(
+        //             'Admin Notes',
+        //             style: TextStyle(
+        //               fontSize: 14,
+        //               fontWeight: FontWeight.w600,
+        //               color: Colors.orange.shade700,
+        //             ),
+        //           ),
+        //         ],
+        //       ),
+        //       const SizedBox(height: 8),
+        //       const Text(
+        //         'Profile verified. KYC approved. Good track record.',
+        //         style: TextStyle(fontSize: 13),
+        //       ),
+        //       const SizedBox(height: 6),
+        //       Text(
+        //         'Updated by: Admin Team • Jan 21',
+        //         style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        //       ),
+        //     ],
+        //   ),
+        // ),
       ],
     );
   }
@@ -1163,7 +1188,7 @@ class _DriverDetailsModal extends StatelessWidget {
           children: [
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => _launchCall(context, driver.phone),
                 icon: const Icon(Icons.phone_rounded, size: 18),
                 label: const Text('Call Driver'),
                 style: ElevatedButton.styleFrom(
@@ -1176,7 +1201,7 @@ class _DriverDetailsModal extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: () => _launchWhatsApp(context, driver.phone),
                 icon: const Icon(Icons.message_rounded, size: 18),
                 label: const Text('WhatsApp'),
                 style: ElevatedButton.styleFrom(
@@ -1190,39 +1215,40 @@ class _DriverDetailsModal extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.note_add_rounded, size: 18),
-                label: const Text('Add Note'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF7B1FA2),
-                  side: const BorderSide(color: Color(0xFF7B1FA2)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.schedule_rounded, size: 18),
-                label: const Text('Schedule'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFE65100),
-                  side: const BorderSide(color: Color(0xFFE65100)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-          ],
+          // children: [
+          //   Expanded(
+          //     child: OutlinedButton.icon(
+          //       onPressed: () {},
+          //       icon: const Icon(Icons.note_add_rounded, size: 18),
+          //       label: const Text('Add Note'),
+          //       style: OutlinedButton.styleFrom(
+          //         foregroundColor: const Color(0xFF7B1FA2),
+          //         side: const BorderSide(color: Color(0xFF7B1FA2)),
+          //         padding: const EdgeInsets.symmetric(vertical: 12),
+          //       ),
+          //     ),
+          //   ),
+          //   const SizedBox(width: 12),
+          //   Expanded(
+          //     child: OutlinedButton.icon(
+          //       onPressed: () {},
+          //       icon: const Icon(Icons.schedule_rounded, size: 18),
+          //       label: const Text('Schedule'),
+          //       style: OutlinedButton.styleFrom(
+          //         foregroundColor: const Color(0xFFE65100),
+          //         side: const BorderSide(color: Color(0xFFE65100)),
+          //         padding: const EdgeInsets.symmetric(vertical: 12),
+          //       ),
+          //     ),
+          //   ),
+          // ],
         ),
       ],
     );
   }
 
   String _outcomeText(String? outcome) {
+    if (outcome == null) return 'N/A';
     switch (outcome) {
       case 'interested':
         return 'Interested';
@@ -1233,7 +1259,7 @@ class _DriverDetailsModal extends StatelessWidget {
       case 'not_reachable':
         return 'Not Reachable';
       default:
-        return 'Unknown';
+        return outcome;
     }
   }
 
@@ -1249,6 +1275,43 @@ class _DriverDetailsModal extends StatelessWidget {
         return 'Never Subscribed';
       default:
         return 'Unknown';
+    }
+  }
+
+  Future<void> _launchCall(BuildContext context, String phone) async {
+    final Uri launchUri = Uri(scheme: 'tel', path: phone);
+    if (!await launchUrl(launchUri)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not launch dialer')),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchWhatsApp(BuildContext context, String phone) async {
+    // Cleanup and format phone
+    String cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    if (cleanPhone.length == 10) {
+      cleanPhone = '91$cleanPhone';
+    }
+
+    final uri = Uri.parse("whatsapp://send?phone=$cleanPhone");
+
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        // Fallback to web
+        final webUri = Uri.parse("https://wa.me/$cleanPhone");
+        if (!await launchUrl(webUri, mode: LaunchMode.externalApplication)) {
+          throw Exception('Could not launch WhatsApp');
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not launch WhatsApp')),
+        );
+      }
     }
   }
 }

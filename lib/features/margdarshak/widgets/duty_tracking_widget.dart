@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../../core/services/location_tracking_service.dart';
 import '../../../core/models/location_models.dart';
 
@@ -388,7 +390,8 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
           if (_locationService.isOnDuty &&
               _lastLocationUpdate?.batteryLevel != null) ...[
             const SizedBox(height: 12),
-            if (_lastLocationUpdate!.batteryLevel! < 20)
+            if (_lastLocationUpdate!.batteryLevel! > 0 &&
+                _lastLocationUpdate!.batteryLevel! < 20)
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -447,6 +450,24 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
+  Future<File?> _pickImage() async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource
+            .camera, // Force camera as per "live" requirement usually
+        imageQuality: 50,
+        maxWidth: 1024,
+      );
+      if (pickedFile != null) {
+        return File(pickedFile.path);
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to capture image: $e');
+    }
+    return null;
+  }
+
   Future<void> _toggleDuty() async {
     setState(() {
       _isLoading = true;
@@ -455,19 +476,35 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
     try {
       bool success;
       if (_locationService.isOnDuty) {
-        success = await _locationService.endDuty();
+        // End Duty
+        // Capture image for checkout
+        final image = await _pickImage();
+        if (image == null) {
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        }
+
+        success = await _locationService.endDuty(image: image);
         if (success) {
           _showSuccessSnackBar('Duty ended successfully');
         }
       } else {
+        // Start Duty
         // Show consent dialog first
         final consent = await _showConsentDialog();
         if (!consent) {
-          setState(() => _isLoading = false);
+          if (mounted) setState(() => _isLoading = false);
           return;
         }
 
-        success = await _locationService.startDuty();
+        // Capture image for check-in
+        final image = await _pickImage();
+        if (image == null) {
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        }
+
+        success = await _locationService.startDuty(image: image);
         if (success) {
           _showSuccessSnackBar('Duty started - Location tracking active');
           // Initial map recenter
@@ -483,11 +520,11 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
         }
       }
 
+      /*
       if (!success) {
-        _showErrorSnackBar(
-          'Failed to ${_locationService.isOnDuty ? 'end' : 'start'} duty',
-        );
+        // Errors are handled by _locationService.onError callback
       }
+      */
     } catch (e) {
       _showErrorSnackBar('Error: $e');
     } finally {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../add_shop/index.dart';
 import '../navigation/index.dart';
+import '../view_shop_detail/index.dart';
 import '../../services/margdarshak_api_service.dart';
 
 class MargdarshakShopsPage extends StatefulWidget {
@@ -192,8 +193,6 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
             _buildFilterChip('Dhabas', 'dhaba'),
             const SizedBox(width: 8),
             _buildFilterChip('Puncture', 'puncture'),
-            const SizedBox(width: 8),
-            _buildFilterChip('Pending', 'pending'),
           ],
         ),
       ),
@@ -313,7 +312,7 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
 
   Widget _buildShopCard(Map<String, dynamic> shop, int index) {
     final isApproved = shop['status'] == 'approved';
-    final isPending = shop['status'] == 'pending';
+    // final isPending = shop['status'] == 'pending';
     final isDhaba = shop['type'] == 'dhaba';
 
     return Container(
@@ -321,14 +320,14 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isPending
-                  ? Colors.orange.shade200
-                  : isApproved
-                  ? Colors.green.shade200
-                  : Colors.grey.shade200,
-              width: 1,
-            ),
+            // border: Border.all(
+            //   color: isPending
+            //       ? Colors.orange.shade200
+            //       : isApproved
+            //       ? Colors.green.shade200
+            //       : Colors.grey.shade200,
+            //   width: 1,
+            // ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.05),
@@ -384,7 +383,35 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
                       ],
                     ),
                   ),
-                  _buildStatusBadge(shop['status']),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _buildStatusBadge(shop['status']),
+                      if (shop['displayType'] != null &&
+                          shop['displayType'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Text(
+                            shop['displayType'],
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
 
@@ -431,52 +458,92 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
 
               const SizedBox(height: 12),
 
-              // Address
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(8),
+              // Address (Hide if empty or placeholder)
+              if (shop['address'] != null &&
+                  shop['address'] != 'No address provided' &&
+                  shop['address'].toString().isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.location_pin,
+                        size: 16,
+                        color: Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          shop['address'],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.location_pin,
-                      size: 16,
-                      color: Colors.grey.shade600,
+
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ShopDetailsScreen(
+                              uniqueId: shop['uniqueId'] ?? '',
+                              userId: shop['id'] ?? '',
+                            ),
+                          ),
+                        );
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: BorderSide(color: Colors.grey.shade300),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'View Details',
+                        style: TextStyle(color: Colors.black87),
+                      ),
                     ),
-                    const SizedBox(width: 8),
+                  ),
+                  if (isApproved && (shop['driversCount'] ?? 0) >= 1) ...[
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        shop['address'] ?? 'No address provided',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          _showShopDriversBottomSheet(shop);
+                        },
+                        icon: const Icon(
+                          Icons.people_outline_rounded,
+                          size: 16,
+                        ),
+                        label: Text('Drivers (${shop['driversCount'] ?? 0})'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF7B1FA2),
+                          side: const BorderSide(color: Color(0xFF7B1FA2)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
-
-              if (isApproved && (shop['driversCount'] ?? 0) >= 1) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      _showShopDriversBottomSheet(shop);
-                    },
-                    icon: const Icon(Icons.people_outline_rounded, size: 16),
-                    label: Text('View Drivers (${shop['driversCount'] ?? 0})'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF7B1FA2),
-                      side: const BorderSide(color: Color(0xFF7B1FA2)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         )

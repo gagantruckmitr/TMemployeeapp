@@ -79,8 +79,10 @@ class ApiConfig {
       '$margdarshakApiBase/margdarshak/territory-overview';
   static String get margdarshakShopDriversApi =>
       '$margdarshakApiBase/margdarshak/shop-drivers';
+  static String get margdarshakDutyStartStopApi =>
+      '$margdarshakApiBase/margdarshak/duty/start-stop';
   static String get margdarshakLocationUpdateApi =>
-      '$margdarshakApiBase/margdarshak/update-location';
+      '$margdarshakApiBase/margdarshak/duty/update-location';
 
   // Margdarshak Dhaba Profile Completion APIs
   static String get margdarshakDhabaBusinessInfoApi =>
@@ -101,6 +103,10 @@ class ApiConfig {
       '$margdarshakApiBase/margdarshak/dhaba/engagement';
   static String get margdarshakDhabaProfileApi =>
       '$margdarshakApiBase/margdarshak/dhaba/profile';
+  static String get margdarshakDhabaDetailsApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/details';
+  static String get margdarshakEarningsApi =>
+      '$margdarshakApiBase/margdarshak/earnings';
 
   // Email Configuration
   static const String hrEmail = 'hr@$domain';

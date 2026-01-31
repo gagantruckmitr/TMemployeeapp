@@ -53,6 +53,16 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
+    // CRITICAL FIX: If user hasn't seen onboarding (fresh install) but isLoggedIn is true,
+    // it implies stale data. Force logout.
+    if (!hasSeenOnboarding && isLoggedIn) {
+      print('⚠️ Fresh install detected with stale session. Logging out...');
+      await RealAuthService.instance.logout();
+      if (!mounted) return;
+      context.go('/onboarding');
+      return;
+    }
+
     if (isLoggedIn) {
       // User is logged in, check their role and route accordingly
       final user = RealAuthService.instance.currentUser;

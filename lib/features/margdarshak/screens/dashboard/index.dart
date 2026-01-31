@@ -4,7 +4,7 @@ import '../../services/margdarshak_auth_service.dart';
 import '../../services/margdarshak_api_service.dart';
 import '../../widgets/dashboard_stats_card.dart';
 import '../../widgets/quick_action_card.dart';
-import '../../widgets/recent_activity_card.dart';
+
 import '../../widgets/duty_tracking_widget.dart';
 import '../add_shop/index.dart';
 import '../navigation/index.dart';
@@ -158,7 +158,14 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Header
-                      _buildHeader(user?.name ?? 'Margdarshak'),
+                      _buildHeader(
+                        _dashboardData['territory']?['name'] ??
+                            user?.name ??
+                            'Margdarshak',
+                        _dashboardData['territory']?['employee_id'] ??
+                            user?.employeeId ??
+                            'Field Agent',
+                      ),
 
                       const SizedBox(height: 24),
 
@@ -186,8 +193,6 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                       const SizedBox(height: 20),
 
                       // Recent Activity
-                      _buildRecentActivity(),
-
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -221,9 +226,7 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
     );
   }
 
-  Widget _buildHeader(String userName) {
-    final user = _authService.currentUser;
-
+  Widget _buildHeader(String userName, String employeeId) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -273,7 +276,7 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                   ),
                 ),
                 Text(
-                  user?.employeeId ?? 'Field Agent',
+                  employeeId,
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
@@ -578,53 +581,5 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
   void _navigateToTab(int tabIndex) {
     // Use the global key to access the navigation container state
     margdarshakNavigationKey.currentState?.switchToTab(tabIndex);
-  }
-
-  Widget _buildRecentActivity() {
-    return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Recent Activity',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2D5F),
-              ),
-            ),
-            const SizedBox(height: 16),
-            RecentActivityCard(
-              activities: [
-                ActivityItem(
-                  title: 'New driver added via Sharma Dhaba',
-                  subtitle: '2 hours ago',
-                  icon: Icons.person_add_rounded,
-                  color: const Color(0xFF4CAF50),
-                ),
-                ActivityItem(
-                  title: 'Puncture shop approved in Pune',
-                  subtitle: '4 hours ago',
-                  icon: Icons.check_circle_rounded,
-                  color: const Color(0xFF2196F3),
-                ),
-                ActivityItem(
-                  title: 'Tele-team contacted 5 drivers',
-                  subtitle: '6 hours ago',
-                  icon: Icons.phone_rounded,
-                  color: const Color(0xFFFF9800),
-                ),
-                ActivityItem(
-                  title: 'Earnings payout processed',
-                  subtitle: '1 day ago',
-                  icon: Icons.payment_rounded,
-                  color: const Color(0xFF9C27B0),
-                ),
-              ],
-            ),
-          ],
-        )
-        .animate()
-        .fadeIn(duration: 600.ms, delay: 800.ms)
-        .slideY(begin: 0.2, end: 0);
   }
 }

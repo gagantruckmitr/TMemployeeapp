@@ -161,11 +161,11 @@ class _MargdarshakProfilePageState
           },
         ),
         actions: [
-          IconButton(
-            onPressed: _navigateToEditProfile,
-            icon: const Icon(Icons.edit_rounded, color: Color(0xFF2D2D5F)),
-            tooltip: 'Edit Profile',
-          ),
+          // IconButton(
+          //   onPressed: _navigateToEditProfile,
+          //   icon: const Icon(Icons.edit_rounded, color: Color(0xFF2D2D5F)),
+          //   tooltip: 'Edit Profile',
+          // ),
           IconButton(
             onPressed: _loadProfileData,
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF2D2D5F)),
@@ -323,7 +323,7 @@ class _MargdarshakProfilePageState
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'ID: ${_profileData['employeeId'] ?? 'N/A'}',
+                  '${_profileData['employeeId'] ?? 'N/A'}',
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
                 const SizedBox(height: 8),
@@ -675,17 +675,17 @@ class _MargdarshakProfilePageState
                       ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const BankDetailsScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text('Edit'),
-                  ),
+                  // TextButton(
+                  //   onPressed: () {
+                  //     Navigator.push(
+                  //       context,
+                  //       MaterialPageRoute(
+                  //         builder: (context) => const BankDetailsScreen(),
+                  //       ),
+                  //     );
+                  //   },
+                  //   child: const Text('Edit'),
+                  // ),
                 ],
               ),
               const SizedBox(height: 16),

@@ -16,6 +16,10 @@ class Driver {
   final Subscription subscription;
   final Earnings earnings;
   final String addedDate;
+  final String uniqueId;
+  final String referralCode;
+  final String city;
+  final String stateName;
 
   Driver({
     required this.id,
@@ -31,6 +35,10 @@ class Driver {
     required this.subscription,
     required this.earnings,
     required this.addedDate,
+    required this.uniqueId,
+    required this.referralCode,
+    required this.city,
+    required this.stateName,
   });
 
   factory Driver.fromMap(Map<String, dynamic> map) {
@@ -48,6 +56,10 @@ class Driver {
       subscription: Subscription.fromMap(map['subscription'] ?? {}),
       earnings: Earnings.fromMap(map['earnings'] ?? {}),
       addedDate: map['addedDate'] ?? '',
+      uniqueId: map['uniqueId'] ?? '',
+      referralCode: map['referralCode'] ?? '',
+      city: map['city'] ?? '',
+      stateName: map['stateName'] ?? '',
     );
   }
 
@@ -56,34 +68,64 @@ class Driver {
     // Extract shop info
     final shopInfo = apiMap['shop_info'] ?? {};
     final paymentInfo = apiMap['payment_info'] ?? {};
-    
+
     // Mask phone number (show last 4 digits)
     final phone = apiMap['mobile']?.toString() ?? '';
-    final maskedPhone = phone.length > 4 
-        ? '******${phone.substring(phone.length - 4)}' 
+    final maskedPhone = phone.length > 4
+        ? '******${phone.substring(phone.length - 4)}'
         : phone;
-    
+
     // Map subscription status
-    final subscriptionStatus = apiMap['subscription_status']?.toString() ?? 'never_subscribed';
+    final subscriptionStatus =
+        apiMap['subscription_status']?.toString() ?? 'never_subscribed';
     String mappedStatus;
-    if (subscriptionStatus.toLowerCase().contains('active')) {
+
+    if (subscriptionStatus.toLowerCase().contains('active') &&
+        subscriptionStatus.toLowerCase().contains('plan')) {
+      mappedStatus = 'active';
+    } else if (subscriptionStatus.toLowerCase().contains('active')) {
+      // Ideally just "Active" means active, but JSON says "Active Plan" vs "Active".
+      // Let's assume any "active" string implies active status unless explicit context says otherwise.
       mappedStatus = 'active';
     } else if (subscriptionStatus.toLowerCase().contains('expired')) {
       mappedStatus = 'expired';
+    } else if (subscriptionStatus.toLowerCase().contains('trial')) {
+      mappedStatus = 'trial';
     } else {
       mappedStatus = 'never_subscribed';
     }
-    
-    // Map contact timeline to contacted status
-    final contactTimeline = apiMap['contact_timeline']?.toString() ?? 'Not Contacted';
-    final isContacted = !contactTimeline.toLowerCase().contains('not contacted');
-    
+
+    // Map contact timeline
+    final contactTimelineData = apiMap['contact_timeline'];
+    bool isContacted = false;
+    String? lastCallDate;
+    String? outcome;
+    String? telecaller;
+
+    if (contactTimelineData is Map) {
+      // It's a map (JSON object)
+      isContacted = true;
+      outcome = contactTimelineData['status']?.toString();
+      telecaller = contactTimelineData['assigned_to']?.toString();
+      lastCallDate = contactTimelineData['call_time']?.toString();
+    } else if (contactTimelineData is String &&
+        contactTimelineData != 'Not Contacted') {
+      // String but not "Not Contacted" - unexpected but handle gracefully
+      isContacted = true;
+      outcome = contactTimelineData;
+    }
+
     // Parse dates
     String? expiryDate;
-    if (paymentInfo['end_at'] != null) {
+    if (paymentInfo is Map && paymentInfo['end_at'] != null) {
       expiryDate = paymentInfo['end_at'].toString();
     }
-    
+
+    String planAmount = '';
+    if (paymentInfo is Map && paymentInfo['amount'] != null) {
+      planAmount = '₹${paymentInfo['amount']}';
+    }
+
     return Driver(
       id: apiMap['id']?.toString() ?? '',
       name: apiMap['name']?.toString() ?? '',
@@ -92,28 +134,38 @@ class Driver {
       sourceShop: shopInfo['shop_name']?.toString() ?? 'Unknown',
       shopType: shopInfo['type']?.toString() ?? 'unknown',
       onboardingStatus: apiMap['status']?.toString() ?? 'pending',
-      kycStatus: 'pending', // Not provided in API
-      profileCompletion: int.tryParse(apiMap['profile_completion']?.toString() ?? '0') ?? 0,
+      kycStatus:
+          'pending', // Not provided explicitly as kyc_status, but maybe inferred or default
+      profileCompletion:
+          int.tryParse(apiMap['profile_completion']?.toString() ?? '0') ?? 0,
       teleStatus: TeleStatus(
         contacted: isContacted,
-        lastCallDate: null, // Not provided in API
-        outcome: contactTimeline != 'Not Contacted' ? contactTimeline : null,
-        nextFollowUp: null, // Not provided in API
-        telecaller: null, // Not provided in API
+        lastCallDate: lastCallDate,
+        outcome: outcome,
+        nextFollowUp: null, // Not in JSON currently
+        telecaller: telecaller,
       ),
       subscription: Subscription(
         status: mappedStatus,
-        plan: paymentInfo['amount'] != null ? '₹${paymentInfo['amount']}' : null,
+        plan: planAmount.isNotEmpty
+            ? planAmount
+            : (mappedStatus == 'active' ? 'Active Plan' : null),
         expiryDate: expiryDate,
       ),
       earnings: Earnings(
-        eligible: apiMap['earning_per_user'] != null && apiMap['earning_per_user'] > 0,
-        amount: int.tryParse(apiMap['earning_per_user']?.toString() ?? '0') ?? 0,
-        reason: apiMap['earning_per_user'] != null && apiMap['earning_per_user'] > 0 
-            ? 'Active subscription' 
-            : 'No active subscription',
+        eligible:
+            apiMap['earning_per_user'] != null &&
+            (int.tryParse(apiMap['earning_per_user'].toString()) ?? 0) > 0,
+        amount:
+            int.tryParse(apiMap['earning_per_user']?.toString() ?? '0') ?? 0,
+        reason: null, // Logic for reason can be added if needed
       ),
-      addedDate: apiMap['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+      addedDate:
+          apiMap['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+      uniqueId: apiMap['unique_id']?.toString() ?? '',
+      referralCode: apiMap['referral_code']?.toString() ?? '',
+      city: apiMap['city']?.toString() ?? '',
+      stateName: apiMap['state_name']?.toString() ?? '',
     );
   }
 
@@ -132,6 +184,10 @@ class Driver {
       'subscription': subscription.toMap(),
       'earnings': earnings.toMap(),
       'addedDate': addedDate,
+      'uniqueId': uniqueId,
+      'referralCode': referralCode,
+      'city': city,
+      'stateName': stateName,
     };
   }
 }
@@ -295,7 +351,7 @@ class DriversState {
 // Notifier for drivers state
 class DriversNotifier extends StateNotifier<DriversState> {
   final _apiService = MargdarshakApiService();
-  
+
   DriversNotifier() : super(DriversState());
 
   Future<void> loadDrivers() async {
@@ -303,19 +359,19 @@ class DriversNotifier extends StateNotifier<DriversState> {
 
     try {
       print('🔵 Loading territory drivers...');
-      
+
       // Fetch real data from API
       final response = await _apiService.getTerritoryDrivers();
-      
+
       if (response['status'] == true && response['data'] != null) {
         final driversData = response['data'] as List;
         print('✅ Loaded ${driversData.length} drivers from API');
-        
+
         // Convert API data to Driver objects
         final drivers = driversData.map((driverMap) {
           return Driver.fromApiMap(driverMap);
         }).toList();
-        
+
         state = state.copyWith(drivers: drivers, isLoading: false);
       } else {
         throw Exception(response['message'] ?? 'Failed to load drivers');

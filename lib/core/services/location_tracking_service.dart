@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:battery_plus/battery_plus.dart';
+import 'package:geocoding/geocoding.dart';
 import '../models/location_models.dart';
 import '../../features/margdarshak/services/margdarshak_api_service.dart';
 
@@ -81,7 +83,7 @@ class LocationTrackingService {
   }
 
   /// Start duty and begin location tracking
-  Future<bool> startDuty() async {
+  Future<bool> startDuty({required File image, String? address}) async {
     if (_isOnDuty) return true;
 
     try {
@@ -95,19 +97,40 @@ class LocationTrackingService {
       // Start location tracking
       await _startLocationTracking();
 
-      // Send duty start event to server
-      await _sendDutyEvent(DutyEventType.start);
+      // Send duty start event to server (using current location)
+      // Note: _sendDutyEvent now needs to handle the image and address
+      // We wait for the first location fixed if not available
+      if (_lastKnownPosition == null) {
+        try {
+          _lastKnownPosition = await Geolocator.getCurrentPosition();
+        } catch (e) {
+          debugPrint('Could not get current location for start duty');
+        }
+      }
+
+      // Fetch address if specific address not provided
+      if (address == null && _lastKnownPosition != null) {
+        address = await _getAddress(
+          _lastKnownPosition!.latitude,
+          _lastKnownPosition!.longitude,
+        );
+      }
+
+      await _sendDutyEvent(DutyEventType.start, image: image, address: address);
 
       debugPrint('🟢 Duty started at ${_dutyStartTime}');
       return true;
     } catch (e) {
-      onError?.call('Failed to start duty: $e');
+      String message = e.toString().replaceAll('Exception: ', '');
+      onError?.call(message);
+      _isOnDuty = false; // Revert state
+      _stopLocationTracking();
       return false;
     }
   }
 
   /// End duty and stop location tracking
-  Future<bool> endDuty() async {
+  Future<bool> endDuty({required File image, String? address}) async {
     if (!_isOnDuty) return true;
 
     try {
@@ -117,13 +140,22 @@ class LocationTrackingService {
       // Stop location tracking
       await _stopLocationTracking();
 
+      // Fetch address if not provided (using last known position)
+      if (address == null && _lastKnownPosition != null) {
+        address = await _getAddress(
+          _lastKnownPosition!.latitude,
+          _lastKnownPosition!.longitude,
+        );
+      }
+
       // Send duty end event to server
-      await _sendDutyEvent(DutyEventType.end);
+      await _sendDutyEvent(DutyEventType.end, image: image, address: address);
 
       debugPrint('🔴 Duty ended at ${_dutyEndTime}');
       return true;
     } catch (e) {
-      onError?.call('Failed to end duty: $e');
+      String message = e.toString().replaceAll('Exception: ', '');
+      onError?.call(message);
       return false;
     }
   }
@@ -186,7 +218,7 @@ class LocationTrackingService {
   }
 
   /// Handle position updates
-  void _handlePositionUpdate(Position position) {
+  Future<void> _handlePositionUpdate(Position position) async {
     // Filter out inaccurate readings
     if (position.accuracy > _accuracyThreshold) {
       debugPrint('Ignoring inaccurate location: ${position.accuracy}m');
@@ -207,10 +239,11 @@ class LocationTrackingService {
       latitude: position.latitude,
       longitude: position.longitude,
       accuracy: position.accuracy,
-      speed: position.speed,
+      // Filter out speed noise (less than ~1.8 km/h)
+      speed: position.speed < 0.5 ? 0.0 : position.speed,
       heading: position.heading,
       timestamp: DateTime.now(),
-      batteryLevel: _getBatteryLevel(),
+      batteryLevel: await _getBatteryLevel(), // Actually fetch battery level
       source: LocationSource.gps,
     );
 
@@ -301,6 +334,8 @@ class LocationTrackingService {
         speed: update.speed,
         heading: update.heading,
         batteryLevel: update.batteryLevel,
+        // We could reverse geocode here but it might be expensive
+        // leaving address as null for periodic updates unless necessary
       );
       debugPrint('Sending location update: ${update.toJson()}');
     } catch (e) {
@@ -309,25 +344,28 @@ class LocationTrackingService {
   }
 
   /// Send duty event to server
-  Future<void> _sendDutyEvent(DutyEventType eventType) async {
+  Future<void> _sendDutyEvent(
+    DutyEventType eventType, {
+    required File image,
+    String? address,
+  }) async {
     try {
-      final event = DutyEvent(
-        agentId: _getCurrentAgentId(),
-        eventType: eventType,
-        timestamp: DateTime.now(),
-        location: _lastKnownPosition != null
-            ? LocationPoint(
-                latitude: _lastKnownPosition!.latitude,
-                longitude: _lastKnownPosition!.longitude,
-              )
-            : null,
+      if (_lastKnownPosition == null) {
+        throw Exception('Location not available for duty event');
+      }
+
+      await MargdarshakApiService().startStopDuty(
+        status: eventType == DutyEventType.start ? 'start' : 'stop',
+        latitude: _lastKnownPosition!.latitude,
+        longitude: _lastKnownPosition!.longitude,
+        image: image,
+        locationAddress: address,
       );
 
-      // TODO: Replace with actual API call
-      // await ApiService.post('/agent/duty', event.toJson());
-      debugPrint('Sending duty event: ${event.toJson()}');
+      debugPrint('Sent duty event: $eventType');
     } catch (e) {
       debugPrint('Failed to send duty event: $e');
+      rethrow; // Rethrow to notify UI
     }
   }
 
@@ -348,10 +386,15 @@ class LocationTrackingService {
     return 'agent_123'; // Mock for now
   }
 
-  /// Get battery level (mock implementation)
-  int _getBatteryLevel() {
-    // This would get actual battery level
-    return 85; // Mock for now
+  /// Get battery level using battery_plus
+  Future<int> _getBatteryLevel() async {
+    try {
+      final Battery battery = Battery();
+      return await battery.batteryLevel;
+    } catch (e) {
+      debugPrint('Failed to get battery level: $e');
+      return 0;
+    }
   }
 
   /// Get mock shop locations for geofencing
@@ -397,6 +440,37 @@ class LocationTrackingService {
       shopLat,
       shopLng,
     );
+  }
+
+  /// Get address from coordinates
+  Future<String?> _getAddress(double lat, double lng) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lng);
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        // Format: Name, SubLocality, Locality, AdministrativeArea
+        // Example: Connaught Place, New Delhi
+        List<String> parts = [];
+        if (place.name != null && place.name!.isNotEmpty)
+          parts.add(place.name!);
+        if (place.subLocality != null &&
+            place.subLocality!.isNotEmpty &&
+            place.subLocality != place.name) {
+          parts.add(place.subLocality!);
+        }
+        if (place.locality != null && place.locality!.isNotEmpty)
+          parts.add(place.locality!);
+        if (place.administrativeArea != null &&
+            place.administrativeArea!.isNotEmpty) {
+          parts.add(place.administrativeArea!);
+        }
+
+        return parts.join(', ');
+      }
+    } catch (e) {
+      debugPrint('Failed to get address: $e');
+    }
+    return null;
   }
 
   /// Dispose resources

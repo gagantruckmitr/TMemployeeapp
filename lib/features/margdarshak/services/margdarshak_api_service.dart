@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../../../core/config/api_config.dart';
 import 'margdarshak_auth_service.dart';
@@ -275,12 +276,19 @@ class MargdarshakApiService {
       if (period != null) queryParams['period'] = period;
 
       final url = Uri.parse(
-        '${ApiConfig.margdarshakApiBase}/margdarshak/earnings',
+        ApiConfig.margdarshakEarningsApi,
       ).replace(queryParameters: queryParams);
+
+      print('🔵 Fetching earnings...');
+      print('   URL: $url');
 
       final response = await http
           .get(url, headers: _authService.getAuthHeaders())
           .timeout(_timeout);
+
+      print('🔵 Earnings Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -294,40 +302,74 @@ class MargdarshakApiService {
     }
   }
 
-  /// Update duty status (check-in/check-out)
-  Future<Map<String, dynamic>> updateDutyStatus({
-    required String status, // 'check_in' or 'check_out'
-    double? latitude,
-    double? longitude,
+  /// Start or Stop Duty (Check-in / Check-out)
+  Future<Map<String, dynamic>> startStopDuty({
+    required String status, // 'start' or 'stop'
+    required double latitude,
+    required double longitude,
+    required File image,
+    String? locationAddress,
   }) async {
     try {
-      final url = Uri.parse(
-        '${ApiConfig.margdarshakApiBase}/margdarshak/duty-status',
-      );
+      final url = Uri.parse(ApiConfig.margdarshakDutyStartStopApi);
 
-      final response = await http
-          .post(
-            url,
-            headers: _authService.getAuthHeaders(),
-            body: json.encode({
-              'status': status,
-              if (latitude != null) 'latitude': latitude,
-              if (longitude != null) 'longitude': longitude,
-            }),
-          )
-          .timeout(_timeout);
+      print('🔵 ${status.toUpperCase()} Duty...');
+      print('   Lat/Lng: $latitude, $longitude');
+      print('   Address: $locationAddress');
+      print('   Image: ${image.path}');
+
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll(_authService.getAuthHeaders());
+
+      request.fields['status'] = status;
+      request.fields['latitude'] = latitude.toString();
+      request.fields['longitude'] = longitude.toString();
+      if (locationAddress != null) {
+        request.fields['location_address'] = locationAddress;
+      }
+
+      request.files.add(await http.MultipartFile.fromPath('image', image.path));
+
+      final streamedResponse = await request.send().timeout(_timeout);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('🔵 Duty Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        print('✅ Duty status updated: $status');
+        print('✅ Duty ${status}ed successfully');
         return data;
       } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        // Try to parse error message from body
+        String errorMessage =
+            'Failed to ${status} duty (HTTP ${response.statusCode})';
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData['message'] != null) {
+            errorMessage = errorData['message'];
+          }
+        } catch (_) {
+          // Keep default error message if parsing fails
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
-      print('❌ Failed to update duty status: $e');
+      print('❌ Failed to $status duty: $e');
       rethrow;
     }
+  }
+
+  /// Update duty status (Deprecated - use startStopDuty)
+  Future<Map<String, dynamic>> updateDutyStatus({
+    required String status,
+    double? latitude,
+    double? longitude,
+  }) async {
+    // Legacy support or fallback if needed without image
+    // For now throwing error as image is required
+    throw UnimplementedError('Use startStopDuty with image instead');
   }
 
   /// Update real-time location
@@ -338,6 +380,7 @@ class MargdarshakApiService {
     required double speed,
     double? heading,
     int? batteryLevel,
+    String? locationAddress,
   }) async {
     try {
       final url = Uri.parse(ApiConfig.margdarshakLocationUpdateApi);
@@ -346,19 +389,22 @@ class MargdarshakApiService {
       // But we use await here to catch errors in this service layer if needed
       // Ideally handled in a background service queue
 
+      final body = {
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy,
+        'speed': speed,
+        'heading': heading ?? 0,
+        'battery_level': batteryLevel ?? 0,
+        if (locationAddress != null) 'location_address': locationAddress,
+      };
+
       final response = await http
           .post(
             url,
-            headers: _authService.getAuthHeaders(),
-            body: json.encode({
-              'latitude': latitude,
-              'longitude': longitude,
-              'accuracy': accuracy,
-              'speed': speed,
-              'heading': heading,
-              'battery_level': batteryLevel,
-              'timestamp': DateTime.now().toIso8601String(),
-            }),
+            headers: _authService.getAuthHeaders()
+              ..addAll({'Content-Type': 'application/json'}),
+            body: json.encode(body),
           )
           .timeout(const Duration(seconds: 10));
 
@@ -1050,6 +1096,47 @@ class MargdarshakApiService {
       }
     } catch (e) {
       print('❌ Failed to fetch dhaba profile: $e');
+      rethrow;
+    }
+  }
+
+  /// Get Dhaba Details (New Endpoint)
+  Future<Map<String, dynamic>> getDhabaDetails({
+    required String uniqueId,
+    required String userId,
+  }) async {
+    try {
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakDhabaDetailsApi}?unique_id=$uniqueId&user_id=$userId',
+      );
+
+      print('🔵 Fetching dhaba details for $uniqueId...');
+
+      final response = await http
+          .get(url, headers: _authService.getAuthHeaders())
+          .timeout(_timeout);
+
+      print('🔵 Details Response:');
+      print('   Status: ${response.statusCode}');
+      // Truncate body log if too long
+      final bodyLog = response.body.length > 500
+          ? '${response.body.substring(0, 500)}...'
+          : response.body;
+      print('   Body: $bodyLog');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == true) {
+          print('✅ Dhaba details fetched successfully');
+          return data;
+        } else {
+          throw Exception(data['message'] ?? 'Failed to fetch details');
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch dhaba details: $e');
       rethrow;
     }
   }
