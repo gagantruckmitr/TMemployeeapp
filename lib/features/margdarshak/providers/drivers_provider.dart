@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/margdarshak_api_service.dart';
 
 // Driver data model
 class Driver {
@@ -47,6 +48,72 @@ class Driver {
       subscription: Subscription.fromMap(map['subscription'] ?? {}),
       earnings: Earnings.fromMap(map['earnings'] ?? {}),
       addedDate: map['addedDate'] ?? '',
+    );
+  }
+
+  /// Factory method to create Driver from API response
+  factory Driver.fromApiMap(Map<String, dynamic> apiMap) {
+    // Extract shop info
+    final shopInfo = apiMap['shop_info'] ?? {};
+    final paymentInfo = apiMap['payment_info'] ?? {};
+    
+    // Mask phone number (show last 4 digits)
+    final phone = apiMap['mobile']?.toString() ?? '';
+    final maskedPhone = phone.length > 4 
+        ? '******${phone.substring(phone.length - 4)}' 
+        : phone;
+    
+    // Map subscription status
+    final subscriptionStatus = apiMap['subscription_status']?.toString() ?? 'never_subscribed';
+    String mappedStatus;
+    if (subscriptionStatus.toLowerCase().contains('active')) {
+      mappedStatus = 'active';
+    } else if (subscriptionStatus.toLowerCase().contains('expired')) {
+      mappedStatus = 'expired';
+    } else {
+      mappedStatus = 'never_subscribed';
+    }
+    
+    // Map contact timeline to contacted status
+    final contactTimeline = apiMap['contact_timeline']?.toString() ?? 'Not Contacted';
+    final isContacted = !contactTimeline.toLowerCase().contains('not contacted');
+    
+    // Parse dates
+    String? expiryDate;
+    if (paymentInfo['end_at'] != null) {
+      expiryDate = paymentInfo['end_at'].toString();
+    }
+    
+    return Driver(
+      id: apiMap['id']?.toString() ?? '',
+      name: apiMap['name']?.toString() ?? '',
+      phone: phone,
+      maskedPhone: maskedPhone,
+      sourceShop: shopInfo['shop_name']?.toString() ?? 'Unknown',
+      shopType: shopInfo['type']?.toString() ?? 'unknown',
+      onboardingStatus: apiMap['status']?.toString() ?? 'pending',
+      kycStatus: 'pending', // Not provided in API
+      profileCompletion: int.tryParse(apiMap['profile_completion']?.toString() ?? '0') ?? 0,
+      teleStatus: TeleStatus(
+        contacted: isContacted,
+        lastCallDate: null, // Not provided in API
+        outcome: contactTimeline != 'Not Contacted' ? contactTimeline : null,
+        nextFollowUp: null, // Not provided in API
+        telecaller: null, // Not provided in API
+      ),
+      subscription: Subscription(
+        status: mappedStatus,
+        plan: paymentInfo['amount'] != null ? '₹${paymentInfo['amount']}' : null,
+        expiryDate: expiryDate,
+      ),
+      earnings: Earnings(
+        eligible: apiMap['earning_per_user'] != null && apiMap['earning_per_user'] > 0,
+        amount: int.tryParse(apiMap['earning_per_user']?.toString() ?? '0') ?? 0,
+        reason: apiMap['earning_per_user'] != null && apiMap['earning_per_user'] > 0 
+            ? 'Active subscription' 
+            : 'No active subscription',
+      ),
+      addedDate: apiMap['created_at']?.toString() ?? DateTime.now().toIso8601String(),
     );
   }
 
@@ -227,224 +294,34 @@ class DriversState {
 
 // Notifier for drivers state
 class DriversNotifier extends StateNotifier<DriversState> {
+  final _apiService = MargdarshakApiService();
+  
   DriversNotifier() : super(DriversState());
 
   Future<void> loadDrivers() async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      await Future.delayed(const Duration(milliseconds: 800));
-
-      final driverMaps = [
-        {
-          'id': '1',
-          'name': 'Rajesh Kumar',
-          'phone': '+91 98765 43210',
-          'maskedPhone': '+91 98765 •••10',
-          'sourceShop': 'Sharma Dhaba',
-          'shopType': 'dhaba',
-          'onboardingStatus': 'completed',
-          'kycStatus': 'verified',
-          'profileCompletion': 100,
-          'teleStatus': {
-            'contacted': true,
-            'lastCallDate': '2024-01-25',
-            'outcome': 'interested',
-            'nextFollowUp': null,
-            'telecaller': 'Priya Sharma',
-          },
-          'subscription': {
-            'status': 'active',
-            'plan': 'Premium Monthly',
-            'expiryDate': '2024-02-15',
-          },
-          'earnings': {'eligible': true, 'amount': 10, 'reason': null},
-          'addedDate': '2024-01-20',
-        },
-        {
-          'id': '2',
-          'name': 'Suresh Patel',
-          'phone': '+91 87654 32109',
-          'maskedPhone': '+91 87654 •••09',
-          'sourceShop': 'Quick Fix Puncture',
-          'shopType': 'puncture',
-          'onboardingStatus': 'pending',
-          'kycStatus': 'pending',
-          'profileCompletion': 60,
-          'teleStatus': {
-            'contacted': false,
-            'lastCallDate': null,
-            'outcome': null,
-            'nextFollowUp': '2024-01-27',
-            'telecaller': null,
-          },
-          'subscription': {
-            'status': 'trial',
-            'plan': 'Trial',
-            'expiryDate': '2024-01-29',
-          },
-          'earnings': {
-            'eligible': false,
-            'amount': 0,
-            'reason': 'Profile incomplete',
-          },
-          'addedDate': '2024-01-22',
-        },
-        {
-          'id': '3',
-          'name': 'Amit Singh',
-          'phone': '+91 76543 21098',
-          'maskedPhone': '+91 76543 •••98',
-          'sourceShop': 'Highway Dhaba',
-          'shopType': 'dhaba',
-          'onboardingStatus': 'completed',
-          'kycStatus': 'verified',
-          'profileCompletion': 100,
-          'teleStatus': {
-            'contacted': true,
-            'lastCallDate': '2024-01-24',
-            'outcome': 'not_interested',
-            'nextFollowUp': '2024-01-30',
-            'telecaller': 'Rahul Kumar',
-          },
-          'subscription': {
-            'status': 'expired',
-            'plan': 'Basic Monthly',
-            'expiryDate': '2024-01-15',
-          },
-          'earnings': {'eligible': true, 'amount': 10, 'reason': null},
-          'addedDate': '2024-01-18',
-        },
-        {
-          'id': '4',
-          'name': 'Vikram Yadav',
-          'phone': '+91 65432 10987',
-          'maskedPhone': '+91 65432 •••87',
-          'sourceShop': 'Sharma Dhaba',
-          'shopType': 'dhaba',
-          'onboardingStatus': 'completed',
-          'kycStatus': 'verified',
-          'profileCompletion': 100,
-          'teleStatus': {
-            'contacted': true,
-            'lastCallDate': '2024-01-26',
-            'outcome': 'follow_up',
-            'nextFollowUp': '2024-01-28',
-            'telecaller': 'Priya Sharma',
-          },
-          'subscription': {
-            'status': 'never_subscribed',
-            'plan': null,
-            'expiryDate': null,
-          },
-          'earnings': {'eligible': true, 'amount': 10, 'reason': null},
-          'addedDate': '2024-01-19',
-        },
-        {
-          'id': '5',
-          'name': 'Manoj Verma',
-          'phone': '+91 99887 76655',
-          'maskedPhone': '+91 99887 •••55',
-          'sourceShop': 'National Highway Dhaba',
-          'shopType': 'dhaba',
-          'onboardingStatus': 'completed',
-          'kycStatus': 'verified',
-          'profileCompletion': 100,
-          'teleStatus': {
-            'contacted': true,
-            'lastCallDate': '2024-01-26',
-            'outcome': 'interested',
-            'nextFollowUp': null,
-            'telecaller': 'Amit Singh',
-          },
-          'subscription': {
-            'status': 'active',
-            'plan': 'Super Premium',
-            'expiryDate': '2024-06-01',
-          },
-          'earnings': {'eligible': true, 'amount': 25, 'reason': null},
-          'addedDate': '2024-01-05',
-        },
-        {
-          'id': '6',
-          'name': 'Deepak Sharma',
-          'phone': '+91 88776 65544',
-          'maskedPhone': '+91 88776 •••44',
-          'sourceShop': 'Tire King Puncture',
-          'shopType': 'puncture',
-          'onboardingStatus': 'pending',
-          'kycStatus': 'pending',
-          'profileCompletion': 45,
-          'teleStatus': {
-            'contacted': false,
-            'lastCallDate': null,
-            'outcome': null,
-            'nextFollowUp': '2024-01-28',
-            'telecaller': null,
-          },
-          'subscription': {
-            'status': 'never_subscribed',
-            'plan': null,
-            'expiryDate': null,
-          },
-          'earnings': {'eligible': false, 'amount': 0, 'reason': 'KYC pending'},
-          'addedDate': '2024-01-26',
-        },
-        {
-          'id': '7',
-          'name': 'Ravi Tiwari',
-          'phone': '+91 77665 54433',
-          'maskedPhone': '+91 77665 •••33',
-          'sourceShop': 'Sharma Dhaba',
-          'shopType': 'dhaba',
-          'onboardingStatus': 'completed',
-          'kycStatus': 'verified',
-          'profileCompletion': 100,
-          'teleStatus': {
-            'contacted': true,
-            'lastCallDate': '2024-01-23',
-            'outcome': 'not_reachable',
-            'nextFollowUp': '2024-01-29',
-            'telecaller': 'Priya Sharma',
-          },
-          'subscription': {
-            'status': 'active',
-            'plan': 'Standard Monthly',
-            'expiryDate': '2024-02-10',
-          },
-          'earnings': {'eligible': true, 'amount': 10, 'reason': null},
-          'addedDate': '2024-01-08',
-        },
-        {
-          'id': '8',
-          'name': 'Sanjay Gupta',
-          'phone': '+91 66554 43322',
-          'maskedPhone': '+91 66554 •••22',
-          'sourceShop': 'Express Puncture Works',
-          'shopType': 'puncture',
-          'onboardingStatus': 'completed',
-          'kycStatus': 'verified',
-          'profileCompletion': 95,
-          'teleStatus': {
-            'contacted': true,
-            'lastCallDate': '2024-01-25',
-            'outcome': 'interested',
-            'nextFollowUp': null,
-            'telecaller': 'Rahul Kumar',
-          },
-          'subscription': {
-            'status': 'trial',
-            'plan': 'Trial Premium',
-            'expiryDate': '2024-01-31',
-          },
-          'earnings': {'eligible': true, 'amount': 10, 'reason': null},
-          'addedDate': '2024-01-24',
-        },
-      ];
-
-      final drivers = driverMaps.map((m) => Driver.fromMap(m)).toList();
-      state = state.copyWith(drivers: drivers, isLoading: false);
+      print('🔵 Loading territory drivers...');
+      
+      // Fetch real data from API
+      final response = await _apiService.getTerritoryDrivers();
+      
+      if (response['status'] == true && response['data'] != null) {
+        final driversData = response['data'] as List;
+        print('✅ Loaded ${driversData.length} drivers from API');
+        
+        // Convert API data to Driver objects
+        final drivers = driversData.map((driverMap) {
+          return Driver.fromApiMap(driverMap);
+        }).toList();
+        
+        state = state.copyWith(drivers: drivers, isLoading: false);
+      } else {
+        throw Exception(response['message'] ?? 'Failed to load drivers');
+      }
     } catch (e) {
+      print('❌ Failed to load drivers: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }

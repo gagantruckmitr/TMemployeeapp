@@ -46,7 +46,12 @@ class _MargdarshakProfilePageState
       final response = await _apiService.getProfile();
 
       if (response['status'] == true && response['data'] != null) {
-        final data = response['data'];
+        final responseData = response['data'];
+        // Handle both new structure (nested user/stats) and fallback
+        final data = responseData['user'] != null
+            ? responseData['user']
+            : responseData;
+        final stats = responseData['stats'];
 
         // Parse territory info
         final territoryInfo = data['territory_info']?.toString() ?? '';
@@ -60,9 +65,12 @@ class _MargdarshakProfilePageState
             'email': data['email'] ?? 'Not provided',
             'mobile': data['mobile'] ?? 'N/A',
             'employeeId': data['employee_id'] ?? 'N/A',
-            'role': data['role'] == 'field_agent' ? 'Field Agent' : 'Margdarshak',
+            'role': data['role'] == 'field_agent'
+                ? 'Field Agent'
+                : 'Margdarshak',
             'territory': {
-              'state': data['state_name'] ?? data['working_state_name'] ?? 'N/A',
+              'state':
+                  data['state_name'] ?? data['working_state_name'] ?? 'N/A',
               'districts': districts,
             },
             'joinDate': data['join_date'] ?? 'N/A',
@@ -75,12 +83,12 @@ class _MargdarshakProfilePageState
               'bankName': data['bank_name'],
               'upiId': data['upi_id'],
             },
-            // Stats will come from dashboard API
             'stats': {
-              'totalShops': 0,
-              'totalDrivers': 0,
-              'totalEarnings': 0,
-              'activeDays': 0,
+              'totalShops': stats?['total_shops'] ?? 0,
+              'totalDrivers': stats?['total_drivers'] ?? 0,
+              'totalEarnings': stats?['total_earnings'] ?? 0,
+              'monthlyEarnings': stats?['monthly_earnings'] ?? 0,
+              'activeDays': stats?['active_days'] ?? 0,
             },
           };
           _isLoading = false;
@@ -254,10 +262,7 @@ class _MargdarshakProfilePageState
           Expanded(
             child: Text(
               _errorMessage!,
-              style: TextStyle(
-                color: Colors.orange.shade900,
-                fontSize: 13,
-              ),
+              style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
             ),
           ),
         ],
@@ -379,13 +384,26 @@ class _MargdarshakProfilePageState
               children: [
                 Expanded(
                   child: _buildStatCard(
+                    'Monthly Earnings',
+                    '₹${stats['monthlyEarnings'] ?? 0}',
+                    Icons.attach_money_rounded,
+                    const Color(0xFF00ACC1),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
                     'Total Earnings',
                     '₹${stats['totalEarnings'] ?? 0}',
                     Icons.account_balance_wallet_rounded,
                     const Color(0xFF388E3C),
                   ),
                 ),
-                const SizedBox(width: 12),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
                 Expanded(
                   child: _buildStatCard(
                     'Active Days',
@@ -394,6 +412,8 @@ class _MargdarshakProfilePageState
                     const Color(0xFF1976D2),
                   ),
                 ),
+                const SizedBox(width: 12),
+                const Spacer(),
               ],
             ),
           ],
@@ -831,10 +851,10 @@ class _MargdarshakProfilePageState
           ElevatedButton(
             onPressed: () async {
               print('Logout confirmed, starting process...'); // Debug log
-              
+
               // Close the dialog first
               Navigator.pop(dialogContext);
-              
+
               // Show loading indicator
               if (mounted) {
                 showDialog(
@@ -852,25 +872,27 @@ class _MargdarshakProfilePageState
                   ),
                 );
               }
-              
+
               try {
-                print('Calling MargdarshakAuthService.logout()...'); // Debug log
-                
+                print(
+                  'Calling MargdarshakAuthService.logout()...',
+                ); // Debug log
+
                 // Perform logout
                 await _authService.logout();
-                
+
                 print('Logout successful, navigating to login...'); // Debug log
-                
+
                 // Close loading dialog and navigate to login
                 if (mounted) {
                   Navigator.of(context).pop(); // Close loading dialog
-                  
+
                   // Navigate to login page and clear all routes
                   context.goNamed('margdarshak-login');
                 }
               } catch (e) {
                 print('Logout error: $e'); // Debug log
-                
+
                 // Close loading dialog and show error
                 if (mounted) {
                   Navigator.of(context).pop(); // Close loading dialog

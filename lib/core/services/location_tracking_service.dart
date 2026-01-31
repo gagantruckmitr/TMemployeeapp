@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/location_models.dart';
+import '../../features/margdarshak/services/margdarshak_api_service.dart';
 
 class LocationTrackingService {
-  static final LocationTrackingService _instance = LocationTrackingService._internal();
+  static final LocationTrackingService _instance =
+      LocationTrackingService._internal();
   factory LocationTrackingService() => _instance;
   LocationTrackingService._internal();
 
@@ -20,12 +22,12 @@ class LocationTrackingService {
   Position? _lastKnownPosition;
   DateTime? _dutyStartTime;
   DateTime? _dutyEndTime;
-  
+
   // Settings
   static const int _foregroundUpdateInterval = 30; // seconds
   static const double _accuracyThreshold = 100.0; // meters
   static const double _geofenceRadius = 100.0; // meters for shop check-ins
-  
+
   // Callbacks
   Function(LocationUpdate)? onLocationUpdate;
   Function(GeofenceEvent)? onGeofenceEvent;
@@ -77,6 +79,7 @@ class LocationTrackingService {
       return false;
     }
   }
+
   /// Start duty and begin location tracking
   Future<bool> startDuty() async {
     if (_isOnDuty) return true;
@@ -138,14 +141,13 @@ class LocationTrackingService {
     );
 
     // Start position stream
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: locationSettings,
-    ).listen(
-      _handlePositionUpdate,
-      onError: (error) {
-        onError?.call('Location stream error: $error');
-      },
-    );
+    _positionStream =
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+          _handlePositionUpdate,
+          onError: (error) {
+            onError?.call('Location stream error: $error');
+          },
+        );
 
     // Also start periodic updates as backup
     _startPeriodicUpdates();
@@ -154,10 +156,10 @@ class LocationTrackingService {
   /// Stop location tracking
   Future<void> _stopLocationTracking() async {
     _isTracking = false;
-    
+
     await _positionStream?.cancel();
     _positionStream = null;
-    
+
     _locationTimer?.cancel();
     _locationTimer = null;
   }
@@ -165,7 +167,7 @@ class LocationTrackingService {
   /// Start periodic location updates
   void _startPeriodicUpdates() {
     final interval = Duration(seconds: _foregroundUpdateInterval);
-    
+
     _locationTimer = Timer.periodic(interval, (timer) async {
       if (!_isOnDuty || !_isTracking) {
         timer.cancel();
@@ -227,7 +229,7 @@ class LocationTrackingService {
     // This would check against known shop locations
     // For now, we'll simulate with mock data
     final mockShops = _getMockShopLocations();
-    
+
     for (final shop in mockShops) {
       final distance = Geolocator.distanceBetween(
         position.latitude,
@@ -266,16 +268,22 @@ class LocationTrackingService {
       position.longitude,
     );
 
-    final timeDiff = DateTime.now().difference(
-      DateTime.fromMillisecondsSinceEpoch(_lastKnownPosition!.timestamp.millisecondsSinceEpoch)
-    ).inSeconds;
+    final timeDiff = DateTime.now()
+        .difference(
+          DateTime.fromMillisecondsSinceEpoch(
+            _lastKnownPosition!.timestamp.millisecondsSinceEpoch,
+          ),
+        )
+        .inSeconds;
 
     if (timeDiff > 0) {
       final speed = distance / timeDiff; // m/s
       const maxReasonableSpeed = 50.0; // 50 m/s = 180 km/h
-      
+
       if (speed > maxReasonableSpeed) {
-        debugPrint('Suspicious speed detected: ${speed.toStringAsFixed(2)} m/s');
+        debugPrint(
+          'Suspicious speed detected: ${speed.toStringAsFixed(2)} m/s',
+        );
         return true;
       }
     }
@@ -286,8 +294,14 @@ class LocationTrackingService {
   /// Send location update to server
   Future<void> _sendLocationUpdate(LocationUpdate update) async {
     try {
-      // TODO: Replace with actual API call
-      // await ApiService.post('/agent/location', update.toJson());
+      await MargdarshakApiService().updateRealtimeLocation(
+        latitude: update.latitude,
+        longitude: update.longitude,
+        accuracy: update.accuracy,
+        speed: update.speed,
+        heading: update.heading,
+        batteryLevel: update.batteryLevel,
+      );
       debugPrint('Sending location update: ${update.toJson()}');
     } catch (e) {
       debugPrint('Failed to send location update: $e');
@@ -301,10 +315,12 @@ class LocationTrackingService {
         agentId: _getCurrentAgentId(),
         eventType: eventType,
         timestamp: DateTime.now(),
-        location: _lastKnownPosition != null ? LocationPoint(
-          latitude: _lastKnownPosition!.latitude,
-          longitude: _lastKnownPosition!.longitude,
-        ) : null,
+        location: _lastKnownPosition != null
+            ? LocationPoint(
+                latitude: _lastKnownPosition!.latitude,
+                longitude: _lastKnownPosition!.longitude,
+              )
+            : null,
       );
 
       // TODO: Replace with actual API call

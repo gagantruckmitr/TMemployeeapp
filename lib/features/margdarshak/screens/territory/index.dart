@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../navigation/index.dart';
+import '../../services/margdarshak_api_service.dart';
 
 class MargdarshakTerritoryPage extends StatefulWidget {
   const MargdarshakTerritoryPage({super.key});
@@ -11,6 +12,8 @@ class MargdarshakTerritoryPage extends StatefulWidget {
 }
 
 class _MargdarshakTerritoryPageState extends State<MargdarshakTerritoryPage> {
+  final _apiService = MargdarshakApiService();
+  
   bool _isLoading = true;
   Map<String, dynamic> _territoryData = {};
 
@@ -24,43 +27,66 @@ class _MargdarshakTerritoryPageState extends State<MargdarshakTerritoryPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
-
-      setState(() {
-        _territoryData = {
-          'state': 'Maharashtra',
-          'districts': [
-            {
-              'name': 'Pune',
-              'shopsCount': 18,
-              'driversCount': 456,
-              'status': 'active',
-            },
-            {
-              'name': 'Mumbai',
-              'shopsCount': 15,
-              'driversCount': 623,
-              'status': 'active',
-            },
-            {
-              'name': 'Nashik',
-              'shopsCount': 12,
-              'driversCount': 377,
-              'status': 'active',
-            },
-          ],
-          'autoAssignmentRules': [
-            'Shops added via main app in your districts are auto-linked to you',
-            'GPS geofence matching for accurate assignment',
-            'Pin code mapping for backup assignment',
-          ],
-        };
-        _isLoading = false;
-      });
+      print('🔵 Loading territory overview...');
+      
+      // Fetch real data from API
+      final response = await _apiService.getTerritoryOverview();
+      
+      if (response['status'] == true && response['data'] != null) {
+        final data = response['data'];
+        print('✅ Territory overview loaded successfully');
+        
+        setState(() {
+          _territoryData = _mapApiDataToLocal(data);
+          _isLoading = false;
+        });
+      } else {
+        throw Exception(response['message'] ?? 'Failed to load territory data');
+      }
     } catch (e) {
+      print('❌ Failed to load territory data: $e');
       setState(() => _isLoading = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load territory: $e'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: _loadTerritoryData,
+            ),
+          ),
+        );
+      }
     }
+  }
+
+  /// Map API response to local territory format
+  Map<String, dynamic> _mapApiDataToLocal(Map<String, dynamic> apiData) {
+    final overview = apiData['overview'] ?? {};
+    final assignedDistricts = apiData['assigned_districts'] as List? ?? [];
+    final rules = apiData['rules'] ?? {};
+    
+    return {
+      'state': overview['state_name'] ?? 'N/A',
+      'totalShops': overview['total_shops'] ?? 0,
+      'totalDrivers': overview['total_drivers'] ?? 0,
+      'totalDhaba': overview['total_dhaba'] ?? 0,
+      'totalPuncture': overview['total_puncture'] ?? 0,
+      'dhabaDriversCount': overview['dhaba_drivers_count'] ?? 0,
+      'punctureDriversCount': overview['puncture_drivers_count'] ?? 0,
+      'districts': assignedDistricts.map((district) => {
+        'name': district['district_name'] ?? 'Unknown',
+        'shopsCount': district['shops_count'] ?? 0,
+        'driversCount': district['drivers_count'] ?? 0,
+        'status': district['status'] ?? 'inactive',
+      }).toList(),
+      'autoAssignmentRules': [
+        rules['auto_assignment'] ?? 'Auto-assignment enabled for your territory',
+      ],
+    };
   }
 
   @override
@@ -119,14 +145,8 @@ class _MargdarshakTerritoryPageState extends State<MargdarshakTerritoryPage> {
 
   Widget _buildTerritoryOverview() {
     final districts = _territoryData['districts'] as List? ?? [];
-    final totalShops = districts.fold<int>(
-      0,
-      (sum, district) => sum + (district['shopsCount'] as int? ?? 0),
-    );
-    final totalDrivers = districts.fold<int>(
-      0,
-      (sum, district) => sum + (district['driversCount'] as int? ?? 0),
-    );
+    final totalShops = _territoryData['totalShops'] ?? 0;
+    final totalDrivers = _territoryData['totalDrivers'] ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(20),

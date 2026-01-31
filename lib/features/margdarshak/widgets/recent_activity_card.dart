@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 class RecentActivityCard extends StatelessWidget {
   final List<ActivityItem> activities;
 
-  const RecentActivityCard({
-    super.key,
-    required this.activities,
-  });
+  const RecentActivityCard({super.key, required this.activities});
 
   @override
   Widget build(BuildContext context) {
@@ -27,16 +24,15 @@ class RecentActivityCard extends StatelessWidget {
           final index = entry.key;
           final activity = entry.value;
           final isLast = index == activities.length - 1;
-          
+
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              border: isLast ? null : Border(
-                bottom: BorderSide(
-                  color: Colors.grey.shade100,
-                  width: 1,
-                ),
-              ),
+              border: isLast
+                  ? null
+                  : Border(
+                      bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+                    ),
             ),
             child: Row(
               children: [
@@ -46,11 +42,7 @@ class RecentActivityCard extends StatelessWidget {
                     color: activity.color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(
-                    activity.icon,
-                    color: activity.color,
-                    size: 18,
-                  ),
+                  child: Icon(activity.icon, color: activity.color, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

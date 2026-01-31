@@ -16,10 +16,10 @@ class TMEmployeeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // Initialize database connection on app start
     _initializeDatabase();
-    
+
     // Initialize callback notification service
     _initializeNotificationService();
-  
+
     // Set system UI overlay style
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -60,18 +60,22 @@ class TMEmployeeApp extends StatelessWidget {
   void _initializeDatabase() {
     // Print database setup instructions
     DatabaseSetup.printConnectionInstructions();
-    
+
     // Test database connection (optional - remove in production)
-    DatabaseSetup.testConnection().then((success) {
-      if (success) {
-        print('✅ Database connected successfully');
-        DatabaseSetup.printDatabaseInfo();
-      } else {
-        print('❌ Database connection failed');
-        print('Please check your database configuration in database_config.dart');
-      }
-    }).catchError((error) {
-      print('Database initialization error: $error');
-    });
+    DatabaseSetup.testConnection()
+        .then((success) {
+          if (success) {
+            print('✅ Database connected successfully');
+            DatabaseSetup.printDatabaseInfo();
+          } else {
+            print('❌ Database connection failed');
+            print(
+              'Please check your database configuration in database_config.dart',
+            );
+          }
+        })
+        .catchError((error) {
+          print('Database initialization error: $error');
+        });
   }
 }

@@ -13,20 +13,20 @@ class ApiConfig {
   static const String baseUrl = 'https://$domain/truckmitr-app/api';
   static const String serverIp = domain;
   static const String publicUrl = 'https://$domain/public';
-  
+
   // Laravel API Base URLs
   // static const String laravelApiBase = 'https://truckmitr.com/api';
   static const String laravelApiBase = 'https://$domain/api';
   static const String teleheadApiBase = 'https://$domain/api/telehead';
   static const String storageBase = 'https://$domain/storage/app/public';
-  
+
   // Margdarshak uses laravelApiBase
   static String get margdarshakApiBase => laravelApiBase;
-  
-  // TaskSuite HRMS Base URL
-  static const String taskSuiteBase = 'https://tasksuite.$domain/backend/public/api';
 
-  
+  // TaskSuite HRMS Base URL
+  static const String taskSuiteBase =
+      'https://tasksuite.$domain/backend/public/api';
+
   // Laravel API Endpoints (Telehead)
   static const String loginApi = '$teleheadApiBase/login';
   static const String getStates = '$laravelApiBase/states';
@@ -35,27 +35,52 @@ class ApiConfig {
   static const String agentJobsApi = '$teleheadApiBase/agent-jobs';
   static const String driversApi = '$teleheadApiBase/drivers';
   static const String jobsApi = '$teleheadApiBase/jobs';
-  static const String rejectedApplyJobsApi = '$teleheadApiBase/rejected-apply-jobs';
+  static const String rejectedApplyJobsApi =
+      '$teleheadApiBase/rejected-apply-jobs';
   static const String callLogsApi = '$teleheadApiBase/call-logs';
-  static const String ivrCallJobMatchingApi = '$teleheadApiBase/ivr-call-jobMatching';
-  static const String ivrCallUpdateJobMatchingApi = '$teleheadApiBase/ivr-call-update-jobMatching';
+  static const String ivrCallJobMatchingApi =
+      '$teleheadApiBase/ivr-call-jobMatching';
+  static const String ivrCallUpdateJobMatchingApi =
+      '$teleheadApiBase/ivr-call-update-jobMatching';
   static const String ivrCallJobBriefApi = '$teleheadApiBase/ivr-call-jobBrief';
-  static const String ivrCallUpdateJobBriefApi = '$teleheadApiBase/ivr-call-update-jobBrief';
+  static const String ivrCallUpdateJobBriefApi =
+      '$teleheadApiBase/ivr-call-update-jobBrief';
   static const String driverBucketApi = '$teleheadApiBase/driver-bucket';
   static const String driverBucketsApi = '$teleheadApiBase/driver-buckets';
   static const String paymentsSearchApi = '$teleheadApiBase/payments/search';
-  static const String withoutCallHistoryApi = '$teleheadApiBase/withoutCallHistory';
-  static const String reportsApi = '$teleheadApiBase/reports/assigned-to-wise-summary';
-  static const String socialMediaLeadsApi = '$teleheadApiBase/social-media-leads';
-  static const String socialMediaCallHistoryApi = '$teleheadApiBase/social-media-call-history';
+  static const String withoutCallHistoryApi =
+      '$teleheadApiBase/withoutCallHistory';
+  static const String reportsApi =
+      '$teleheadApiBase/reports/assigned-to-wise-summary';
+  static const String socialMediaLeadsApi =
+      '$teleheadApiBase/social-media-leads';
+  static const String socialMediaCallHistoryApi =
+      '$teleheadApiBase/social-media-call-history';
   static const String todayLeadsApi = '$teleheadApiBase/today-leads';
   static const String callHistoryApi = '$teleheadApiBase/call-history';
-  static const String matchMakingHistoryApi = '$teleheadApiBase/match-making-history';
-  static const String socialMediaIvrCallsApi = '$teleheadApiBase/social-media-ivr-calls';
+  static const String matchMakingHistoryApi =
+      '$teleheadApiBase/match-making-history';
+  static const String socialMediaIvrCallsApi =
+      '$teleheadApiBase/social-media-ivr-calls';
   static const String breakLogsApi = '$teleheadApiBase/break-logs';
   static const String analyticsApi = '$teleheadApiBase/analytics';
   static const String ivrCallUpdateApi = '$teleheadApiBase/ivr-call-update';
-  static const String socialMediaIvrCallApi = '$teleheadApiBase/social-media-ivr-call';
+  static const String socialMediaIvrCallApi =
+      '$teleheadApiBase/social-media-ivr-call';
+
+  // Margdarshak API Endpoints
+  static String get margdarshakDashboardApi =>
+      '$margdarshakApiBase/margdarshak/dashboard';
+  static String get margdarshakTerritoryDriversApi =>
+      '$margdarshakApiBase/margdarshak/territory-drivers';
+  static String get margdarshakTerritoryShopsApi =>
+      '$margdarshakApiBase/margdarshak/territory-shops';
+  static String get margdarshakTerritoryOverviewApi =>
+      '$margdarshakApiBase/margdarshak/territory-overview';
+  static String get margdarshakShopDriversApi =>
+      '$margdarshakApiBase/margdarshak/shop-drivers';
+  static String get margdarshakLocationUpdateApi =>
+      '$margdarshakApiBase/margdarshak/update-location';
 
   // Email Configuration
   static const String hrEmail = 'hr@$domain';

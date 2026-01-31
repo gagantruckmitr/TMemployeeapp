@@ -18,17 +18,25 @@ class MargdarshakApiService {
   /// Get dashboard statistics
   Future<Map<String, dynamic>> getDashboardStats() async {
     try {
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/dashboard');
+      final url = Uri.parse(ApiConfig.margdarshakDashboardApi);
 
       print('🔵 Fetching dashboard stats...');
+      print('   URL: $url');
+      print('   Has Auth Token: ${_authService.authToken != null}');
 
       final response = await http
           .get(url, headers: _authService.getAuthHeaders())
           .timeout(_timeout);
 
+      print('🔵 Dashboard API Response:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         print('✅ Dashboard stats fetched successfully');
+        print('   Response Status: ${data['status']}');
+        print('   Response Message: ${data['message']}');
         return data;
       } else {
         throw Exception('HTTP ${response.statusCode}: ${response.body}');
@@ -51,8 +59,9 @@ class MargdarshakApiService {
       if (limit != null) queryParams['limit'] = limit.toString();
       if (offset != null) queryParams['offset'] = offset.toString();
 
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/shops')
-          .replace(queryParameters: queryParams);
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakApiBase}/margdarshak/shops',
+      ).replace(queryParameters: queryParams);
 
       final response = await http
           .get(url, headers: _authService.getAuthHeaders())
@@ -73,7 +82,9 @@ class MargdarshakApiService {
   /// Add new shop
   Future<Map<String, dynamic>> addShop(Map<String, dynamic> shopData) async {
     try {
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/shops');
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakApiBase}/margdarshak/shops',
+      );
 
       final response = await http
           .post(
@@ -108,8 +119,9 @@ class MargdarshakApiService {
       if (limit != null) queryParams['limit'] = limit.toString();
       if (offset != null) queryParams['offset'] = offset.toString();
 
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/drivers')
-          .replace(queryParameters: queryParams);
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakApiBase}/margdarshak/drivers',
+      ).replace(queryParameters: queryParams);
 
       final response = await http
           .get(url, headers: _authService.getAuthHeaders())
@@ -127,6 +139,133 @@ class MargdarshakApiService {
     }
   }
 
+  /// Get territory drivers (drivers in agent's territory)
+  Future<Map<String, dynamic>> getTerritoryDrivers() async {
+    try {
+      final url = Uri.parse(ApiConfig.margdarshakTerritoryDriversApi);
+
+      print('🔵 Fetching territory drivers...');
+
+      final response = await http
+          .get(url, headers: _authService.getAuthHeaders())
+          .timeout(_timeout);
+
+      print('🔵 Territory Drivers Response:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ Territory drivers fetched successfully');
+        print('   Count: ${data['count']}');
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch territory drivers: $e');
+      rethrow;
+    }
+  }
+
+  /// Get territory shops (shops in agent's territory)
+  Future<Map<String, dynamic>> getTerritoryShops({
+    String filter = 'all',
+  }) async {
+    try {
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakTerritoryShopsApi}?filter=$filter',
+      );
+
+      print('🔵 Fetching territory shops...');
+      print('   Filter: $filter');
+
+      final response = await http
+          .get(url, headers: _authService.getAuthHeaders())
+          .timeout(_timeout);
+
+      print('🔵 Territory Shops Response:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ Territory shops fetched successfully');
+        print('   Count: ${data['count']}');
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch territory shops: $e');
+      rethrow;
+    }
+  }
+
+  /// Get territory overview (overview of agent's territory)
+  Future<Map<String, dynamic>> getTerritoryOverview() async {
+    try {
+      final url = Uri.parse(ApiConfig.margdarshakTerritoryOverviewApi);
+
+      print('🔵 Fetching territory overview...');
+
+      final response = await http
+          .get(url, headers: _authService.getAuthHeaders())
+          .timeout(_timeout);
+
+      print('🔵 Territory Overview Response:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ Territory overview fetched successfully');
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch territory overview: $e');
+      rethrow;
+    }
+  }
+
+  /// Get shop drivers (drivers linked to a specific shop)
+  Future<Map<String, dynamic>> getShopDrivers({
+    required String referralCode,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConfig.margdarshakShopDriversApi);
+
+      print('🔵 Fetching shop drivers...');
+      print('   Referral Code: $referralCode');
+
+      final response = await http
+          .post(
+            url,
+            headers: _authService.getAuthHeaders(),
+            body: json.encode({'referral_code': referralCode}),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Shop Drivers Response:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ Shop drivers fetched successfully');
+        print('   Count: ${data['count']}');
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch shop drivers: $e');
+      rethrow;
+    }
+  }
+
   /// Get earnings summary
   Future<Map<String, dynamic>> getEarnings({
     String? period, // 'today', 'week', 'month'
@@ -135,8 +274,9 @@ class MargdarshakApiService {
       final queryParams = <String, String>{};
       if (period != null) queryParams['period'] = period;
 
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/earnings')
-          .replace(queryParameters: queryParams);
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakApiBase}/margdarshak/earnings',
+      ).replace(queryParameters: queryParams);
 
       final response = await http
           .get(url, headers: _authService.getAuthHeaders())
@@ -161,7 +301,9 @@ class MargdarshakApiService {
     double? longitude,
   }) async {
     try {
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/duty-status');
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakApiBase}/margdarshak/duty-status',
+      );
 
       final response = await http
           .post(
@@ -188,10 +330,53 @@ class MargdarshakApiService {
     }
   }
 
+  /// Update real-time location
+  Future<void> updateRealtimeLocation({
+    required double latitude,
+    required double longitude,
+    required double accuracy,
+    required double speed,
+    double? heading,
+    int? batteryLevel,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConfig.margdarshakLocationUpdateApi);
+
+      // Fire and forget - don't wait for response to keep UI responsive
+      // But we use await here to catch errors in this service layer if needed
+      // Ideally handled in a background service queue
+
+      final response = await http
+          .post(
+            url,
+            headers: _authService.getAuthHeaders(),
+            body: json.encode({
+              'latitude': latitude,
+              'longitude': longitude,
+              'accuracy': accuracy,
+              'speed': speed,
+              'heading': heading,
+              'battery_level': batteryLevel,
+              'timestamp': DateTime.now().toIso8601String(),
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        print('⚠️ Location update failed: HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      print('⚠️ Failed to update location: $e');
+      // Don't rethrow to avoid disrupting the tracking service loop
+    }
+  }
+
   /// Get territory information
   Future<Map<String, dynamic>> getTerritoryInfo() async {
     try {
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/territory');
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakApiBase}/margdarshak/territory',
+      );
 
       final response = await http
           .get(url, headers: _authService.getAuthHeaders())
@@ -212,7 +397,9 @@ class MargdarshakApiService {
   /// Get profile information
   Future<Map<String, dynamic>> getProfile() async {
     try {
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/profile');
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakApiBase}/margdarshak/profile',
+      );
 
       print('🔵 Fetching profile...');
 
@@ -301,7 +488,9 @@ class MargdarshakApiService {
     required String stateId,
   }) async {
     try {
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/add-dhaba');
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakApiBase}/margdarshak/add-dhaba',
+      );
 
       print('🔵 Sending dhaba registration OTP...');
       print('   Mobile: $mobile');
@@ -346,7 +535,9 @@ class MargdarshakApiService {
     required String stateId,
   }) async {
     try {
-      final url = Uri.parse('${ApiConfig.margdarshakApiBase}/margdarshak/add-puncture');
+      final url = Uri.parse(
+        '${ApiConfig.margdarshakApiBase}/margdarshak/add-puncture',
+      );
 
       print('🔵 Sending puncture registration OTP...');
       print('   Mobile: $mobile');
@@ -400,10 +591,7 @@ class MargdarshakApiService {
           .post(
             url,
             headers: _authService.getAuthHeaders(),
-            body: json.encode({
-              'mobile': mobile,
-              'otp': otp,
-            }),
+            body: json.encode({'mobile': mobile, 'otp': otp}),
           )
           .timeout(_timeout);
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../add_shop/index.dart';
 import '../navigation/index.dart';
+import '../../services/margdarshak_api_service.dart';
 
 class MargdarshakShopsPage extends StatefulWidget {
   const MargdarshakShopsPage({super.key});
@@ -13,6 +14,8 @@ class MargdarshakShopsPage extends StatefulWidget {
 class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
     with TickerProviderStateMixin {
   late TabController _tabController;
+  final _apiService = MargdarshakApiService();
+  
   bool _isLoading = true;
   List<Map<String, dynamic>> _shops = [];
   String _selectedFilter = 'all';
@@ -34,69 +37,68 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
     setState(() => _isLoading = true);
 
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
-
-      setState(() {
-        _shops = [
-          {
-            'id': '1',
-            'name': 'Sharma Dhaba',
-            'type': 'dhaba',
-            'owner': 'Rajesh Sharma',
-            'mobile': '+91 98765 43210',
-            'address': 'NH-48, Pune-Mumbai Highway',
-            'district': 'Pune',
-            'status': 'approved',
-            'driversCount': 23,
-            'addedDate': '2024-01-15',
-            'source': 'manual',
-          },
-          {
-            'id': '2',
-            'name': 'Quick Fix Puncture',
-            'type': 'puncture',
-            'owner': 'Amit Kumar',
-            'mobile': '+91 87654 32109',
-            'address': 'Katraj, Pune',
-            'district': 'Pune',
-            'status': 'pending',
-            'driversCount': 0,
-            'addedDate': '2024-01-20',
-            'source': 'manual',
-          },
-          {
-            'id': '3',
-            'name': 'Highway Dhaba',
-            'type': 'dhaba',
-            'owner': 'Suresh Patel',
-            'mobile': '+91 76543 21098',
-            'address': 'Mumbai-Nashik Highway',
-            'district': 'Mumbai',
-            'status': 'approved',
-            'driversCount': 45,
-            'addedDate': '2024-01-10',
-            'source': 'auto',
-          },
-        ];
-        _isLoading = false;
-      });
+      print('🔵 Loading territory shops with filter: $_selectedFilter');
+      
+      // Fetch real data from API
+      final response = await _apiService.getTerritoryShops(filter: _selectedFilter);
+      
+      if (response['status'] == true && response['data'] != null) {
+        final shopsData = response['data'] as List;
+        print('✅ Loaded ${shopsData.length} shops from API');
+        
+        setState(() {
+          _shops = shopsData.map((shop) => _mapApiShopToLocal(shop)).toList();
+          _isLoading = false;
+        });
+      } else {
+        throw Exception(response['message'] ?? 'Failed to load shops');
+      }
     } catch (e) {
+      print('❌ Failed to load shops: $e');
       setState(() => _isLoading = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load shops: $e'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: _loadShops,
+            ),
+          ),
+        );
+      }
     }
   }
 
+  /// Map API response to local shop format
+  Map<String, dynamic> _mapApiShopToLocal(Map<String, dynamic> apiShop) {
+    return {
+      'id': apiShop['id']?.toString() ?? '',
+      'name': apiShop['shop_name'] ?? 'Unknown Shop',
+      'type': apiShop['role'] ?? 'unknown', // 'dhaba' or 'puncture'
+      'owner': apiShop['owner_name'] ?? 'Unknown Owner',
+      'mobile': apiShop['mobile'] ?? 'N/A',
+      'address': apiShop['address'] ?? 'No address provided',
+      'district': apiShop['city'] ?? 'Unknown',
+      'status': apiShop['status'] == '1' ? 'approved' : 'pending',
+      'driversCount': apiShop['driver_count'] ?? 0,
+      'addedDate': apiShop['created_at'] ?? '',
+      'source': apiShop['onboarding_type']?.toLowerCase() == 'direct' ? 'manual' : 'auto',
+      'uniqueId': apiShop['unique_id'] ?? '',
+      'referralCode': apiShop['referral_code'] ?? '',
+      'displayType': apiShop['display_type'] ?? '',
+    };
+  }
+
   List<Map<String, dynamic>> get filteredShops {
-    switch (_selectedFilter) {
-      case 'dhaba':
-        return _shops.where((shop) => shop['type'] == 'dhaba').toList();
-      case 'puncture':
-        return _shops.where((shop) => shop['type'] == 'puncture').toList();
-      case 'pending':
-        return _shops.where((shop) => shop['status'] == 'pending').toList();
-      default:
-        return _shops;
+    // API already filters by type, but we handle 'pending' filter locally
+    if (_selectedFilter == 'pending') {
+      return _shops.where((shop) => shop['status'] == 'pending').toList();
     }
+    return _shops;
   }
 
   @override
@@ -272,48 +274,6 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
   //   );
   // }
 
-  Widget _buildQuickActionButton(
-    String title,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _navigateToTab(int tabIndex) {
-    // Use the global key to access the navigation container
-    final navigationState = margdarshakNavigationKey.currentState;
-    if (navigationState != null) {
-      navigationState.switchToTab(tabIndex);
-    }
-  }
-
   Widget _buildFilterChip(String label, String value) {
     final isSelected = _selectedFilter == value;
 
@@ -322,6 +282,8 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
         setState(() {
           _selectedFilter = value;
         });
+        // Reload shops with new filter
+        _loadShops();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -500,7 +462,7 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          // View drivers
+                          _showShopDriversBottomSheet(shop);
                         },
                         icon: const Icon(
                           Icons.people_outline_rounded,
@@ -653,5 +615,467 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
       // Refresh shops list when returning from add shop screen
       _loadShops();
     });
+  }
+
+  void _showShopDriversBottomSheet(Map<String, dynamic> shop) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ShopDriversBottomSheet(
+        shop: shop,
+        apiService: _apiService,
+      ),
+    );
+  }
+}
+
+/// Bottom sheet widget to display shop drivers
+class _ShopDriversBottomSheet extends StatefulWidget {
+  final Map<String, dynamic> shop;
+  final MargdarshakApiService apiService;
+
+  const _ShopDriversBottomSheet({
+    required this.shop,
+    required this.apiService,
+  });
+
+  @override
+  State<_ShopDriversBottomSheet> createState() =>
+      _ShopDriversBottomSheetState();
+}
+
+class _ShopDriversBottomSheetState extends State<_ShopDriversBottomSheet> {
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _drivers = [];
+  String? _errorMessage;
+  String _shopName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadShopDrivers();
+  }
+
+  Future<void> _loadShopDrivers() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final referralCode = widget.shop['referralCode'] ?? '';
+      
+      if (referralCode.isEmpty) {
+        throw Exception('Referral code not found for this shop');
+      }
+
+      print('🔵 Loading drivers for shop: ${widget.shop['name']}');
+      print('   Referral Code: $referralCode');
+
+      final response = await widget.apiService.getShopDrivers(
+        referralCode: referralCode,
+      );
+
+      if (response['status'] == true && response['data'] != null) {
+        final driversData = response['data'] as List;
+        print('✅ Loaded ${driversData.length} drivers for shop');
+
+        setState(() {
+          _shopName = response['shop_name'] ?? widget.shop['name'];
+          _drivers = driversData.cast<Map<String, dynamic>>();
+          _isLoading = false;
+        });
+      } else {
+        throw Exception(response['message'] ?? 'Failed to load drivers');
+      }
+    } catch (e) {
+      print('❌ Failed to load shop drivers: $e');
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7B1FA2).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.people_rounded,
+                    color: Color(0xFF7B1FA2),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _shopName.isNotEmpty ? _shopName : widget.shop['name'],
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2D2D5F),
+                        ),
+                      ),
+                      Text(
+                        '${widget.shop['driversCount'] ?? 0} Drivers',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1),
+
+          // Content
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMessage != null
+                    ? _buildErrorState()
+                    : _drivers.isEmpty
+                        ? _buildEmptyState()
+                        : _buildDriversList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+            const SizedBox(height: 16),
+            Text(
+              'Failed to load drivers',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'Unknown error',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadShopDrivers,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7B1FA2),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.people_outline_rounded,
+              size: 48,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No drivers found',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This shop has no drivers linked yet',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDriversList() {
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: _drivers.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final driver = _drivers[index];
+        return _buildDriverCard(driver);
+      },
+    );
+  }
+
+  Widget _buildDriverCard(Map<String, dynamic> driver) {
+    final subscriptionStatus = driver['subscription_status'] ?? 'Never Subscribed';
+    final contactTimeline = driver['contact_timeline'] ?? 'Not Contacted';
+    final isContacted = !contactTimeline.toLowerCase().contains('not contacted');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7B1FA2).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.person_rounded,
+                  color: Color(0xFF7B1FA2),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      driver['name'] ?? 'Unknown Driver',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2D2D5F),
+                      ),
+                    ),
+                    Text(
+                      driver['unique_id'] ?? 'N/A',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _buildSubscriptionBadge(subscriptionStatus),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Details
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailItem(
+                  Icons.phone_rounded,
+                  driver['mobile'] ?? 'N/A',
+                ),
+              ),
+              Expanded(
+                child: _buildDetailItem(
+                  Icons.location_on_rounded,
+                  driver['state_name'] ?? 'N/A',
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailItem(
+                  Icons.calendar_today_rounded,
+                  _formatDate(driver['created_at']),
+                ),
+              ),
+              Expanded(
+                child: _buildDetailItem(
+                  Icons.account_balance_wallet_rounded,
+                  '₹${driver['earning_per_user'] ?? 0}',
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Contact Status
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isContacted
+                  ? Colors.green.shade50
+                  : Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isContacted ? Icons.check_circle : Icons.schedule,
+                  size: 16,
+                  color: isContacted ? Colors.green.shade700 : Colors.orange.shade700,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    contactTimeline,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isContacted ? Colors.green.shade700 : Colors.orange.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailItem(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey.shade600),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubscriptionBadge(String status) {
+    Color color;
+    String text;
+
+    if (status.toLowerCase().contains('active')) {
+      color = const Color(0xFF4CAF50);
+      text = 'Active';
+    } else if (status.toLowerCase().contains('expired')) {
+      color = const Color(0xFFFF9800);
+      text = 'Expired';
+    } else {
+      color = Colors.grey;
+      text = 'No Plan';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return 'N/A';
+    
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inDays == 0) {
+        return 'Today';
+      } else if (difference.inDays == 1) {
+        return 'Yesterday';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays} days ago';
+      } else if (difference.inDays < 30) {
+        return '${(difference.inDays / 7).floor()} weeks ago';
+      } else {
+        return '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      return dateStr;
+    }
   }
 }

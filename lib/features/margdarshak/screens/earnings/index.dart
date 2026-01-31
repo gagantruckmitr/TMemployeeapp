@@ -96,21 +96,22 @@ class _MargdarshakEarningsPageState
 
   @override
   Widget build(BuildContext context) {
+    final textColor =
+        Theme.of(context).textTheme.titleLarge?.color ??
+        const Color(0xFF2D2D5F);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'My Earnings',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2D2D5F),
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF2D2D5F)),
+          icon: Icon(Icons.arrow_back_rounded, color: textColor),
           onPressed: () {
             // Navigate to Dashboard tab
             margdarshakNavigationKey.currentState?.switchToTab(0);
@@ -121,10 +122,7 @@ class _MargdarshakEarningsPageState
             onPressed: () {
               _showEarningsRules();
             },
-            icon: const Icon(
-              Icons.info_outline_rounded,
-              color: Color(0xFF2D2D5F),
-            ),
+            icon: Icon(Icons.info_outline_rounded, color: textColor),
           ),
         ],
       ),
@@ -268,14 +266,14 @@ class _MargdarshakEarningsPageState
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                'Pending Verification',
-                '₹${summary['pendingVerification'] ?? 0}',
-                Icons.pending_rounded,
-                const Color(0xFFFF9800),
-              ),
-            ),
+            // Expanded(
+            //   child: _buildStatCard(
+            //     'Pending Verification',
+            //     '₹${summary['pendingVerification'] ?? 0}',
+            //     Icons.pending_rounded,
+            //     const Color(0xFFFF9800),
+            //   ),
+            // ),
           ],
         ),
         const SizedBox(height: 12),
@@ -290,14 +288,14 @@ class _MargdarshakEarningsPageState
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                'Eligible Drivers',
-                '${_earningsData['eligibleDrivers'] ?? 0}/${_earningsData['totalDrivers'] ?? 0}',
-                Icons.people_rounded,
-                const Color(0xFF9C27B0),
-              ),
-            ),
+            // Expanded(
+            //   child: _buildStatCard(
+            //     'Eligible Drivers',
+            //     '${_earningsData['eligibleDrivers'] ?? 0}/${_earningsData['totalDrivers'] ?? 0}',
+            //     Icons.people_rounded,
+            //     const Color(0xFF9C27B0),
+            //   ),
+            // ),
           ],
         ),
       ],
@@ -310,14 +308,17 @@ class _MargdarshakEarningsPageState
     IconData icon,
     Color color,
   ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.3)
+                : Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -337,16 +338,23 @@ class _MargdarshakEarningsPageState
           const SizedBox(height: 12),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF2D2D5F),
+              color:
+                  Theme.of(context).textTheme.titleLarge?.color ??
+                  const Color(0xFF2D2D5F),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             title,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            style: TextStyle(
+              fontSize: 12,
+              color:
+                  Theme.of(context).textTheme.bodyMedium?.color ??
+                  Colors.grey.shade600,
+            ),
           ),
         ],
       ),
@@ -358,180 +366,216 @@ class _MargdarshakEarningsPageState
     final eligibleAmount = summary['eligibleEarnings'] ?? 0;
     final threshold = _earningsData['payoutThreshold'] ?? 500;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor =
+        Theme.of(context).textTheme.titleLarge?.color ??
+        const Color(0xFF2D2D5F);
+
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.account_balance_rounded,
-                  color: Color(0xFF4CAF50),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Payout Information',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D2D5F),
-                ),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardTheme.color,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.3)
+                    : Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Info Banner
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Payouts are processed automatically by admin',
-                    style: TextStyle(
-                      color: Color(0xFF1565C0),
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Progress Bar
-          Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Eligible Amount: ₹$eligibleAmount',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF2D2D5F),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ),
-                  Text(
-                    'Threshold: ₹$threshold',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: (eligibleAmount / threshold).clamp(0.0, 1.0),
-                backgroundColor: Colors.grey.shade200,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  eligibleAmount >= threshold
-                      ? const Color(0xFF4CAF50)
-                      : const Color(0xFFFF9800),
-                ),
-              ),
-            ],
-          ),
-
-          if (_earningsData['nextPayoutDate'] != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.calendar_today_rounded,
-                    color: Colors.green.shade700,
-                    size: 20,
+                    child: const Icon(
+                      Icons.account_balance_rounded,
+                      color: Color(0xFF4CAF50),
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Next Scheduled Payout',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF2D2D5F),
-                          ),
-                        ),
-                        Text(
-                          _earningsData['nextPayoutDate'] ?? 'N/A',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.green.shade700,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'Payout Information',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
-        ],
-      ),
-    ).animate().fadeIn(duration: 600.ms, delay: 400.ms).slideY(begin: 0.2, end: 0);
+              const SizedBox(height: 16),
+
+              // Info Banner
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.blue.withValues(alpha: 0.1)
+                      : Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.blue.withValues(alpha: 0.3)
+                        : Colors.blue.shade200,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: isDark
+                          ? Colors.blue.shade200
+                          : Colors.blue.shade700,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Payouts are processed automatically by admin',
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.blue.shade200
+                              : const Color(0xFF1565C0),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Progress Bar
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Eligible Amount: ₹$eligibleAmount',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                      Text(
+                        'Threshold: ₹$threshold',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color:
+                              Theme.of(context).textTheme.bodyMedium?.color ??
+                              Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: (eligibleAmount / threshold).clamp(0.0, 1.0),
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      eligibleAmount >= threshold
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFFFF9800),
+                    ),
+                  ),
+                ],
+              ),
+
+              if (_earningsData['nextPayoutDate'] != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        color: Colors.green.shade700,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Next Scheduled Payout',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                            ),
+                            Text(
+                              _earningsData['nextPayoutDate'] ?? 'N/A',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.green.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        )
+        .animate()
+        .fadeIn(duration: 600.ms, delay: 400.ms)
+        .slideY(begin: 0.2, end: 0);
   }
 
   Widget _buildRecentEarnings() {
     final recentEarnings = _earningsData['recentEarnings'] as List? ?? [];
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor =
+        Theme.of(context).textTheme.titleLarge?.color ??
+        const Color(0xFF2D2D5F);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Recent Earnings',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF2D2D5F),
+            color: textColor,
           ),
         ),
         const SizedBox(height: 16),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardTheme.color,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.3)
+                    : Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -601,24 +645,32 @@ class _MargdarshakEarningsPageState
                               children: [
                                 Text(
                                   earning['driverName'] ?? 'Unknown Driver',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF2D2D5F),
+                                    color: textColor,
                                   ),
                                 ),
                                 Text(
                                   'via ${earning['shopName'] ?? 'Unknown Shop'}',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey.shade600,
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).textTheme.bodyMedium?.color ??
+                                        Colors.grey.shade600,
                                   ),
                                 ),
                                 Text(
                                   earning['date'] ?? 'Unknown Date',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Colors.grey.shade500,
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.color ??
+                                        Colors.grey.shade500,
                                   ),
                                 ),
                               ],
@@ -672,25 +724,32 @@ class _MargdarshakEarningsPageState
   Widget _buildPayoutHistory() {
     final payoutHistory = _earningsData['payoutHistory'] as List? ?? [];
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor =
+        Theme.of(context).textTheme.titleLarge?.color ??
+        const Color(0xFF2D2D5F);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Payout History',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF2D2D5F),
+            color: textColor,
           ),
         ),
         const SizedBox(height: 16),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardTheme.color,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.3)
+                    : Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -760,17 +819,21 @@ class _MargdarshakEarningsPageState
                               children: [
                                 Text(
                                   'Payout ${payout['id'] ?? 'Unknown'}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF2D2D5F),
+                                    color: textColor,
                                   ),
                                 ),
                                 Text(
                                   '${payout['method'] ?? 'Unknown Method'} • ${payout['date'] ?? 'Unknown Date'}',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey.shade600,
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).textTheme.bodyMedium?.color ??
+                                        Colors.grey.shade600,
                                   ),
                                 ),
                                 if (payout['transactionId'] != null)
@@ -778,7 +841,11 @@ class _MargdarshakEarningsPageState
                                     'TXN: ${payout['transactionId']}',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: Colors.grey.shade500,
+                                      color:
+                                          Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall?.color ??
+                                          Colors.grey.shade500,
                                     ),
                                   ),
                               ],

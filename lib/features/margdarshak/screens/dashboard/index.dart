@@ -44,41 +44,105 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
     });
 
     try {
-      // Fetch real dashboard data from API
-      final data = await _apiService.getDashboardStats();
+      print('🔵 Dashboard: Starting to fetch data...');
 
-      setState(() {
-        _dashboardData = data;
-        _isLoading = false;
-      });
-    } catch (e) {
+      // Fetch real dashboard data from API
+      final response = await _apiService.getDashboardStats();
+
+      print('🔵 Dashboard: Response received');
+      print('   Full Response: $response');
+      print('   Status: ${response['status']}');
+      print('   Message: ${response['message']}');
+      print('   Has Data: ${response['data'] != null}');
+
+      if (response['status'] == true && response['data'] != null) {
+        final data = response['data'];
+        print('✅ Dashboard: Data loaded successfully');
+        print('   Territory: ${data['territory']}');
+        print('   Shops: ${data['shops']}');
+        print('   Drivers: ${data['drivers']}');
+        print('   Earnings: ${data['earnings']}');
+
+        // Extract specific values
+        print('📊 Extracted Values:');
+        print('   State Name: ${data['territory']?['state_name']}');
+        print('   Districts Count: ${data['territory']?['districts_count']}');
+        print('   Total Onboarded: ${data['shops']?['total_onboarded']}');
+        print('   Dhaba Count: ${data['shops']?['dhaba_count']}');
+        print('   Puncture Count: ${data['shops']?['puncture_count']}');
+        print('   Drivers Total: ${data['drivers']?['total']}');
+        print('   Drivers This Month: ${data['drivers']?['this_month']}');
+        print('   Monthly Amount: ${data['earnings']?['monthly_amount']}');
+
+        setState(() {
+          _dashboardData = data;
+          _isLoading = false;
+        });
+
+        print('✅ Dashboard: State updated with new data');
+        print('   _dashboardData: $_dashboardData');
+      } else {
+        throw Exception(
+          response['message'] ?? 'Failed to fetch dashboard data',
+        );
+      }
+    } catch (e, stackTrace) {
       print('❌ Dashboard error: $e');
+      print('   Error type: ${e.runtimeType}');
+      print('   Stack trace: $stackTrace');
 
       // Fallback to demo data if API fails
       setState(() {
         _dashboardData = {
           'territory': {
-            'state': _authService.currentUser?.stateName ?? 'N/A',
-            'districts': 3,
+            'state_name': _authService.currentUser?.stateName ?? 'N/A',
+            'districts_count': 0,
+            'districts': [],
           },
-          'shops': {'total': 0, 'dhabhas': 0, 'puncture': 0, 'pending': 0},
-          'drivers': {'today': 0, 'week': 0, 'month': 0, 'total': 0},
+          'shops': {
+            'total_onboarded': 0,
+            'dhaba_count': 0,
+            'puncture_count': 0,
+            'blocked_shops': 0,
+          },
+          'drivers': {'total': 0, 'today': 0, 'this_week': 0, 'this_month': 0},
           'earnings': {
-            'today': 0,
-            'week': 0,
-            'month': 0,
-            'pending': 0,
+            'total_amount': 0,
+            'monthly_amount': 0,
+            'pending_amount': 0,
           },
         };
-        // _errorMessage = 'Using offline mode';
+        _errorMessage = 'API Error - Using offline mode';
         _isLoading = false;
       });
+
+      // Show error to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load dashboard: $e'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: _loadDashboardData,
+            ),
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final user = _authService.currentUser;
+
+    // Debug: Print build info
+    print('🏗️ Dashboard build() called');
+    print('   _isLoading: $_isLoading');
+    print('   _dashboardData keys: ${_dashboardData.keys.toList()}');
+    print('   Territory data: ${_dashboardData['territory']}');
+    print('   Shops data: ${_dashboardData['shops']}');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -149,10 +213,7 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
           Expanded(
             child: Text(
               _errorMessage!,
-              style: TextStyle(
-                color: Colors.orange.shade900,
-                fontSize: 13,
-              ),
+              style: TextStyle(color: Colors.orange.shade900, fontSize: 13),
             ),
           ),
         ],
@@ -288,7 +349,7 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                           ),
                         ),
                         Text(
-                          territory['state']?.toString() ?? 'N/A',
+                          territory['state_name']?.toString() ?? 'N/A',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -309,7 +370,7 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                           ),
                         ),
                         Text(
-                          '${territory['districts'] ?? 0}',
+                          '${territory['districts_count'] ?? 0}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -340,8 +401,8 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                 Expanded(
                   child: DashboardStatsCard(
                     title: 'Shops Onboarded',
-                    value: '${shops['total'] ?? 0}',
-                    subtitle: '${shops['pending'] ?? 0} pending approval',
+                    value: '${shops['total_onboarded'] ?? 0}',
+                    subtitle: '${shops['blocked_shops'] ?? 0} blocked',
                     icon: Icons.store_rounded,
                     color: const Color(0xFFE65100),
                   ),
@@ -350,7 +411,7 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                 Expanded(
                   child: DashboardStatsCard(
                     title: 'Drivers Added',
-                    value: '${drivers['month'] ?? 0}',
+                    value: '${drivers['this_month'] ?? 0}',
                     subtitle: 'This month',
                     icon: Icons.people_rounded,
                     color: const Color(0xFF7B1FA2),
@@ -364,8 +425,8 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                 Expanded(
                   child: DashboardStatsCard(
                     title: 'Earnings',
-                    value: '₹${earnings['month'] ?? 0}',
-                    subtitle: '₹${earnings['pending'] ?? 0} pending',
+                    value: '₹${earnings['monthly_amount'] ?? 0}',
+                    subtitle: 'this month',
                     icon: Icons.account_balance_wallet_rounded,
                     color: const Color(0xFF388E3C),
                   ),
@@ -375,7 +436,7 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
                   child: DashboardStatsCard(
                     title: 'Today\'s Drivers',
                     value: '${drivers['today'] ?? 0}',
-                    subtitle: '${drivers['week'] ?? 0} this week',
+                    subtitle: '${drivers['this_week'] ?? 0} this month',
                     icon: Icons.today_rounded,
                     color: const Color(0xFF1976D2),
                   ),
@@ -566,6 +627,4 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
         .fadeIn(duration: 600.ms, delay: 800.ms)
         .slideY(begin: 0.2, end: 0);
   }
-
- 
 }

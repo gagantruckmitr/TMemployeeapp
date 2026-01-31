@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../core/services/location_tracking_service.dart';
 import '../../../core/models/location_models.dart';
 
@@ -11,14 +13,31 @@ class DutyTrackingWidget extends StatefulWidget {
 }
 
 class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
-  final LocationTrackingService _locationService = LocationTrackingService.instance;
+  final LocationTrackingService _locationService =
+      LocationTrackingService.instance;
+  final MapController _mapController = MapController();
   bool _isLoading = false;
   LocationUpdate? _lastLocationUpdate;
+  bool _shouldRecenter = true;
 
   @override
   void initState() {
     super.initState();
     _setupLocationCallbacks();
+    // Check if we already have a location
+    if (_locationService.lastKnownPosition != null) {
+      final pos = _locationService.lastKnownPosition!;
+      _lastLocationUpdate = LocationUpdate(
+        agentId: 'current',
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        accuracy: pos.accuracy,
+        speed: pos.speed,
+        heading: pos.heading,
+        timestamp: DateTime.now(),
+        source: LocationSource.gps,
+      );
+    }
   }
 
   void _setupLocationCallbacks() {
@@ -27,6 +46,13 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
         setState(() {
           _lastLocationUpdate = locationUpdate;
         });
+
+        if (_shouldRecenter && _locationService.isOnDuty) {
+          _mapController.move(
+            LatLng(locationUpdate.latitude, locationUpdate.longitude),
+            15.0,
+          );
+        }
       }
     };
 
@@ -62,8 +88,11 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: (_locationService.isOnDuty ? const Color(0xFF4CAF50) : Colors.grey)
-                .withValues(alpha: 0.3),
+            color:
+                (_locationService.isOnDuty
+                        ? const Color(0xFF4CAF50)
+                        : Colors.grey)
+                    .withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -82,7 +111,7 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  _locationService.isOnDuty 
+                  _locationService.isOnDuty
                       ? Icons.location_on_rounded
                       : Icons.location_off_rounded,
                   color: Colors.white,
@@ -114,7 +143,10 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
               ),
               if (_locationService.isOnDuty && _locationService.isTracking)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
@@ -123,17 +155,17 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                      )
-                      .animate(onPlay: (controller) => controller.repeat())
-                      .fadeIn(duration: 1000.ms)
-                      .then()
-                      .fadeOut(duration: 1000.ms),
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          )
+                          .animate(onPlay: (controller) => controller.repeat())
+                          .fadeIn(duration: 1000.ms)
+                          .then()
+                          .fadeOut(duration: 1000.ms),
                       const SizedBox(width: 6),
                       const Text(
                         'Live',
@@ -151,7 +183,100 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
 
           const SizedBox(height: 16),
 
-          // Location Info
+          // Live Map view
+          if (_locationService.isOnDuty && _lastLocationUpdate != null) ...[
+            Container(
+              height: 200,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                children: [
+                  FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: LatLng(
+                        _lastLocationUpdate!.latitude,
+                        _lastLocationUpdate!.longitude,
+                      ),
+                      initialZoom: 15.0,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                      ),
+                      onMapReady: () {
+                        _mapController.move(
+                          LatLng(
+                            _lastLocationUpdate!.latitude,
+                            _lastLocationUpdate!.longitude,
+                          ),
+                          15.0,
+                        );
+                      },
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.tmemployee.app',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: LatLng(
+                              _lastLocationUpdate!.latitude,
+                              _lastLocationUpdate!.longitude,
+                            ),
+                            width: 60,
+                            height: 60,
+                            child: const Icon(
+                              Icons.location_on,
+                              color: Colors.red,
+                              size: 40,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  // Recenter button
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: FloatingActionButton.small(
+                      onPressed: () {
+                        if (_lastLocationUpdate != null) {
+                          _mapController.move(
+                            LatLng(
+                              _lastLocationUpdate!.latitude,
+                              _lastLocationUpdate!.longitude,
+                            ),
+                            15.0,
+                          );
+                          setState(() => _shouldRecenter = true);
+                        }
+                      },
+                      backgroundColor: Colors.white,
+                      child: const Icon(Icons.my_location, color: Colors.blue),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // Location Info Text
           if (_lastLocationUpdate != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -163,33 +288,53 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.gps_fixed_rounded, color: Colors.white70, size: 16),
+                      const Icon(
+                        Icons.gps_fixed_rounded,
+                        color: Colors.white70,
+                        size: 16,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Lat: ${_lastLocationUpdate!.latitude.toStringAsFixed(6)}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                       Text(
                         'Lng: ${_lastLocationUpdate!.longitude.toStringAsFixed(6)}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.speed_rounded, color: Colors.white70, size: 16),
+                      const Icon(
+                        Icons.speed_rounded,
+                        color: Colors.white70,
+                        size: 16,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Speed: ${(_lastLocationUpdate!.speed * 3.6).toStringAsFixed(1)} km/h',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
                       ),
                       const Spacer(),
                       Text(
                         'Accuracy: ${_lastLocationUpdate!.accuracy.toStringAsFixed(0)}m',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -214,7 +359,7 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
                       ),
                     )
                   : Icon(
-                      _locationService.isOnDuty 
+                      _locationService.isOnDuty
                           ? Icons.stop_rounded
                           : Icons.play_arrow_rounded,
                       size: 20,
@@ -228,7 +373,7 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: _locationService.isOnDuty 
+                foregroundColor: _locationService.isOnDuty
                     ? const Color(0xFF4CAF50)
                     : Colors.grey.shade700,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -240,7 +385,8 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
           ),
 
           // Battery Warning
-          if (_locationService.isOnDuty && _lastLocationUpdate?.batteryLevel != null) ...[
+          if (_locationService.isOnDuty &&
+              _lastLocationUpdate?.batteryLevel != null) ...[
             const SizedBox(height: 12),
             if (_lastLocationUpdate!.batteryLevel! < 20)
               Container(
@@ -248,16 +394,25 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.5),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.battery_alert_rounded, color: Colors.orange, size: 16),
+                    const Icon(
+                      Icons.battery_alert_rounded,
+                      color: Colors.orange,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Low battery: ${_lastLocationUpdate!.batteryLevel}%',
-                        style: const TextStyle(color: Colors.orange, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.orange,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ],
@@ -266,10 +421,7 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
           ],
         ],
       ),
-    )
-    .animate()
-    .fadeIn(duration: 600.ms)
-    .slideY(begin: 0.2, end: 0);
+    ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2, end: 0);
   }
 
   String _getStatusSubtitle() {
@@ -318,61 +470,76 @@ class _DutyTrackingWidgetState extends State<DutyTrackingWidget> {
         success = await _locationService.startDuty();
         if (success) {
           _showSuccessSnackBar('Duty started - Location tracking active');
+          // Initial map recenter
+          if (_lastLocationUpdate != null && mounted) {
+            _mapController.move(
+              LatLng(
+                _lastLocationUpdate!.latitude,
+                _lastLocationUpdate!.longitude,
+              ),
+              15.0,
+            );
+          }
         }
       }
 
       if (!success) {
-        _showErrorSnackBar('Failed to ${_locationService.isOnDuty ? 'end' : 'start'} duty');
+        _showErrorSnackBar(
+          'Failed to ${_locationService.isOnDuty ? 'end' : 'start'} duty',
+        );
       }
     } catch (e) {
       _showErrorSnackBar('Error: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   Future<bool> _showConsentDialog() async {
     return await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Location Tracking Consent'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'We collect your location while you are on duty to:',
-              style: TextStyle(fontWeight: FontWeight.w500),
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Location Tracking Consent'),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'We collect your location while you are on duty to:',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                SizedBox(height: 12),
+                Text('• Support field operations'),
+                Text('• Verify shop visits'),
+                Text('• Calculate accurate payouts'),
+                Text('• Ensure agent safety'),
+                SizedBox(height: 12),
+                Text(
+                  'Location is only tracked during duty hours and can be stopped anytime.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
             ),
-            SizedBox(height: 12),
-            Text('• Support field operations'),
-            Text('• Verify shop visits'),
-            Text('• Calculate accurate payouts'),
-            Text('• Ensure agent safety'),
-            SizedBox(height: 12),
-            Text(
-              'Location is only tracked during duty hours and can be stopped anytime.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Decline'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Decline'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4CAF50),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Accept & Start'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4CAF50),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Accept & Start'),
-          ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
   }
 
   void _showSuccessSnackBar(String message) {
