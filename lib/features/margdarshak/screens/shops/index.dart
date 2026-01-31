@@ -15,7 +15,7 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
     with TickerProviderStateMixin {
   late TabController _tabController;
   final _apiService = MargdarshakApiService();
-  
+
   bool _isLoading = true;
   List<Map<String, dynamic>> _shops = [];
   String _selectedFilter = 'all';
@@ -38,14 +38,16 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
 
     try {
       print('🔵 Loading territory shops with filter: $_selectedFilter');
-      
+
       // Fetch real data from API
-      final response = await _apiService.getTerritoryShops(filter: _selectedFilter);
-      
+      final response = await _apiService.getTerritoryShops(
+        filter: _selectedFilter,
+      );
+
       if (response['status'] == true && response['data'] != null) {
         final shopsData = response['data'] as List;
         print('✅ Loaded ${shopsData.length} shops from API');
-        
+
         setState(() {
           _shops = shopsData.map((shop) => _mapApiShopToLocal(shop)).toList();
           _isLoading = false;
@@ -56,7 +58,7 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
     } catch (e) {
       print('❌ Failed to load shops: $e');
       setState(() => _isLoading = false);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -86,7 +88,9 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
       'status': apiShop['status'] == '1' ? 'approved' : 'pending',
       'driversCount': apiShop['driver_count'] ?? 0,
       'addedDate': apiShop['created_at'] ?? '',
-      'source': apiShop['onboarding_type']?.toLowerCase() == 'direct' ? 'manual' : 'auto',
+      'source': apiShop['onboarding_type']?.toLowerCase() == 'direct'
+          ? 'manual'
+          : 'auto',
       'uniqueId': apiShop['unique_id'] ?? '',
       'referralCode': apiShop['referral_code'] ?? '',
       'displayType': apiShop['display_type'] ?? '',
@@ -455,41 +459,22 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
                 ),
               ),
 
-              if (isApproved) ...[
+              if (isApproved && (shop['driversCount'] ?? 0) >= 1) ...[
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          _showShopDriversBottomSheet(shop);
-                        },
-                        icon: const Icon(
-                          Icons.people_outline_rounded,
-                          size: 16,
-                        ),
-                        label: const Text('View Drivers'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF7B1FA2),
-                          side: const BorderSide(color: Color(0xFF7B1FA2)),
-                        ),
-                      ),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      _showShopDriversBottomSheet(shop);
+                    },
+                    icon: const Icon(Icons.people_outline_rounded, size: 16),
+                    label: Text('View Drivers (${shop['driversCount'] ?? 0})'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF7B1FA2),
+                      side: const BorderSide(color: Color(0xFF7B1FA2)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          // Edit shop
-                        },
-                        icon: const Icon(Icons.edit_rounded, size: 16),
-                        label: const Text('Edit'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE65100),
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ],
@@ -622,10 +607,8 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _ShopDriversBottomSheet(
-        shop: shop,
-        apiService: _apiService,
-      ),
+      builder: (context) =>
+          _ShopDriversBottomSheet(shop: shop, apiService: _apiService),
     );
   }
 }
@@ -635,10 +618,7 @@ class _ShopDriversBottomSheet extends StatefulWidget {
   final Map<String, dynamic> shop;
   final MargdarshakApiService apiService;
 
-  const _ShopDriversBottomSheet({
-    required this.shop,
-    required this.apiService,
-  });
+  const _ShopDriversBottomSheet({required this.shop, required this.apiService});
 
   @override
   State<_ShopDriversBottomSheet> createState() =>
@@ -665,7 +645,7 @@ class _ShopDriversBottomSheetState extends State<_ShopDriversBottomSheet> {
 
     try {
       final referralCode = widget.shop['referralCode'] ?? '';
-      
+
       if (referralCode.isEmpty) {
         throw Exception('Referral code not found for this shop');
       }
@@ -774,10 +754,10 @@ class _ShopDriversBottomSheetState extends State<_ShopDriversBottomSheet> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _errorMessage != null
-                    ? _buildErrorState()
-                    : _drivers.isEmpty
-                        ? _buildEmptyState()
-                        : _buildDriversList(),
+                ? _buildErrorState()
+                : _drivers.isEmpty
+                ? _buildEmptyState()
+                : _buildDriversList(),
           ),
         ],
       ),
@@ -868,9 +848,32 @@ class _ShopDriversBottomSheetState extends State<_ShopDriversBottomSheet> {
   }
 
   Widget _buildDriverCard(Map<String, dynamic> driver) {
-    final subscriptionStatus = driver['subscription_status'] ?? 'Never Subscribed';
-    final contactTimeline = driver['contact_timeline'] ?? 'Not Contacted';
-    final isContacted = !contactTimeline.toLowerCase().contains('not contacted');
+    final subscriptionStatus =
+        driver['subscription_status'] ?? 'Never Subscribed';
+
+    // Handle contact_timeline which can be either a String or a Map
+    final rawContactTimeline = driver['contact_timeline'];
+    String contactTimelineDisplay;
+    String? callTime;
+    String? assignedTo;
+    bool isContacted;
+
+    if (rawContactTimeline is Map<String, dynamic>) {
+      // It's an object with status, assigned_to, call_time
+      final status = rawContactTimeline['status'] ?? 'Unknown';
+      assignedTo = rawContactTimeline['assigned_to']?.toString();
+      callTime = rawContactTimeline['call_time']?.toString();
+
+      contactTimelineDisplay = status.toString();
+      isContacted = !status.toString().toLowerCase().contains('not contacted');
+    } else {
+      // It's a String - show "Pending" instead of "Not Contacted"
+      final rawStatus = rawContactTimeline?.toString() ?? 'Not Contacted';
+      contactTimelineDisplay = rawStatus.toLowerCase().contains('not contacted')
+          ? 'Pending'
+          : rawStatus;
+      isContacted = !rawStatus.toLowerCase().contains('not contacted');
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -974,37 +977,160 @@ class _ShopDriversBottomSheetState extends State<_ShopDriversBottomSheet> {
 
           // Contact Status
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isContacted
-                  ? Colors.green.shade50
-                  : Colors.orange.shade50,
+              color: isContacted ? Colors.green.shade50 : Colors.orange.shade50,
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isContacted
+                    ? Colors.green.shade200
+                    : Colors.orange.shade200,
+              ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  isContacted ? Icons.check_circle : Icons.schedule,
-                  size: 16,
-                  color: isContacted ? Colors.green.shade700 : Colors.orange.shade700,
+                Row(
+                  children: [
+                    Icon(
+                      isContacted ? Icons.check_circle : Icons.schedule,
+                      size: 18,
+                      color: isContacted
+                          ? Colors.green.shade700
+                          : Colors.orange.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        contactTimelineDisplay,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isContacted
+                              ? Colors.green.shade700
+                              : Colors.orange.shade700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    contactTimeline,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isContacted ? Colors.green.shade700 : Colors.orange.shade700,
-                      fontWeight: FontWeight.w500,
+                // Show additional details if contacted
+                if (isContacted &&
+                    (assignedTo != null || callTime != null)) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Column(
+                      children: [
+                        if (assignedTo != null && assignedTo.isNotEmpty)
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.person_outline_rounded,
+                                size: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Assigned to: ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              Text(
+                                assignedTo,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        if (callTime != null && callTime.isNotEmpty) ...[
+                          if (assignedTo != null && assignedTo.isNotEmpty)
+                            const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.access_time_rounded,
+                                size: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Last call: ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              Text(
+                                _formatCallTime(callTime),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _formatCallTime(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return 'N/A';
+
+    try {
+      final date = DateTime.parse(dateStr);
+
+      // Month names
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+
+      // Format time as HH:MM AM/PM
+      final hour = date.hour > 12
+          ? date.hour - 12
+          : (date.hour == 0 ? 12 : date.hour);
+      final period = date.hour >= 12 ? 'PM' : 'AM';
+      final timeStr =
+          '${hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} $period';
+
+      // Format date as "DD MMM YYYY"
+      final dateFormatted =
+          '${date.day} ${months[date.month - 1]} ${date.year}';
+
+      return '$dateFormatted at $timeStr';
+    } catch (e) {
+      return dateStr;
+    }
   }
 
   Widget _buildDetailItem(IconData icon, String text) {
@@ -1057,23 +1183,28 @@ class _ShopDriversBottomSheetState extends State<_ShopDriversBottomSheet> {
 
   String _formatDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return 'N/A';
-    
+
     try {
       final date = DateTime.parse(dateStr);
-      final now = DateTime.now();
-      final difference = now.difference(date);
 
-      if (difference.inDays == 0) {
-        return 'Today';
-      } else if (difference.inDays == 1) {
-        return 'Yesterday';
-      } else if (difference.inDays < 7) {
-        return '${difference.inDays} days ago';
-      } else if (difference.inDays < 30) {
-        return '${(difference.inDays / 7).floor()} weeks ago';
-      } else {
-        return '${date.day}/${date.month}/${date.year}';
-      }
+      // Month names
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+
+      // Format date as "DD MMM YYYY"
+      return '${date.day} ${months[date.month - 1]} ${date.year}';
     } catch (e) {
       return dateStr;
     }

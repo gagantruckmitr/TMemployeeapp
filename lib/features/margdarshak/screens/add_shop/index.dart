@@ -83,7 +83,7 @@ class _AddShopScreenState extends State<AddShopScreen>
     'Mobile Charging',
   ];
 
-  final List<String> _punctureServices = [
+  final _punctureServices = [
     'Tire Repair',
     'Tire Replacement',
     'Wheel Balancing',
@@ -94,10 +94,73 @@ class _AddShopScreenState extends State<AddShopScreen>
     'Mobile Service',
   ];
 
+  // Additional Controllers for Dhaba Profile
+  final _emailController = TextEditingController();
+  final _yearEstablishedController = TextEditingController();
+  final _specialDishesController = TextEditingController();
+  final _peakHoursController = TextEditingController();
+  final _avgWaitTimeController = TextEditingController();
+  final _avgPriceRangeController = TextEditingController();
+
+  // Banking Controllers
+  final _accountHolderController = TextEditingController();
+  final _bankNameController = TextEditingController();
+  final _accountNumberController = TextEditingController();
+  final _ifscCodeController = TextEditingController();
+
+  // Dhaba User ID (from OTP verification)
+  int? _dhabaUserId;
+
+  // Food Type Selection
+  List<String> _selectedFoodTypes = [];
+  final List<String> _foodTypeOptions = ['Veg', 'Non-Veg', 'Both'];
+
+  // Meal Times
+  bool _mealBreakfast = false;
+  bool _mealLunch = false;
+  bool _mealDinner = false;
+  bool _mealNight = false;
+
+  // Facilities
+  bool _sittingFacility = false;
+  bool _cleanRestrooms = false;
+  bool _drinkingWater = false;
+  bool _parkingSmall = false;
+  bool _parkingLarge = false;
+  bool _sleepingArea = false;
+  bool _washingArea = false;
+  bool _electricPoint = false;
+  bool _cctv = false;
+  bool _securityStaff = false;
+  bool _wheelAlignment = false;
+  bool _mechanicAvailable = false;
+
+  // Operation
+  bool _is24x7 = false;
+
+  // Engagement Settings
+  bool _allowCall = true;
+  bool _allowMessages = true;
+  bool _allowPromotions = false;
+
+  // Location Source
+  String _locationSource = 'Pinned via GPS';
+
+  // Photo Categories
+  String _selectedPhotoCategory = 'Exterior';
+  final List<String> _photoCategories = [
+    'Exterior',
+    'Interior',
+    'Kitchen',
+    'Food Items',
+    'Parking Area',
+    'Facilities',
+  ];
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
     _loadStates();
   }
 
@@ -133,23 +196,23 @@ class _AddShopScreenState extends State<AddShopScreen>
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        
+
         if (data is List && data.isNotEmpty) {
           final result = data[0];
-          
+
           if (result['Status'] == 'Success' && result['PostOffice'] != null) {
             final postOffices = result['PostOffice'] as List;
-            
+
             if (postOffices.isNotEmpty) {
               final firstOffice = postOffices[0];
               final district = firstOffice['District'] as String?;
-              
+
               if (district != null && district.isNotEmpty) {
                 setState(() {
                   _districtController.text = district;
                   _isFetchingPincode = false;
                 });
-                
+
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -165,10 +228,10 @@ class _AddShopScreenState extends State<AddShopScreen>
           }
         }
       }
-      
+
       // If we reach here, pincode lookup failed
       setState(() => _isFetchingPincode = false);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -180,7 +243,7 @@ class _AddShopScreenState extends State<AddShopScreen>
       }
     } catch (e) {
       setState(() => _isFetchingPincode = false);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -212,7 +275,7 @@ class _AddShopScreenState extends State<AddShopScreen>
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text(
-          'Add New Partner',
+          'Add Dhaba Partner',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Color(0xFF2D2D5F),
@@ -233,10 +296,12 @@ class _AddShopScreenState extends State<AddShopScreen>
           indicatorColor: const Color(0xFFE65100),
           tabs: const [
             Tab(text: 'Registration'),
-            Tab(text: 'Basic Info'),
+            Tab(text: 'Business Info'),
             Tab(text: 'Location'),
-            Tab(text: 'Services'),
-            Tab(text: 'Photos & Review'),
+            Tab(text: 'Operation'),
+            Tab(text: 'Food & Menu'),
+            Tab(text: 'Photos'),
+            Tab(text: 'Review'),
           ],
         ),
       ),
@@ -246,10 +311,12 @@ class _AddShopScreenState extends State<AddShopScreen>
           controller: _tabController,
           children: [
             _buildRegistrationTab(),
-            _buildBasicInfoTab(),
+            _buildBusinessInfoTab(),
             _buildLocationTab(),
-            _buildServicesTab(),
-            _buildPhotosReviewTab(),
+            _buildOperationTab(),
+            _buildFoodMenuTab(),
+            _buildPhotosTab(),
+            _buildReviewTab(),
           ],
         ),
       ),
@@ -390,14 +457,14 @@ class _AddShopScreenState extends State<AddShopScreen>
     ).animate().fadeIn(duration: 600.ms);
   }
 
-  Widget _buildBasicInfoTab() {
+  Widget _buildBusinessInfoTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Partner Details Section - Apple Style
-          _buildAppleStyleSectionTitle('Partner Details'),
+          // Business Details Section
+          _buildAppleStyleSectionTitle('Business Information'),
           const SizedBox(height: 14),
 
           // Apple-style grouped input card
@@ -425,8 +492,8 @@ class _AddShopScreenState extends State<AddShopScreen>
                 _buildAppleDivider(),
                 _buildAppleTextField(
                   controller: _shopNameController,
-                  label: 'Partner Name',
-                  placeholder: 'Enter partner name',
+                  label: 'Dhaba Name',
+                  placeholder: 'Enter dhaba name',
                   icon: Icons.store_rounded,
                   iconColor: const Color(0xFFFF9500),
                 ),
@@ -436,8 +503,62 @@ class _AddShopScreenState extends State<AddShopScreen>
                   label: 'Mobile Number',
                   icon: Icons.phone_rounded,
                   iconColor: const Color(0xFF5856D6),
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _emailController,
+                  label: 'Email (Optional)',
+                  placeholder: 'Enter email address',
+                  icon: Icons.email_rounded,
+                  iconColor: const Color(0xFF007AFF),
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _yearEstablishedController,
+                  label: 'Year Established',
+                  placeholder: 'e.g. 2015',
+                  icon: Icons.calendar_today_rounded,
+                  iconColor: const Color(0xFFAF52DE),
                   isLast: true,
                 ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Dhaba Type Section
+          _buildAppleStyleSectionTitle('Dhaba Type'),
+          const SizedBox(height: 14),
+
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildDhabaTypeOption(
+                  'Highway Dhaba',
+                  Icons.local_shipping_rounded,
+                ),
+                _buildAppleDivider(),
+                _buildDhabaTypeOption(
+                  'City Dhaba',
+                  Icons.location_city_rounded,
+                ),
+                _buildAppleDivider(),
+                _buildDhabaTypeOption('Village Dhaba', Icons.home_rounded),
+                _buildAppleDivider(),
+                _buildDhabaTypeOption('Tourist Dhaba', Icons.tour_rounded),
               ],
             ),
           ),
@@ -446,6 +567,60 @@ class _AddShopScreenState extends State<AddShopScreen>
         ],
       ),
     ).animate().fadeIn(duration: 600.ms);
+  }
+
+  String _selectedDhabaType = 'Highway Dhaba';
+
+  Widget _buildDhabaTypeOption(String type, IconData icon) {
+    final isSelected = _selectedDhabaType == type;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _selectedDhabaType = type);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? const Color(0xFFFF9500).withValues(alpha: 0.12)
+                    : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                color: isSelected
+                    ? const Color(0xFFFF9500)
+                    : Colors.grey.shade600,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                type,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected
+                      ? const Color(0xFFFF9500)
+                      : const Color(0xFF1C1C1E),
+                ),
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFFFF9500),
+                size: 22,
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildAppleStyleSectionTitle(String title) {
@@ -544,7 +719,7 @@ class _AddShopScreenState extends State<AddShopScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: _districtController.text.isNotEmpty 
+        color: _districtController.text.isNotEmpty
             ? const Color(0xFF34C759).withValues(alpha: 0.05)
             : Colors.white,
       ),
@@ -603,7 +778,9 @@ class _AddShopScreenState extends State<AddShopScreen>
                 const SizedBox(height: 4),
                 TextField(
                   controller: _districtController,
-                  enabled: _districtController.text.isEmpty, // Allow manual entry if not auto-filled
+                  enabled: _districtController
+                      .text
+                      .isEmpty, // Allow manual entry if not auto-filled
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -626,11 +803,7 @@ class _AddShopScreenState extends State<AddShopScreen>
             ),
           ),
           if (_districtController.text.isNotEmpty)
-            const Icon(
-              Icons.check_circle,
-              color: Color(0xFF34C759),
-              size: 20,
-            ),
+            const Icon(Icons.check_circle, color: Color(0xFF34C759), size: 20),
         ],
       ),
     );
@@ -644,22 +817,24 @@ class _AddShopScreenState extends State<AddShopScreen>
   ) {
     final isSelected = _selectedShopType == type;
     final isDisabled = _isPhoneVerified; // Disable after phone verification
-    
+
     return GestureDetector(
-      onTap: isDisabled ? null : () {
-        HapticFeedback.lightImpact();
-        setState(() {
-          _selectedShopType = type;
-          _selectedServices.clear();
-        });
-      },
+      onTap: isDisabled
+          ? null
+          : () {
+              HapticFeedback.lightImpact();
+              setState(() {
+                _selectedShopType = type;
+                _selectedServices.clear();
+              });
+            },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: isDisabled 
-              ? Colors.grey.shade100 
+          color: isDisabled
+              ? Colors.grey.shade100
               : (isSelected ? color : Colors.white),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -687,8 +862,8 @@ class _AddShopScreenState extends State<AddShopScreen>
         child: Column(
           children: [
             Icon(
-              icon, 
-              size: 32, 
+              icon,
+              size: 32,
               color: isDisabled
                   ? Colors.grey.shade400
                   : (isSelected ? Colors.white : color),
@@ -706,11 +881,7 @@ class _AddShopScreenState extends State<AddShopScreen>
             ),
             if (isDisabled) ...[
               const SizedBox(height: 4),
-              Icon(
-                Icons.lock_rounded,
-                size: 14,
-                color: Colors.grey.shade400,
-              ),
+              Icon(Icons.lock_rounded, size: 14, color: Colors.grey.shade400),
             ],
           ],
         ),
@@ -774,7 +945,9 @@ class _AddShopScreenState extends State<AddShopScreen>
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: isDisabled ? Colors.grey.shade600 : const Color(0xFF1C1C1E),
+                    color: isDisabled
+                        ? Colors.grey.shade600
+                        : const Color(0xFF1C1C1E),
                   ),
                   decoration: InputDecoration(
                     hintText: placeholder,
@@ -791,11 +964,7 @@ class _AddShopScreenState extends State<AddShopScreen>
             ),
           ),
           if (isDisabled)
-            Icon(
-              Icons.lock_rounded,
-              color: Colors.grey.shade400,
-              size: 18,
-            ),
+            Icon(Icons.lock_rounded, color: Colors.grey.shade400, size: 18),
         ],
       ),
     );
@@ -847,19 +1016,15 @@ class _AddShopScreenState extends State<AddShopScreen>
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: controller.text.isEmpty 
-                        ? Colors.grey.shade400 
+                    color: controller.text.isEmpty
+                        ? Colors.grey.shade400
                         : const Color(0xFF1C1C1E),
                   ),
                 ),
               ],
             ),
           ),
-          Icon(
-            Icons.lock_rounded,
-            color: Colors.grey.shade400,
-            size: 18,
-          ),
+          Icon(Icons.lock_rounded, color: Colors.grey.shade400, size: 18),
         ],
       ),
     );
@@ -867,7 +1032,7 @@ class _AddShopScreenState extends State<AddShopScreen>
 
   Widget _buildAppleStateDropdown() {
     final isDisabled = _isPhoneVerified; // Disable after phone verification
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
@@ -920,9 +1085,78 @@ class _AddShopScreenState extends State<AddShopScreen>
                         ),
                       ),
                       Icon(
-                        isDisabled ? Icons.lock_rounded : Icons.chevron_right_rounded,
+                        isDisabled
+                            ? Icons.lock_rounded
+                            : Icons.chevron_right_rounded,
                         color: Colors.grey.shade400,
                         size: isDisabled ? 18 : 22,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Duplicate for Location tab without verify check
+  Widget _buildLocationStateDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: const BoxDecoration(color: Colors.white),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF007AFF).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.map_rounded,
+              color: Color(0xFF007AFF),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'State',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF8E8E93),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: () => _showStatePickerModal(),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _stateController.text.isEmpty
+                              ? 'Select state'
+                              : _stateController.text,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: _stateController.text.isEmpty
+                                ? Colors.grey.shade400
+                                : const Color(0xFF1C1C1E),
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.grey.shade400,
+                        size: 22,
                       ),
                     ],
                   ),
@@ -981,8 +1215,8 @@ class _AddShopScreenState extends State<AddShopScreen>
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
-                    color: _isPhoneVerified 
-                        ? Colors.grey.shade600 
+                    color: _isPhoneVerified
+                        ? Colors.grey.shade600
                         : const Color(0xFF1C1C1E),
                   ),
                   onChanged: (value) => setState(() {}),
@@ -1043,11 +1277,7 @@ class _AddShopScreenState extends State<AddShopScreen>
                   ),
                 ),
                 const SizedBox(width: 8),
-                Icon(
-                  Icons.lock_rounded,
-                  color: Colors.grey.shade400,
-                  size: 18,
-                ),
+                Icon(Icons.lock_rounded, color: Colors.grey.shade400, size: 18),
               ],
             ),
         ],
@@ -1112,80 +1342,86 @@ class _AddShopScreenState extends State<AddShopScreen>
               child: _isLoadingStates
                   ? const Center(child: CircularProgressIndicator())
                   : _statesData.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No states available',
-                                style: TextStyle(color: Colors.grey.shade600),
-                              ),
-                              const SizedBox(height: 8),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  _loadStates();
-                                },
-                                child: const Text('Retry'),
-                              ),
-                            ],
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.grey.shade400,
                           ),
-                        )
-                      : ListView.builder(
-                          itemCount: _statesData.length,
-                          itemBuilder: (context, index) {
-                            final state = _statesData[index];
-                            final stateName = state['name'] as String;
-                            final stateId = state['id'].toString();
-                            final isSelected = _selectedStateId == stateId;
-                            
-                            return ListTile(
-                              onTap: () {
-                                HapticFeedback.selectionClick();
-                                setState(() {
-                                  _stateController.text = stateName;
-                                  _selectedStateId = stateId;
-                                });
-                                Navigator.pop(context);
-                              },
-                              leading: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? const Color(0xFF007AFF).withValues(alpha: 0.1)
-                                      : Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  Icons.location_on_rounded,
-                                  color: isSelected
-                                      ? const Color(0xFF007AFF)
-                                      : Colors.grey.shade600,
-                                  size: 20,
-                                ),
-                              ),
-                              title: Text(
-                                stateName,
-                                style: TextStyle(
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.w500,
-                                  color: isSelected
-                                      ? const Color(0xFF007AFF)
-                                      : const Color(0xFF1C1C1E),
-                                ),
-                              ),
-                              trailing: isSelected
-                                  ? const Icon(
-                                      Icons.check_circle,
-                                      color: Color(0xFF007AFF),
-                                    )
-                                  : null,
-                            );
+                          const SizedBox(height: 16),
+                          Text(
+                            'No states available',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _loadStates();
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _statesData.length,
+                      itemBuilder: (context, index) {
+                        final state = _statesData[index];
+                        final stateName = state['name'] as String;
+                        final stateId = state['id'].toString();
+                        final isSelected = _selectedStateId == stateId;
+
+                        return ListTile(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() {
+                              _stateController.text = stateName;
+                              _selectedStateId = stateId;
+                            });
+                            Navigator.pop(context);
                           },
-                        ),
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(
+                                      0xFF007AFF,
+                                    ).withValues(alpha: 0.1)
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.location_on_rounded,
+                              color: isSelected
+                                  ? const Color(0xFF007AFF)
+                                  : Colors.grey.shade600,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            stateName,
+                            style: TextStyle(
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              color: isSelected
+                                  ? const Color(0xFF007AFF)
+                                  : const Color(0xFF1C1C1E),
+                            ),
+                          ),
+                          trailing: isSelected
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: Color(0xFF007AFF),
+                                )
+                              : null,
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -1287,7 +1523,6 @@ class _AddShopScreenState extends State<AddShopScreen>
   }
 
   void _showOtpModal() {
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1534,7 +1769,7 @@ class _AddShopScreenState extends State<AddShopScreen>
                   onTap: _otpResendTimer == 0
                       ? () async {
                           setModalState(() => _otpResendTimer = 30);
-                          
+
                           // Resend OTP logic - use correct API based on shop type
                           try {
                             final response = _selectedShopType == 'dhaba'
@@ -1548,7 +1783,7 @@ class _AddShopScreenState extends State<AddShopScreen>
                                     name: _ownerNameController.text,
                                     stateId: _selectedStateId!,
                                   );
-                            
+
                             if (response['success'] == true && mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -1593,7 +1828,7 @@ class _AddShopScreenState extends State<AddShopScreen>
 
   void _verifyOtp(StateSetter setModalState) async {
     final otpCode = _getOtpString();
-    
+
     if (otpCode.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1616,8 +1851,11 @@ class _AddShopScreenState extends State<AddShopScreen>
       setModalState(() => _isVerifyingOtp = false);
 
       if (response['success'] == true) {
+        // Extract and store the dhaba_user_id for subsequent API calls
+        final userData = response['user'];
         setState(() {
           _isPhoneVerified = true;
+          _dhabaUserId = userData?['id'];
         });
 
         // Close keyboard before closing modal
@@ -1631,9 +1869,8 @@ class _AddShopScreenState extends State<AddShopScreen>
         }
 
         // Show success message with user info
-        final userData = response['user'];
         final uniqueId = userData?['unique_id'] ?? '';
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Column(
@@ -1655,9 +1892,7 @@ class _AddShopScreenState extends State<AddShopScreen>
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text('Registration successful!'),
-                    ),
+                    const Expanded(child: Text('Registration successful!')),
                   ],
                 ),
                 if (uniqueId.isNotEmpty) ...[
@@ -1671,7 +1906,9 @@ class _AddShopScreenState extends State<AddShopScreen>
             ),
             backgroundColor: const Color(0xFF34C759),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             margin: const EdgeInsets.all(16),
             duration: const Duration(seconds: 4),
           ),
@@ -1736,6 +1973,8 @@ class _AddShopScreenState extends State<AddShopScreen>
                 _buildPincodeField(), // Pincode field with auto-fetch
                 _buildAppleDivider(),
                 _buildDistrictField(), // District field (auto-filled)
+                _buildAppleDivider(),
+                _buildLocationStateDropdown(), // New state dropdown
                 _buildAppleDivider(),
                 _buildAppleTextField(
                   controller: _landmarkController,
@@ -2100,373 +2339,717 @@ class _AddShopScreenState extends State<AddShopScreen>
     );
   }
 
-  Widget _buildServicesTab() {
-    final services = _selectedShopType == 'dhaba'
-        ? _dhabaServices
-        : _punctureServices;
-
+  Widget _buildOperationTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Services Section
-          _buildSectionTitle('Services Offered'),
-          const SizedBox(height: 8),
-          Text(
-            'Select all services available at this ${_selectedShopType == 'dhaba' ? 'dhaba' : 'puncture partner'}',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 16),
+          // Operating Hours Section
+          _buildAppleStyleSectionTitle('Operating Hours'),
+          const SizedBox(height: 14),
 
-          // Services Grid
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 3,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            itemCount: services.length,
-            itemBuilder: (context, index) {
-              final service = services[index];
-              final isSelected = _selectedServices.contains(service);
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    if (isSelected) {
-                      _selectedServices.remove(service);
-                    } else {
-                      _selectedServices.add(service);
-                    }
-                  });
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFFE65100).withValues(alpha: 0.1)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFFE65100)
-                          : Colors.grey.shade300,
-                      width: isSelected ? 2 : 1,
-                    ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // 24x7 Toggle
+                SwitchListTile(
+                  value: _is24x7,
+                  onChanged: (value) => setState(() => _is24x7 = value),
+                  title: const Text(
+                    'Open 24x7',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
-                  child: Row(
+                  subtitle: const Text('Available round the clock'),
+                  activeColor: const Color(0xFF34C759),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                if (!_is24x7) ...[
+                  const Divider(height: 24),
+                  Row(
                     children: [
-                      Icon(
-                        isSelected ? Icons.check_circle : Icons.circle_outlined,
-                        color: isSelected
-                            ? const Color(0xFFE65100)
-                            : Colors.grey.shade400,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          service,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.w500,
-                            color: isSelected
-                                ? const Color(0xFFE65100)
-                                : Colors.grey.shade700,
+                        child: GestureDetector(
+                          onTap: () => _selectTime('opening'),
+                          child: _buildTimeCard(
+                            'Opening',
+                            _operatingHours['opening']!,
+                            Icons.wb_sunny_rounded,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _selectTime('closing'),
+                          child: _buildTimeCard(
+                            'Closing',
+                            _operatingHours['closing']!,
+                            Icons.nightlight_round,
                           ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              );
-            },
+                ],
+              ],
+            ),
           ),
 
           const SizedBox(height: 24),
 
-          // Operating Hours Section
-          _buildSectionTitle('Operating Hours (Optional)'),
-          const SizedBox(height: 16),
+          // Facilities Section
+          _buildAppleStyleSectionTitle('Facilities'),
+          const SizedBox(height: 14),
 
           Container(
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
+            padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Opening Time',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          GestureDetector(
-                            onTap: () => _selectTime('opening'),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.access_time_rounded,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(_operatingHours['opening']!),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Closing Time',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          GestureDetector(
-                            onTap: () => _selectTime('closing'),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.access_time_rounded,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(_operatingHours['closing']!),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                _buildFacilitySwitch(
+                  'Sitting Area',
+                  Icons.chair_rounded,
+                  _sittingFacility,
+                  (v) => setState(() => _sittingFacility = v),
+                ),
+                _buildFacilitySwitch(
+                  'Clean Restrooms',
+                  Icons.wc_rounded,
+                  _cleanRestrooms,
+                  (v) => setState(() => _cleanRestrooms = v),
+                ),
+                _buildFacilitySwitch(
+                  'Drinking Water',
+                  Icons.water_drop_rounded,
+                  _drinkingWater,
+                  (v) => setState(() => _drinkingWater = v),
+                ),
+                _buildFacilitySwitch(
+                  'Parking (Small)',
+                  Icons.local_parking_rounded,
+                  _parkingSmall,
+                  (v) => setState(() => _parkingSmall = v),
+                ),
+                _buildFacilitySwitch(
+                  'Parking (Truck)',
+                  Icons.local_shipping_rounded,
+                  _parkingLarge,
+                  (v) => setState(() => _parkingLarge = v),
+                ),
+                _buildFacilitySwitch(
+                  'Sleeping Area',
+                  Icons.hotel_rounded,
+                  _sleepingArea,
+                  (v) => setState(() => _sleepingArea = v),
+                ),
+                _buildFacilitySwitch(
+                  'Vehicle Washing',
+                  Icons.local_car_wash_rounded,
+                  _washingArea,
+                  (v) => setState(() => _washingArea = v),
+                ),
+                _buildFacilitySwitch(
+                  'Electric Charging',
+                  Icons.ev_station_rounded,
+                  _electricPoint,
+                  (v) => setState(() => _electricPoint = v),
+                ),
+                _buildFacilitySwitch(
+                  'CCTV',
+                  Icons.videocam_rounded,
+                  _cctv,
+                  (v) => setState(() => _cctv = v),
+                ),
+                _buildFacilitySwitch(
+                  'Security Staff',
+                  Icons.security_rounded,
+                  _securityStaff,
+                  (v) => setState(() => _securityStaff = v),
+                ),
+                _buildFacilitySwitch(
+                  'Wheel Alignment',
+                  Icons.build_rounded,
+                  _wheelAlignment,
+                  (v) => setState(() => _wheelAlignment = v),
+                ),
+                _buildFacilitySwitch(
+                  'Mechanic Available',
+                  Icons.engineering_rounded,
+                  _mechanicAvailable,
+                  (v) => setState(() => _mechanicAvailable = v),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 32),
         ],
       ),
-    ).animate().fadeIn(duration: 600.ms, delay: 400.ms).slideY(begin: 0.2, end: 0);
+    ).animate().fadeIn(duration: 600.ms);
   }
 
-  Widget _buildPhotosReviewTab() {
+  Widget _buildTimeCard(String label, String time, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: const Color(0xFFFF9500), size: 24),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            time,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFacilitySwitch(
+    String label,
+    IconData icon,
+    bool value,
+    Function(bool) onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: value ? const Color(0xFF34C759) : Colors.grey.shade400,
+            size: 22,
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 15))),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: const Color(0xFF34C759),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFoodMenuTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Photos Section
-          _buildSectionTitle('Partner Photos'),
-          const SizedBox(height: 8),
-          Text(
-            'Add photos of partner front and signboard (minimum 2 photos required)',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 16),
+          _buildAppleStyleSectionTitle('Food Type'),
+          const SizedBox(height: 14),
 
-          // Photo Grid
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 1,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            itemCount: _shopImages.length + 1,
-            itemBuilder: (context, index) {
-              if (index == _shopImages.length) {
-                return _buildAddPhotoCard();
-              }
-              return _buildPhotoCard(_shopImages[index], index);
-            },
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: _foodTypeOptions.map((type) {
+                final isSelected = _selectedFoodTypes.contains(type);
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        if (isSelected) {
+                          _selectedFoodTypes.remove(type);
+                        } else {
+                          _selectedFoodTypes.add(type);
+                        }
+                      });
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF34C759).withValues(alpha: 0.12)
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF34C759)
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          type,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? const Color(0xFF34C759)
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ),
 
           const SizedBox(height: 24),
 
-          // Review Section
-          _buildSectionTitle('Review & Consent'),
-          const SizedBox(height: 16),
+          _buildAppleStyleSectionTitle('Meal Services'),
+          const SizedBox(height: 14),
 
-          // Summary Card
           Container(
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
+            padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSummaryRow(
-                  'Partner Type',
-                  _selectedShopType == 'dhaba' ? 'Dhaba' : 'Puncture Shop',
+                _buildFacilitySwitch(
+                  'Breakfast',
+                  Icons.free_breakfast_rounded,
+                  _mealBreakfast,
+                  (v) => setState(() => _mealBreakfast = v),
                 ),
-                _buildSummaryRow(
-                  'Partner Name',
-                  _shopNameController.text.isEmpty
-                      ? 'Not entered'
-                      : _shopNameController.text,
+                _buildFacilitySwitch(
+                  'Lunch',
+                  Icons.lunch_dining_rounded,
+                  _mealLunch,
+                  (v) => setState(() => _mealLunch = v),
                 ),
-                _buildSummaryRow(
-                  'Owner Name',
-                  _ownerNameController.text.isEmpty
-                      ? 'Not entered'
-                      : _ownerNameController.text,
+                _buildFacilitySwitch(
+                  'Dinner',
+                  Icons.dinner_dining_rounded,
+                  _mealDinner,
+                  (v) => setState(() => _mealDinner = v),
                 ),
-                _buildSummaryRow(
-                  'Mobile',
-                  _mobileController.text.isEmpty
-                      ? 'Not entered'
-                      : _mobileController.text,
-                ),
-                _buildSummaryRow(
-                  'District',
-                  _districtController.text.isEmpty
-                      ? 'Not entered'
-                      : _districtController.text,
-                ),
-                _buildSummaryRow(
-                  'Services',
-                  _selectedServices.isEmpty
-                      ? 'None selected'
-                      : '${_selectedServices.length} services',
-                ),
-                _buildSummaryRow('Photos', '${_shopImages.length} photos'),
-                _buildSummaryRow(
-                  'State',
-                  _stateController.text.isEmpty
-                      ? 'Not entered'
-                      : _stateController.text,
-                ),
-                _buildSummaryRow(
-                  'GPS Location',
-                  _latitude != null ? 'Captured' : 'Not captured',
+                _buildFacilitySwitch(
+                  'Night Service',
+                  Icons.nightlight_round,
+                  _mealNight,
+                  (v) => setState(() => _mealNight = v),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          // Consent Checkbox
+          _buildAppleStyleSectionTitle('Menu Details'),
+          const SizedBox(height: 14),
+
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                _buildAppleTextField(
+                  controller: _specialDishesController,
+                  label: 'Special Dishes',
+                  placeholder: 'e.g. Dal Makhani, Butter Chicken',
+                  icon: Icons.restaurant_menu_rounded,
+                  iconColor: const Color(0xFFFF9500),
+                  isFirst: true,
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _avgPriceRangeController,
+                  label: 'Avg Price Per Plate',
+                  placeholder: 'e.g. ₹80-150',
+                  icon: Icons.currency_rupee_rounded,
+                  iconColor: const Color(0xFF34C759),
+                  isLast: true,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms);
+  }
+
+  Widget _buildPhotosTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildAppleStyleSectionTitle('Photo Category'),
+          const SizedBox(height: 14),
+
+          SizedBox(
+            height: 46,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _photoCategories.length,
+              itemBuilder: (context, index) {
+                final cat = _photoCategories[index];
+                final isSelected = _selectedPhotoCategory == cat;
+                return GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    setState(() => _selectedPhotoCategory = cat);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFFF9500)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFFFF9500)
+                            : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Text(
+                      cat,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Colors.white : Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          _buildAppleStyleSectionTitle('Uploaded Photos'),
+          const SizedBox(height: 14),
+
+          SizedBox(
+            height: 160,
+            child: _shopImages.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.photo_library_rounded,
+                          size: 48,
+                          color: Colors.grey.shade300,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'No photos yet',
+                          style: TextStyle(color: Colors.grey.shade500),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _shopImages.length,
+                    itemBuilder: (context, index) {
+                      final photo = _shopImages[index];
+                      return Container(
+                        width: 140,
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          image: DecorationImage(
+                            image: FileImage(photo),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: GestureDetector(
+                                onTap: () =>
+                                    setState(() => _shopImages.removeAt(index)),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          const SizedBox(height: 20),
+
+          GestureDetector(
+            onTap: _addPhoto,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFFF9500).withValues(alpha: 0.5),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF9500).withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.add_a_photo_rounded,
+                      color: Color(0xFFFF9500),
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Add Photo',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFFF9500),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tap to capture or select',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms);
+  }
+
+  Widget _buildReviewTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildAppleStyleSectionTitle('Banking Details (Optional)'),
+          const SizedBox(height: 14),
+
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                _buildAppleTextField(
+                  controller: _accountHolderController,
+                  label: 'Account Holder Name',
+                  placeholder: 'Enter name as per bank',
+                  icon: Icons.person_rounded,
+                  iconColor: const Color(0xFF007AFF),
+                  isFirst: true,
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _bankNameController,
+                  label: 'Bank Name',
+                  placeholder: 'e.g. State Bank of India',
+                  icon: Icons.account_balance_rounded,
+                  iconColor: const Color(0xFF5856D6),
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _accountNumberController,
+                  label: 'Account Number',
+                  placeholder: 'Enter account number',
+                  icon: Icons.numbers_rounded,
+                  iconColor: const Color(0xFFFF9500),
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _ifscCodeController,
+                  label: 'IFSC Code',
+                  placeholder: 'e.g. SBIN0001234',
+                  icon: Icons.code_rounded,
+                  iconColor: const Color(0xFF34C759),
+                  isLast: true,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          _buildAppleStyleSectionTitle('Engagement Settings'),
+          const SizedBox(height: 14),
+
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildFacilitySwitch(
+                  'Allow Calls',
+                  Icons.call_rounded,
+                  _allowCall,
+                  (v) => setState(() => _allowCall = v),
+                ),
+                _buildFacilitySwitch(
+                  'Allow Messages',
+                  Icons.message_rounded,
+                  _allowMessages,
+                  (v) => setState(() => _allowMessages = v),
+                ),
+                _buildFacilitySwitch(
+                  'Allow Promotions',
+                  Icons.campaign_rounded,
+                  _allowPromotions,
+                  (v) => setState(() => _allowPromotions = v),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.blue.shade200),
             ),
-            child: Column(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Checkbox(
-                      value: _consentGiven,
-                      onChanged: (value) {
-                        setState(() {
-                          _consentGiven = value ?? false;
-                        });
-                      },
-                      activeColor: const Color(0xFFE65100),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Terms & Data Consent',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'I confirm that all information provided is accurate and I consent to data collection and processing for business purposes.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade700,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                Checkbox(
+                  value: _consentGiven,
+                  onChanged: (v) => setState(() => _consentGiven = v ?? false),
+                  activeColor: const Color(0xFFE65100),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        // Show terms and conditions
-                      },
-                      child: const Text('View Terms & Conditions'),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () {
-                        // Show privacy policy
-                      },
-                      child: const Text('Privacy Policy'),
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Terms & Data Consent',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'I confirm all information is accurate and consent to data processing.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 32),
         ],
       ),
-    ).animate().fadeIn(duration: 600.ms, delay: 600.ms).slideY(begin: 0.2, end: 0);
+    ).animate().fadeIn(duration: 600.ms);
   }
 
   // Helper Widgets
@@ -2674,8 +3257,9 @@ class _AddShopScreenState extends State<AddShopScreen>
   // Missing Methods Implementation
   Widget _buildBottomNavigation() {
     // Check if phone is verified for Registration tab (index 0)
-    final bool canProceedFromRegistration = _tabController.index != 0 || _isPhoneVerified;
-    
+    final bool canProceedFromRegistration =
+        _tabController.index != 0 || _isPhoneVerified;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2708,17 +3292,11 @@ class _AddShopScreenState extends State<AddShopScreen>
             ),
           if (_tabController.index > 0) const SizedBox(width: 12),
           Expanded(
-            flex: _tabController.index == 0 ? 1 : 1,
+            flex: 1,
             child: ElevatedButton(
               onPressed: (_isLoading || !canProceedFromRegistration)
                   ? null
-                  : () {
-                      if (_tabController.index < 4) {
-                        _tabController.animateTo(_tabController.index + 1);
-                      } else {
-                        _handleSubmit();
-                      }
-                    },
+                  : () => _handleNextStep(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE65100),
                 foregroundColor: Colors.white,
@@ -2735,12 +3313,383 @@ class _AddShopScreenState extends State<AddShopScreen>
                       ),
                     )
                   : Text(
-                      _tabController.index < 4 ? 'Next' : 'Submit Partner',
+                      _tabController.index < 6
+                          ? 'Save & Next'
+                          : 'Submit Partner',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Handle step-by-step navigation with API calls
+  Future<void> _handleNextStep() async {
+    final currentIndex = _tabController.index;
+    print('🔄 Handling next step for tab index: $currentIndex');
+
+    switch (currentIndex) {
+      case 0: // Registration
+        print('✅ Moving from Registration to Business Info');
+        _tabController.animateTo(1);
+        break;
+      case 1: // Business Info
+        print('🚀 Saving Business Info...');
+        await _saveBusinessInfo();
+        break;
+      case 2: // Location
+        print('🚀 Saving Location...');
+        await _saveLocation();
+        break;
+      case 3: // Operation
+        print('🚀 Saving Operation & Facilities...');
+        await _saveOperationAndFacilities();
+        break;
+      case 4: // Food & Menu
+        print('🚀 Saving Food Details...');
+        await _saveFoodDetails();
+        break;
+      case 5: // Photos
+        print('🚀 Uploading Photos...');
+        await _savePhotos();
+        break;
+      case 6: // Review
+        print('🚀 Completing Dhaba Profile...');
+        await _completeDhabaProfile();
+        break;
+    }
+  }
+
+  /// Step 1: Save Business Info
+  Future<void> _saveBusinessInfo() async {
+    if (_dhabaUserId == null) {
+      _showError('Registration not complete. Please verify phone first.');
+      return;
+    }
+
+    if (_shopNameController.text.isEmpty || _ownerNameController.text.isEmpty) {
+      _showError('Please fill in all required fields');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiService.saveDhabaBusinessInfo(
+        dhabaUserId: _dhabaUserId!,
+        dhabaName: _shopNameController.text,
+        ownerName: _ownerNameController.text,
+        mobile: _mobileController.text,
+        email: _emailController.text.isNotEmpty ? _emailController.text : null,
+        yearEstablished: _yearEstablishedController.text.isNotEmpty
+            ? _yearEstablishedController.text
+            : null,
+        dhabaType: _selectedDhabaType,
+      );
+
+      if (response['success'] == true) {
+        _showSuccess('Business info saved successfully');
+        _tabController.animateTo(2);
+      } else {
+        _showError(response['message'] ?? 'Failed to save business info');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 2: Save Location
+  Future<void> _saveLocation() async {
+    if (_dhabaUserId == null) {
+      _showError('Registration not complete');
+      return;
+    }
+
+    if (_addressController.text.isEmpty ||
+        _latitude == null ||
+        _longitude == null) {
+      _showError('Please capture location and fill address');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiService.saveDhabaLocation(
+        dhabaUserId: _dhabaUserId!,
+        fullAddress: _addressController.text,
+        landmark: _landmarkController.text.isNotEmpty
+            ? _landmarkController.text
+            : null,
+        stateId: int.tryParse(_selectedStateId ?? '1') ?? 1,
+        district: _districtController.text.isNotEmpty
+            ? _districtController.text
+            : null,
+        pincode: _pincodeController.text,
+        latitude: _latitude!,
+        longitude: _longitude!,
+        locationSource: _locationSource,
+      );
+
+      if (response['success'] == true) {
+        _showSuccess('Location saved successfully');
+        _tabController.animateTo(3);
+      } else {
+        _showError(response['message'] ?? 'Failed to save location');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 3: Save Operation and Facilities
+  Future<void> _saveOperationAndFacilities() async {
+    if (_dhabaUserId == null) {
+      _showError('Registration not complete');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Save operation details
+      final operationResponse = await _apiService.saveDhabaOperation(
+        dhabaUserId: _dhabaUserId!,
+        openingTime: _is24x7 ? null : _operatingHours['opening'],
+        closingTime: _is24x7 ? null : _operatingHours['closing'],
+        is24x7: _is24x7,
+        peakHours: _peakHoursController.text.isNotEmpty
+            ? _peakHoursController.text
+            : null,
+        avgWaitTime: _avgWaitTimeController.text.isNotEmpty
+            ? _avgWaitTimeController.text
+            : null,
+      );
+
+      if (operationResponse['success'] != true) {
+        _showError(operationResponse['message'] ?? 'Failed to save operation');
+        return;
+      }
+
+      // Save facilities
+      final facilitiesResponse = await _apiService.saveDhabaFacilities(
+        dhabaUserId: _dhabaUserId!,
+        sittingFacility: _sittingFacility,
+        cleanRestrooms: _cleanRestrooms,
+        drinkingWater: _drinkingWater,
+        parkingSmall: _parkingSmall,
+        parkingLarge: _parkingLarge,
+        sleepingArea: _sleepingArea,
+        washingArea: _washingArea,
+        electricPoint: _electricPoint,
+        cctv: _cctv,
+        securityStaff: _securityStaff,
+        wheelAlignment: _wheelAlignment,
+        mechanic: _mechanicAvailable,
+      );
+
+      if (facilitiesResponse['success'] == true) {
+        _showSuccess('Operation & Facilities saved successfully');
+        _tabController.animateTo(4);
+      } else {
+        _showError(
+          facilitiesResponse['message'] ?? 'Failed to save facilities',
+        );
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 4: Save Food Details
+  Future<void> _saveFoodDetails() async {
+    if (_dhabaUserId == null) {
+      _showError('Registration not complete');
+      return;
+    }
+
+    if (_selectedFoodTypes.isEmpty) {
+      _showError('Please select at least one food type');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiService.saveDhabaFood(
+        dhabaUserId: _dhabaUserId!,
+        foodType: _selectedFoodTypes.toList(),
+        specialDishes: _specialDishesController.text.isNotEmpty
+            ? _specialDishesController.text
+            : null,
+        mealBreakfast: _mealBreakfast,
+        mealLunch: _mealLunch,
+        mealDinner: _mealDinner,
+        mealNight: _mealNight,
+        avgPriceRange: _avgPriceRangeController.text.isNotEmpty
+            ? _avgPriceRangeController.text
+            : null,
+      );
+
+      if (response['success'] == true) {
+        _showSuccess('Food details saved successfully');
+        _tabController.animateTo(5);
+      } else {
+        _showError(response['message'] ?? 'Failed to save food details');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 5: Save Photos
+  Future<void> _savePhotos() async {
+    if (_dhabaUserId == null) {
+      _showError('Registration not complete');
+      return;
+    }
+
+    if (_shopImages.isEmpty) {
+      _showError('Please add at least one photo');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Convert File list to path strings
+      final imagePaths = _shopImages.map((f) => f.path).toList();
+
+      final response = await _apiService.uploadDhabaPhotos(
+        dhabaUserId: _dhabaUserId!,
+        category: _selectedPhotoCategory,
+        imagePaths: imagePaths,
+      );
+
+      if (response['success'] == true) {
+        _showSuccess('Photos uploaded successfully');
+        _tabController.animateTo(6);
+      } else {
+        _showError(response['message'] ?? 'Failed to upload photos');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 6: Complete profile with banking and engagement
+  Future<void> _completeDhabaProfile() async {
+    if (_dhabaUserId == null) {
+      _showError('Registration not complete');
+      return;
+    }
+
+    if (!_consentGiven) {
+      _showError('Please accept the terms and consent');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Save banking details (if provided)
+      if (_accountNumberController.text.isNotEmpty) {
+        print('🚀 Saving Banking Details...');
+        final bankingResponse = await _apiService.saveDhabaBanking(
+          dhabaUserId: _dhabaUserId!,
+          accountHolderName: _accountHolderController.text,
+          bankName: _bankNameController.text,
+          accountNumber: _accountNumberController.text,
+          ifscCode: _ifscCodeController.text,
+        );
+
+        if (bankingResponse['success'] == true) {
+          print('✅ Banking details saved successfully');
+        } else {
+          print('⚠️ Banking info not saved: ${bankingResponse['message']}');
+          // We don't stop here as banking is optional, but it's good to know
+        }
+      } else {
+        print('ℹ️ Banking details skipped (not provided)');
+      }
+
+      // Save engagement settings
+      print('🚀 Saving Engagement Settings...');
+      final engagementResponse = await _apiService.saveDhabaEngagement(
+        dhabaUserId: _dhabaUserId!,
+        allowCall: _allowCall,
+        allowMessages: _allowMessages,
+        allowPromotions: _allowPromotions,
+      );
+
+      if (engagementResponse['success'] == true) {
+        print('✅ Engagement settings saved successfully');
+        _showSuccess('Partner profile completed successfully!');
+
+        // Wait a small moment to let the user see the success message
+        await Future.delayed(const Duration(milliseconds: 1500));
+
+        // Navigate back or to success screen
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
+      } else {
+        _showError(
+          engagementResponse['message'] ?? 'Failed to save engagement settings',
+        );
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+
+    // Log the full error to terminal
+    print('🔴 UI Error: $message');
+
+    // Sanitize message for user display
+    String displayMessage = message;
+    if (message.contains('SQLSTATE') ||
+        message.contains('Constraint violation') ||
+        message.contains('HTTP 500') ||
+        message.contains('Exception:')) {
+      displayMessage = 'Server Error. Please try again later.';
+    } else if (message.startsWith('Error: Exception:')) {
+      displayMessage = 'Server connection failed.';
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(displayMessage),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

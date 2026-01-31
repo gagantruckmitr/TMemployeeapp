@@ -82,6 +82,26 @@ class ApiConfig {
   static String get margdarshakLocationUpdateApi =>
       '$margdarshakApiBase/margdarshak/update-location';
 
+  // Margdarshak Dhaba Profile Completion APIs
+  static String get margdarshakDhabaBusinessInfoApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/business-info';
+  static String get margdarshakDhabaLocationApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/location';
+  static String get margdarshakDhabaOperationApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/operation';
+  static String get margdarshakDhabaFacilitiesApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/facilities';
+  static String get margdarshakDhabaFoodApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/food';
+  static String get margdarshakDhabaPhotosApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/photos';
+  static String get margdarshakDhabaBankingApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/banking';
+  static String get margdarshakDhabaEngagementApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/engagement';
+  static String get margdarshakDhabaProfileApi =>
+      '$margdarshakApiBase/margdarshak/dhaba/profile';
+
   // Email Configuration
   static const String hrEmail = 'hr@$domain';
   static const String commandCentreEmail = 'harneet.kaur@$domain';
