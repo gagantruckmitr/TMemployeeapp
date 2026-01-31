@@ -365,19 +365,56 @@ class _FreshLeadsScreenState extends State<FreshLeadsScreen> {
   ) async {
     try {
       // Determine process based on role
-      final process = lead.role == 'driver' 
-          ? 'Driver Onboarding' 
+      final process = lead.role == 'driver'
+          ? 'Driver Onboarding'
           : 'Transporter Onboarding';
 
-      // Use the new manual call helper
+      // Use the manual call helper
+      // IMPORTANT: ManualCallHelper already updates feedback via ManualCallService.updateCall()
+      // which uses the correct manual-call-update endpoint.
+      // The onFeedbackSubmitted callback should ONLY handle UI updates, NOT call any other API.
       await ManualCallHelper.initiateManualCall(
         context: context,
         contact: contact,
         process: process,
         showRecordingUpload: true, // Show recording upload for fresh leads
         onFeedbackSubmitted: (feedback) async {
-          // Handle feedback submission using existing method
-          await _updateContactStatus(contact, lead, feedback);
+          // ONLY handle UI state updates here
+          // ManualCallHelper already called ManualCallService.updateCall() for API update
+          // DO NOT call _updateContactStatus() as it would use the wrong IVR endpoint
+          debugPrint(
+            '📝 [FreshLeads] Manual call feedback submitted - UI update only',
+          );
+
+          if (mounted) {
+            // Remove from cache and mark as processed in TodayLeadsService
+            TodayLeadsService.instance.removeLeadFromCache(lead.id);
+            debugPrint(
+              '✅ [FreshLeads] Marked lead ${lead.id} as processed in TodayLeadsService',
+            );
+
+            // Clear pending feedback cache since feedback was submitted
+            CallFeedbackGuardService.instance.clearCache();
+
+            // Update local list
+            setState(() {
+              _leads.removeWhere((l) => l.id == lead.id);
+              _remainingFreshLeads =
+                  TodayLeadsService.instance.totalRemainingFromApi > 0
+                  ? TodayLeadsService.instance.totalRemainingFromApi
+                  : TodayLeadsService.instance.remainingFreshLeads;
+            });
+            HapticFeedback.lightImpact();
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ Feedback saved for ${contact.name}'),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         },
       );
     } catch (e) {

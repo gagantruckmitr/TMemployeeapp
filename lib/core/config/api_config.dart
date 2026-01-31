@@ -8,19 +8,19 @@ class ApiConfig {
   // static const String publicUrl = 'http://$serverIp/TMemployeeApp/public';
 
   // PRODUCTION: Plesk Server (Active)
-  static const String domain = 'truckmitr.com';
+  static const String domain = 'development.truckmitr.com';
   static const String baseUrl = 'https://$domain/truckmitr-app/api';
   static const String serverIp = domain;
   static const String publicUrl = 'https://$domain/public';
-  
+
   // Laravel API Base URLs
   static const String laravelApiBase = 'https://$domain/api/telehead';
   static const String storageBase = 'https://$domain/storage/app/public';
-  
-  // TaskSuite HRMS Base URL
-  static const String taskSuiteBase = 'https://tasksuite.$domain/backend/public/api';
 
-  
+  // TaskSuite HRMS Base URL
+  static const String taskSuiteBase =
+      'https://tasksuite.$domain/backend/public/api';
+
   // Laravel API Endpoints
   static const String loginApi = '$laravelApiBase/login';
   static const String forgotPasswordApi = '$laravelApiBase/forgot-password';
@@ -28,27 +28,38 @@ class ApiConfig {
   static const String agentJobsApi = '$laravelApiBase/agent-jobs';
   static const String driversApi = '$laravelApiBase/drivers';
   static const String jobsApi = '$laravelApiBase/jobs';
-  static const String rejectedApplyJobsApi = '$laravelApiBase/rejected-apply-jobs';
+  static const String rejectedApplyJobsApi =
+      '$laravelApiBase/rejected-apply-jobs';
   static const String callLogsApi = '$laravelApiBase/call-logs';
-  static const String ivrCallJobMatchingApi = '$laravelApiBase/ivr-call-jobMatching';
-  static const String ivrCallUpdateJobMatchingApi = '$laravelApiBase/ivr-call-update-jobMatching';
+  static const String ivrCallJobMatchingApi =
+      '$laravelApiBase/ivr-call-jobMatching';
+  static const String ivrCallUpdateJobMatchingApi =
+      '$laravelApiBase/ivr-call-update-jobMatching';
   static const String ivrCallJobBriefApi = '$laravelApiBase/ivr-call-jobBrief';
-  static const String ivrCallUpdateJobBriefApi = '$laravelApiBase/ivr-call-update-jobBrief';
+  static const String ivrCallUpdateJobBriefApi =
+      '$laravelApiBase/ivr-call-update-jobBrief';
   static const String driverBucketApi = '$laravelApiBase/driver-bucket';
   static const String driverBucketsApi = '$laravelApiBase/driver-buckets';
   static const String paymentsSearchApi = '$laravelApiBase/payments/search';
-  static const String withoutCallHistoryApi = '$laravelApiBase/withoutCallHistory';
-  static const String reportsApi = '$laravelApiBase/reports/assigned-to-wise-summary';
-  static const String socialMediaLeadsApi = '$laravelApiBase/social-media-leads';
-  static const String socialMediaCallHistoryApi = '$laravelApiBase/social-media-call-history';
+  static const String withoutCallHistoryApi =
+      '$laravelApiBase/withoutCallHistory';
+  static const String reportsApi =
+      '$laravelApiBase/reports/assigned-to-wise-summary';
+  static const String socialMediaLeadsApi =
+      '$laravelApiBase/social-media-leads';
+  static const String socialMediaCallHistoryApi =
+      '$laravelApiBase/social-media-call-history';
   static const String todayLeadsApi = '$laravelApiBase/today-leads';
   static const String callHistoryApi = '$laravelApiBase/call-history';
-  static const String matchMakingHistoryApi = '$laravelApiBase/match-making-history';
-  static const String socialMediaIvrCallsApi = '$laravelApiBase/social-media-ivr-calls';
+  static const String matchMakingHistoryApi =
+      '$laravelApiBase/match-making-history';
+  static const String socialMediaIvrCallsApi =
+      '$laravelApiBase/social-media-ivr-calls';
   static const String breakLogsApi = '$laravelApiBase/break-logs';
   static const String analyticsApi = '$laravelApiBase/analytics';
   static const String ivrCallUpdateApi = '$laravelApiBase/ivr-call-update';
-  static const String socialMediaIvrCallApi = '$laravelApiBase/social-media-ivr-call';
+  static const String socialMediaIvrCallApi =
+      '$laravelApiBase/social-media-ivr-call';
 
   // Email Configuration
   static const String hrEmail = 'hr@$domain';

@@ -410,15 +410,39 @@ class _BacklogScreenState extends State<BacklogScreen>
           ? 'Transporter Onboarding'
           : 'Driver Onboarding';
 
-      // Use the new manual call helper
+      // Use the manual call helper
+      // IMPORTANT: ManualCallHelper already updates feedback via ManualCallService.updateCall()
+      // which uses the correct manual-call-update endpoint.
+      // The onFeedbackSubmitted callback should ONLY handle UI updates, NOT call any other API.
       await ManualCallHelper.initiateManualCall(
         context: context,
         contact: lead,
         process: process,
-        showRecordingUpload: false, // No recording upload for backlog
+        showRecordingUpload: true, // Enable recording upload for manual calls
         onFeedbackSubmitted: (feedback) async {
-          // Handle feedback submission using existing method
-          await _updateContactStatus(lead, feedback);
+          // ONLY handle UI state updates here
+          // ManualCallHelper already called ManualCallService.updateCall() for API update
+          // DO NOT call _updateContactStatus() as it uses the wrong IVR endpoint
+          if (mounted) {
+            HapticFeedback.lightImpact();
+            setState(() {
+              _processedLeadIds.add(lead.id);
+              _backlogLeads?.removeWhere((c) => c.id == lead.id);
+            });
+            // Also remove from cache
+            _cacheService.removeLeadFromCache(lead.id);
+            // Clear pending feedback cache since feedback was submitted
+            CallFeedbackGuardService.instance.clearCache();
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ Feedback saved for ${lead.name}'),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         },
       );
     } catch (e) {

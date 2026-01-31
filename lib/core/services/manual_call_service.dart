@@ -7,8 +7,10 @@ import '../config/api_config.dart';
 /// Manual Call Service for initiating and updating manual calls
 /// Uses the telehead manual call API endpoints
 class ManualCallService {
-  static const String _initiateCallUrl = 'https://truckmitr.com/api/telehead/manual-call';
-  static const String _updateCallUrl = 'https://truckmitr.com/api/telehead/manual-call-update';
+  static const String _initiateCallUrl =
+      '${ApiConfig.laravelApiBase}/manual-call';
+  static const String _updateCallUrl =
+      '${ApiConfig.laravelApiBase}/manual-call-update';
   static const Duration _timeout = Duration(seconds: 30);
 
   /// Initiate manual call
@@ -105,14 +107,16 @@ class ManualCallService {
       print('   Status: "$callStatus"');
       print('   Feedback: "$callFeedback"');
       print('   Remarks: "${callRemarks ?? ''}"');
-      print('   Recording: ${callRecording != null ? callRecording.path : "none"}');
+      print(
+        '   Recording: ${callRecording != null ? callRecording.path : "none"}',
+      );
 
       // Create multipart request
       final request = http.MultipartRequest('POST', Uri.parse(_updateCallUrl));
-      
+
       // Add headers
       request.headers['Authorization'] = 'Bearer $token';
-      
+
       // Add form fields
       request.fields['id'] = callHistoryId.toString();
       request.fields['call_status'] = callStatus;
@@ -148,14 +152,17 @@ class ManualCallService {
         final isSuccess =
             data['success'] == true ||
             data['status'] == true ||
-            data['message']?.toString().toLowerCase().contains('success') == true ||
-            data['message']?.toString().toLowerCase().contains('updated') == true;
+            data['message']?.toString().toLowerCase().contains('success') ==
+                true ||
+            data['message']?.toString().toLowerCase().contains('updated') ==
+                true;
 
         if (isSuccess) {
           print('✅ Manual call updated successfully');
           return {'success': true, 'data': data};
         } else {
-          final errorMsg = data['message'] ?? data['error'] ?? 'Update rejected by server';
+          final errorMsg =
+              data['message'] ?? data['error'] ?? 'Update rejected by server';
           print('❌ API rejected update: $errorMsg');
           return {'success': false, 'error': errorMsg, 'data': data};
         }

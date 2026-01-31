@@ -926,15 +926,49 @@ class _SmartCallingPageState extends State<SmartCallingPage>
           ? 'Transporter Onboarding'
           : 'Driver Onboarding';
 
-      // Use the new manual call helper
+      // Use the manual call helper
+      // IMPORTANT: ManualCallHelper already updates feedback via ManualCallService.updateCall()
+      // which uses the correct manual-call-update endpoint.
+      // The onFeedbackSubmitted callback should ONLY handle UI updates, NOT call any other API.
       await ManualCallHelper.initiateManualCall(
         context: context,
         contact: contact,
         process: process,
         showRecordingUpload: true, // Show recording upload for smart calling
         onFeedbackSubmitted: (feedback) async {
-          // Handle feedback submission using existing method
-          await _updateContactStatus(contact, feedback);
+          // ONLY handle UI state updates here
+          // ManualCallHelper already called ManualCallService.updateCall() for API update
+          // DO NOT call _updateContactStatus() as it would use the wrong IVR endpoint
+          debugPrint(
+            '📝 [SmartCalling] Manual call feedback submitted - UI update only',
+          );
+
+          if (mounted) {
+            HapticFeedback.lightImpact();
+
+            // Remove contact from list based on type
+            setState(() {
+              if (contactType == 'transporter') {
+                _allTransporters.removeWhere((c) => c.id == contact.id);
+                _filteredTransporters.removeWhere((c) => c.id == contact.id);
+              } else {
+                _allDrivers.removeWhere((c) => c.id == contact.id);
+                _filteredDrivers.removeWhere((c) => c.id == contact.id);
+              }
+            });
+
+            // Clear pending feedback cache since feedback was submitted
+            CallFeedbackGuardService.instance.clearCache();
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ Feedback saved for ${contact.name}'),
+                backgroundColor: AppTheme.success,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         },
       );
     } catch (e) {
