@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 
-import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:flutter/services.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/config/api_config.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
-import '../../core/services/smart_calling_service.dart';
 import '../../models/driver_applicant_model.dart';
 import '../../widgets/profile_completion_avatar.dart';
 import 'match_making_screen.dart';
 import '../calls/widgets/call_feedback_modal.dart';
 import '../telecaller/widgets/call_type_selection_dialog.dart';
 import '../telecaller/widgets/easygo_ivr_call_helper.dart';
+import '../telecaller/widgets/manual_call_job_matching_helper.dart';
+import 'widgets/job_matching_feedback_modal.dart';
 import 'driver_detailed_info_screen.dart';
 import '../main_container.dart' as main;
 
@@ -2000,19 +2000,60 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
   }
 
   Future<void> _handleManualCall(DriverApplicant driver, int callerId) async {
-    final cleanMobile = driver.mobile.replaceAll(RegExp(r'[^\d]'), '');
-    final result = await SmartCallingService.instance.initiateManualCall(
-      driverMobile: cleanMobile,
-      callerId: callerId,
-      driverId: driver.driverId.toString(),
+    // Use the new Laravel job matching manual call API
+    await ManualCallJobMatchingHelper.initiateJobMatchingCall(
+      context: context,
+      uniqueIdTransporter: _transporterTmid,
+      uniqueIdDriver: driver.driverTmid,
+      userIdTransporter: _transporterUserId.toString(),
+      userIdDriver: driver.driverId.toString(),
+      jobId: widget.jobId,
+      driverName: driver.name,
+      transporterName: _transporterName,
+      phoneNumber: driver.mobile,
+      onCallInitiated: (id) {
+        // Show feedback modal after call is initiated
+        if (mounted) {
+          _showJobMatchingFeedbackModal(driver, id);
+        }
+      },
     );
+  }
 
-    if (result['success'] == true) {
-      final driverMobileRaw = result['data']?['driver_mobile_raw'];
-      await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) _showCallFeedbackModal(driver);
-    }
+  // Show job matching feedback modal for manual calls
+  void _showJobMatchingFeedbackModal(DriverApplicant driver, int callId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) => JobMatchingFeedbackModal(
+        driverName: driver.name,
+        transporterName: _transporterName,
+        onSubmit: (callStatus, callFeedback, remarks, matchStatus) async {
+          // Update the job matching call with feedback
+          await ManualCallJobMatchingHelper.updateJobMatchingCall(
+            context: context,
+            id: callId,
+            callStatus: callStatus,
+            callFeedback: callFeedback,
+            callRemarks: remarks,
+            matchStatus: matchStatus,
+            driverName: driver.name,
+            transporterName: _transporterName,
+          );
+
+          // Close modal
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+
+          // Refresh the applicants list
+          _loadApplicants();
+        },
+      ),
+    );
   }
 
   void _showCallFeedbackModal(DriverApplicant driver) {

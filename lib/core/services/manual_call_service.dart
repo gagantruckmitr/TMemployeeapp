@@ -7,10 +7,14 @@ import '../config/api_config.dart';
 /// Manual Call Service for initiating and updating manual calls
 /// Uses the telehead manual call API endpoints
 class ManualCallService {
-  static const String _initiateCallUrl =
-      '${ApiConfig.laravelApiBase}/manual-call';
-  static const String _updateCallUrl =
-      '${ApiConfig.laravelApiBase}/manual-call-update';
+  static String get _initiateCallUrl =>
+      ApiConfig.getLaravelApiUrl('manual-call');
+  static String get _updateCallUrl =>
+      ApiConfig.getLaravelApiUrl('manual-call-update');
+  static String get _initiateJobMatchingCallUrl =>
+      ApiConfig.getLaravelApiUrl('manual-call-jobMatching');
+  static String get _updateJobMatchingCallUrl =>
+      ApiConfig.getLaravelApiUrl('manual-call-update-jobMatching');
   static const Duration _timeout = Duration(seconds: 30);
 
   /// Initiate manual call
@@ -175,6 +179,174 @@ class ManualCallService {
       }
     } catch (e) {
       print('❌ Failed to update manual call: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Initiate manual call for job matching
+  /// Returns id on success
+  static Future<Map<String, dynamic>> initiateJobMatchingCall({
+    required String uniqueIdTransporter,
+    required String uniqueIdDriver,
+    required String userIdTransporter,
+    required String userIdDriver,
+    required String assignedTo,
+    required String jobId,
+    required String driverName,
+    required String transporterName,
+  }) async {
+    try {
+      final token = await RealAuthService.instance.getAuthToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'error': 'Authentication token not found. Please login again.',
+        };
+      }
+
+      final requestBody = {
+        'unique_id_transporter': uniqueIdTransporter,
+        'unique_id_driver': uniqueIdDriver,
+        'user_id_transporter': userIdTransporter,
+        'user_id_driver': userIdDriver,
+        'assigned_to': assignedTo,
+        'job_id': jobId,
+        'driver_name': driverName,
+        'transporter_name': transporterName,
+      };
+
+      print('🔵 Manual Call Job Matching Initiate Request:');
+      print('   URL: $_initiateJobMatchingCallUrl');
+      print('   Body: ${json.encode(requestBody)}');
+
+      final response = await http
+          .post(
+            Uri.parse(_initiateJobMatchingCallUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode(requestBody),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Manual Call Job Matching Initiate Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+
+        if (data['success'] == true && data['data'] != null) {
+          // API returns 'match_id' instead of 'id'
+          final id = data['data']['match_id'] ?? data['data']['id'];
+          print('✅ Manual job matching call initiated successfully. ID: $id');
+
+          return {'success': true, 'id': id, 'match_id': id, 'data': data};
+        } else {
+          return {
+            'success': false,
+            'error':
+                data['message'] ??
+                'Failed to initiate manual job matching call',
+          };
+        }
+      } else {
+        return {
+          'success': false,
+          'error': 'HTTP ${response.statusCode}: ${response.body}',
+        };
+      }
+    } catch (e) {
+      print('❌ Exception in Manual Call initiateJobMatchingCall: $e');
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  /// Update manual call for job matching with feedback
+  static Future<Map<String, dynamic>> updateJobMatchingCall({
+    required int id,
+    required String callStatus,
+    required String callFeedback,
+    String? callRemarks,
+    String? matchStatus,
+    required String driverName,
+    required String transporterName,
+  }) async {
+    try {
+      final token = await RealAuthService.instance.getAuthToken();
+      if (token == null) {
+        return {'success': false, 'error': 'No auth token'};
+      }
+
+      print('🔵 Manual Call Job Matching Update Request:');
+      print('   URL: $_updateJobMatchingCallUrl');
+      print('   ID: $id');
+      print('   Status: "$callStatus"');
+      print('   Feedback: "$callFeedback"');
+      print('   Remarks: "${callRemarks ?? ''}"');
+      print('   Match Status: "${matchStatus ?? ''}"');
+
+      final requestBody = {
+        'id': id,
+        'call_status': callStatus,
+        'call_feedback': callFeedback,
+        'driver_name': driverName,
+        'transporter_name': transporterName,
+      };
+
+      if (callRemarks != null && callRemarks.isNotEmpty) {
+        requestBody['call_remarks'] = callRemarks;
+      }
+
+      if (matchStatus != null && matchStatus.isNotEmpty) {
+        requestBody['match_status'] = matchStatus;
+      }
+
+      final response = await http
+          .post(
+            Uri.parse(_updateJobMatchingCallUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: json.encode(requestBody),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Manual Call Job Matching Update Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+
+        final isSuccess =
+            data['success'] == true ||
+            data['status'] == true ||
+            data['message']?.toString().toLowerCase().contains('success') ==
+                true ||
+            data['message']?.toString().toLowerCase().contains('updated') ==
+                true;
+
+        if (isSuccess) {
+          print('✅ Manual job matching call updated successfully');
+          return {'success': true, 'data': data};
+        } else {
+          final errorMsg =
+              data['message'] ?? data['error'] ?? 'Update rejected by server';
+          print('❌ API rejected update: $errorMsg');
+          return {'success': false, 'error': errorMsg, 'data': data};
+        }
+      } else {
+        print('❌ HTTP Error: ${response.statusCode} - ${response.body}');
+        return {
+          'success': false,
+          'error': 'HTTP ${response.statusCode}: ${response.body}',
+        };
+      }
+    } catch (e) {
+      print('❌ Failed to update manual job matching call: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
