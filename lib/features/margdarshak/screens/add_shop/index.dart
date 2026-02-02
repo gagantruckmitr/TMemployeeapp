@@ -158,6 +158,35 @@ class _AddShopScreenState extends State<AddShopScreen>
     'Facilities',
   ];
 
+  // Puncture Shop Specific Variables
+  int? _punctureUserId; // User ID from OTP verification
+  String _selectedPunctureType = 'Roadside Service';
+  final List<String> _punctureTypeOptions = [
+    'Roadside Service',
+    'Workshop',
+    'Mobile Service',
+    'Highway Service',
+  ];
+
+  // Puncture Services
+  bool _tyreRepair = false;
+  bool _airFilling = false;
+  bool _tyreReplacement = false;
+  bool _wheelBalancing = false;
+  bool _emergencyService = false;
+  bool _tubePatching = false;
+  bool _valveRepair = false;
+  bool _mobileService = false;
+
+  // Puncture Photo Categories
+  final List<String> _puncturePhotoCategories = [
+    'Front View',
+    'Inside View',
+    'Equipment',
+    'Service Area',
+    'Signboard',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -365,30 +394,50 @@ class _AddShopScreenState extends State<AddShopScreen>
           labelColor: const Color(0xFFE65100),
           unselectedLabelColor: Colors.grey,
           indicatorColor: const Color(0xFFE65100),
-          tabs: const [
-            Tab(text: 'Registration'),
-            Tab(text: 'Business Info'),
-            Tab(text: 'Location'),
-            Tab(text: 'Operation'),
-            Tab(text: 'Food & Menu'),
-            Tab(text: 'Photos'),
-            Tab(text: 'Review'),
-          ],
+          tabs: _selectedShopType == 'puncture'
+              ? const [
+                  Tab(text: 'Registration'),
+                  Tab(text: 'Business Info'),
+                  Tab(text: 'Location'),
+                  Tab(text: 'Operation'),
+                  Tab(text: 'Services'),
+                  Tab(text: 'Photos'),
+                  Tab(text: 'Review'),
+                ]
+              : const [
+                  Tab(text: 'Registration'),
+                  Tab(text: 'Business Info'),
+                  Tab(text: 'Location'),
+                  Tab(text: 'Operation'),
+                  Tab(text: 'Food & Menu'),
+                  Tab(text: 'Photos'),
+                  Tab(text: 'Review'),
+                ],
         ),
       ),
       body: Form(
         key: _formKey,
         child: TabBarView(
           controller: _tabController,
-          children: [
-            _buildRegistrationTab(),
-            _buildBusinessInfoTab(),
-            _buildLocationTab(),
-            _buildOperationTab(),
-            _buildFoodMenuTab(),
-            _buildPhotosTab(),
-            _buildReviewTab(),
-          ],
+          children: _selectedShopType == 'puncture'
+              ? [
+                  _buildRegistrationTab(),
+                  _buildPunctureBusinessInfoTab(),
+                  _buildLocationTab(),
+                  _buildPunctureOperationTab(),
+                  _buildPunctureServicesTab(),
+                  _buildPhotosTab(),
+                  _buildPunctureReviewTab(),
+                ]
+              : [
+                  _buildRegistrationTab(),
+                  _buildBusinessInfoTab(),
+                  _buildLocationTab(),
+                  _buildOperationTab(),
+                  _buildFoodMenuTab(),
+                  _buildPhotosTab(),
+                  _buildReviewTab(),
+                ],
         ),
       ),
       bottomNavigationBar: _buildBottomNavigation(),
@@ -893,19 +942,6 @@ class _AddShopScreenState extends State<AddShopScreen>
       onTap: isDisabled
           ? null
           : () {
-              if (type == 'puncture') {
-                HapticFeedback.mediumImpact();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Comming soon'),
-                    backgroundColor: Colors.grey.shade800,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-                return;
-              }
-
               HapticFeedback.lightImpact();
               setState(() {
                 _selectedShopType = type;
@@ -1618,11 +1654,14 @@ class _AddShopScreenState extends State<AddShopScreen>
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      isDismissible: !_isVerifyingOtp,
+      isDismissible: true,
+      enableDrag: true,
       builder: (modalContext) {
         // Request focus on first OTP field after modal is shown
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _otpFocusNodes[0].requestFocus();
+          if (_otpFocusNodes.isNotEmpty) {
+            _otpFocusNodes[0].requestFocus();
+          }
         });
 
         return StatefulBuilder(
@@ -1636,7 +1675,7 @@ class _AddShopScreenState extends State<AddShopScreen>
               padding: EdgeInsets.only(bottom: keyboardHeight),
               child: Container(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(builderContext).size.height * 0.75,
+                  maxHeight: MediaQuery.of(builderContext).size.height * 0.85,
                 ),
                 decoration: const BoxDecoration(
                   color: Colors.white,
@@ -1646,20 +1685,46 @@ class _AddShopScreenState extends State<AddShopScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Handle bar
-                      Container(
-                        margin: const EdgeInsets.only(top: 12),
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
+                      // Header with Handle and Close Button
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Handle
+                          Container(
+                            margin: const EdgeInsets.symmetric(vertical: 16),
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          // Close Button
+                          Positioned(
+                            right: 16,
+                            top: 12,
+                            child: GestureDetector(
+                              onTap: () => Navigator.pop(modalContext),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 20,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       Padding(
                         padding: EdgeInsets.fromLTRB(
                           24,
-                          20,
+                          0,
                           24,
                           20 + safeAreaBottom,
                         ),
@@ -1752,52 +1817,79 @@ class _AddShopScreenState extends State<AddShopScreen>
                       left: index == 0 ? 0 : 8,
                       right: index == 2 ? 16 : 0, // Gap after 3rd digit
                     ),
-                    child: TextField(
-                      controller: _otpControllers[index],
-                      focusNode: _otpFocusNodes[index],
-                      textAlign: TextAlign.center,
-                      textAlignVertical: TextAlignVertical.center,
-                      keyboardType: TextInputType.number,
-                      maxLength: 1,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black,
-                        height: 1.0,
-                      ),
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
-                        counterText: '',
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 16,
-                          horizontal: 8,
+                    child: Focus(
+                      onKeyEvent: (node, event) {
+                        if (event is KeyDownEvent &&
+                            event.logicalKey == LogicalKeyboardKey.backspace &&
+                            _otpControllers[index].text.isEmpty &&
+                            index > 0) {
+                          _otpFocusNodes[index - 1].requestFocus();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: TextField(
+                        controller: _otpControllers[index],
+                        focusNode: _otpFocusNodes[index],
+                        textAlign: TextAlign.center,
+                        textAlignVertical: TextAlignVertical.center,
+                        keyboardType: TextInputType.number,
+                        maxLength: null,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black,
+                          height: 1.0,
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF007AFF),
-                            width: 2,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(2),
+                        ],
+                        decoration: InputDecoration(
+                          counterText: '',
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF007AFF),
+                              width: 2,
+                            ),
                           ),
                         ),
+                        onChanged: (value) {
+                          if (value.isNotEmpty) {
+                            if (value.length > 1) {
+                              // Overwrite behavior: take the last char
+                              final lastChar = value.characters.last;
+                              _otpControllers[index].text = lastChar;
+                              _otpControllers[index].selection =
+                                  TextSelection.fromPosition(
+                                    const TextPosition(offset: 1),
+                                  );
+                            }
+                            // Move to next field
+                            if (index < 5) {
+                              _otpFocusNodes[index + 1].requestFocus();
+                            }
+                          } else if (value.isEmpty && index > 0) {
+                            _otpFocusNodes[index - 1].requestFocus();
+                          }
+                          setModalState(() {});
+                        },
                       ),
-                      onChanged: (value) {
-                        if (value.isNotEmpty && index < 5) {
-                          _otpFocusNodes[index + 1].requestFocus();
-                        } else if (value.isEmpty && index > 0) {
-                          _otpFocusNodes[index - 1].requestFocus();
-                        }
-                        setModalState(() {});
-                      },
                     ),
                   );
                 }),
@@ -1942,11 +2034,15 @@ class _AddShopScreenState extends State<AddShopScreen>
       setModalState(() => _isVerifyingOtp = false);
 
       if (response['success'] == true) {
-        // Extract and store the dhaba_user_id for subsequent API calls
+        // Extract and store the user_id for subsequent API calls
         final userData = response['user'];
         setState(() {
           _isPhoneVerified = true;
-          _dhabaUserId = userData?['id'];
+          if (_selectedShopType == 'puncture') {
+            _punctureUserId = userData?['id'];
+          } else {
+            _dhabaUserId = userData?['id'];
+          }
         });
 
         // Close keyboard before closing modal
@@ -3345,6 +3441,677 @@ class _AddShopScreenState extends State<AddShopScreen>
     );
   }
 
+  // ==========================================
+  // PUNCTURE SHOP SPECIFIC TABS
+  // ==========================================
+
+  Widget _buildPunctureBusinessInfoTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Business Details Section
+          _buildAppleStyleSectionTitle('Business Information'),
+          const SizedBox(height: 14),
+
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                _buildAppleTextFieldReadOnly(
+                  controller: _ownerNameController,
+                  label: 'Owner Name',
+                  icon: Icons.person_rounded,
+                  iconColor: const Color(0xFF34C759),
+                  isFirst: true,
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _shopNameController,
+                  label: 'Puncture Shop Name',
+                  placeholder: 'Enter shop name',
+                  icon: Icons.build_rounded,
+                  iconColor: const Color(0xFF5856D6),
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextFieldReadOnly(
+                  controller: _mobileController,
+                  label: 'Mobile Number',
+                  icon: Icons.phone_rounded,
+                  iconColor: const Color(0xFF5856D6),
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _emailController,
+                  label: 'Email (Optional)',
+                  placeholder: 'Enter email address',
+                  icon: Icons.email_rounded,
+                  iconColor: const Color(0xFF007AFF),
+                ),
+                _buildAppleDivider(),
+                _buildAppleTextField(
+                  controller: _yearEstablishedController,
+                  label: 'Year Established',
+                  placeholder: 'e.g. 2015',
+                  icon: Icons.calendar_today_rounded,
+                  iconColor: const Color(0xFFAF52DE),
+                  isLast: true,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Puncture Type Section
+          _buildAppleStyleSectionTitle('Shop Type'),
+          const SizedBox(height: 14),
+
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildPunctureTypeOption(
+                  'Roadside Service',
+                  Icons.directions_car_rounded,
+                ),
+                _buildAppleDivider(),
+                _buildPunctureTypeOption('Workshop', Icons.home_work_rounded),
+                _buildAppleDivider(),
+                _buildPunctureTypeOption(
+                  'Mobile Service',
+                  Icons.local_shipping_rounded,
+                ),
+                _buildAppleDivider(),
+                _buildPunctureTypeOption(
+                  'Highway Service',
+                  Icons.route_rounded,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms);
+  }
+
+  Widget _buildPunctureTypeOption(String type, IconData icon) {
+    final isSelected = _selectedPunctureType == type;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _selectedPunctureType = type);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? const Color(0xFF5856D6).withValues(alpha: 0.12)
+                    : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                color: isSelected
+                    ? const Color(0xFF5856D6)
+                    : Colors.grey.shade600,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                type,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected
+                      ? const Color(0xFF5856D6)
+                      : const Color(0xFF1C1C1E),
+                ),
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF5856D6),
+                size: 22,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPunctureOperationTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Operating Hours Section
+          _buildAppleStyleSectionTitle('Operating Hours'),
+          const SizedBox(height: 14),
+
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // 24x7 Toggle
+                SwitchListTile(
+                  value: _is24x7,
+                  onChanged: (value) => setState(() => _is24x7 = value),
+                  title: const Text(
+                    'Open 24x7',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text('Available round the clock'),
+                  activeColor: const Color(0xFF34C759),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                if (!_is24x7) ...[
+                  const Divider(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _selectTime('opening'),
+                          child: _buildTimeCard(
+                            'Opening',
+                            _operatingHours['opening']!,
+                            Icons.wb_sunny_rounded,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _selectTime('closing'),
+                          child: _buildTimeCard(
+                            'Closing',
+                            _operatingHours['closing']!,
+                            Icons.nightlight_round,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms);
+  }
+
+  Widget _buildPunctureServicesTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildAppleStyleSectionTitle('Services Offered'),
+          const SizedBox(height: 14),
+
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildFacilitySwitch(
+                  'Tire Repair',
+                  Icons.build_circle_rounded,
+                  _tyreRepair,
+                  (v) => setState(() => _tyreRepair = v),
+                ),
+                _buildFacilitySwitch(
+                  'Air Filling',
+                  Icons.air_rounded,
+                  _airFilling,
+                  (v) => setState(() => _airFilling = v),
+                ),
+                _buildFacilitySwitch(
+                  'Tire Replacement',
+                  Icons.change_circle_rounded,
+                  _tyreReplacement,
+                  (v) => setState(() => _tyreReplacement = v),
+                ),
+                _buildFacilitySwitch(
+                  'Wheel Balancing',
+                  Icons.settings_rounded,
+                  _wheelBalancing,
+                  (v) => setState(() => _wheelBalancing = v),
+                ),
+                _buildFacilitySwitch(
+                  'Emergency Service',
+                  Icons.emergency_rounded,
+                  _emergencyService,
+                  (v) => setState(() => _emergencyService = v),
+                ),
+                _buildFacilitySwitch(
+                  'Tube Patching',
+                  Icons.handyman_rounded,
+                  _tubePatching,
+                  (v) => setState(() => _tubePatching = v),
+                ),
+                _buildFacilitySwitch(
+                  'Valve Repair',
+                  Icons.plumbing_rounded,
+                  _valveRepair,
+                  (v) => setState(() => _valveRepair = v),
+                ),
+                _buildFacilitySwitch(
+                  'Mobile Service',
+                  Icons.phone_in_talk_rounded,
+                  _mobileService,
+                  (v) => setState(() => _mobileService = v),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms);
+  }
+
+  Widget _buildPunctureReviewTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF5856D6), Color(0xFF007AFF)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Review & Submit',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Verify all details before submission',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Business Info Summary
+          _buildAppleStyleSectionTitle('Business Information'),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildSummaryRow('Shop Name', _shopNameController.text),
+                const Divider(height: 24),
+                _buildSummaryRow('Owner Name', _ownerNameController.text),
+                const Divider(height: 24),
+                _buildSummaryRow('Mobile', _mobileController.text),
+                const Divider(height: 24),
+                _buildSummaryRow('Shop Type', _selectedPunctureType),
+                if (_emailController.text.isNotEmpty) ...[
+                  const Divider(height: 24),
+                  _buildSummaryRow('Email', _emailController.text),
+                ],
+                if (_yearEstablishedController.text.isNotEmpty) ...[
+                  const Divider(height: 24),
+                  _buildSummaryRow('Established', _yearEstablishedController.text),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Location Summary
+          _buildAppleStyleSectionTitle('Location'),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildSummaryRow('Address', _addressController.text),
+                if (_landmarkController.text.isNotEmpty) ...[
+                  const Divider(height: 24),
+                  _buildSummaryRow('Landmark', _landmarkController.text),
+                ],
+                const Divider(height: 24),
+                _buildSummaryRow('District', _districtController.text),
+                const Divider(height: 24),
+                _buildSummaryRow('State', _stateController.text),
+                const Divider(height: 24),
+                _buildSummaryRow('Pincode', _pincodeController.text),
+                if (_latitude != null && _longitude != null) ...[
+                  const Divider(height: 24),
+                  _buildSummaryRow(
+                    'GPS',
+                    '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Operation Summary
+          _buildAppleStyleSectionTitle('Operation'),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: _buildSummaryRow(
+              'Hours',
+              _is24x7
+                  ? '24x7 Open'
+                  : '${_operatingHours['opening']} - ${_operatingHours['closing']}',
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Services Summary
+          _buildAppleStyleSectionTitle('Services'),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (_tyreRepair) _buildServiceChip('Tire Repair'),
+                if (_airFilling) _buildServiceChip('Air Filling'),
+                if (_tyreReplacement) _buildServiceChip('Tire Replacement'),
+                if (_wheelBalancing) _buildServiceChip('Wheel Balancing'),
+                if (_emergencyService) _buildServiceChip('Emergency Service'),
+                if (_tubePatching) _buildServiceChip('Tube Patching'),
+                if (_valveRepair) _buildServiceChip('Valve Repair'),
+                if (_mobileService) _buildServiceChip('Mobile Service'),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Photos Summary
+          _buildAppleStyleSectionTitle('Photos'),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: _buildSummaryRow(
+              'Total Photos',
+              '${_shopImages.length} uploaded',
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Consent
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Checkbox(
+                  value: _consentGiven,
+                  onChanged: (v) => setState(() => _consentGiven = v ?? false),
+                  activeColor: const Color(0xFF5856D6),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Terms & Data Consent',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'I confirm all information is accurate and consent to data processing.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Submit Button
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _submitPunctureProfile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF5856D6),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 0,
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    )
+                  : const Text(
+                      'Submit Profile',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+            ),
+          ),
+
+          const SizedBox(height: 32),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms);
+  }
+
+  Widget _buildServiceChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF34C759).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF34C759).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.check_circle,
+            color: Color(0xFF34C759),
+            size: 16,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF34C759),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // END PUNCTURE SHOP SPECIFIC TABS
+  // ==========================================
+
   // Missing Methods Implementation
   Widget _buildBottomNavigation() {
     // Check if phone is verified for Registration tab (index 0)
@@ -3420,7 +4187,18 @@ class _AddShopScreenState extends State<AddShopScreen>
   Future<void> _handleNextStep() async {
     final currentIndex = _tabController.index;
     print('🔄 Handling next step for tab index: $currentIndex');
+    print('🔄 Shop type: $_selectedShopType');
 
+    // Route based on shop type
+    if (_selectedShopType == 'puncture') {
+      await _handlePunctureNextStep(currentIndex);
+    } else {
+      await _handleDhabaNextStep(currentIndex);
+    }
+  }
+
+  /// Handle Dhaba flow
+  Future<void> _handleDhabaNextStep(int currentIndex) async {
     switch (currentIndex) {
       case 0: // Registration
         print('✅ Moving from Registration to Business Info');
@@ -3449,6 +4227,40 @@ class _AddShopScreenState extends State<AddShopScreen>
       case 6: // Review
         print('🚀 Completing Dhaba Profile...');
         await _completeDhabaProfile();
+        break;
+    }
+  }
+
+  /// Handle Puncture flow
+  Future<void> _handlePunctureNextStep(int currentIndex) async {
+    switch (currentIndex) {
+      case 0: // Registration
+        print('✅ Moving from Registration to Business Info');
+        _tabController.animateTo(1);
+        break;
+      case 1: // Business Info
+        print('🚀 Saving Puncture Business Info...');
+        await _savePunctureBusinessInfoStep();
+        break;
+      case 2: // Location
+        print('🚀 Saving Puncture Location...');
+        await _savePunctureLocationStep();
+        break;
+      case 3: // Operation
+        print('🚀 Saving Puncture Operation...');
+        await _savePunctureOperationStep();
+        break;
+      case 4: // Services
+        print('🚀 Saving Puncture Services...');
+        await _savePunctureServicesStep();
+        break;
+      case 5: // Photos
+        print('🚀 Uploading Puncture Photos...');
+        await _savePuncturePhotosStep();
+        break;
+      case 6: // Review
+        print('🚀 Submitting Puncture Profile...');
+        await _submitPunctureProfile();
         break;
     }
   }
@@ -4105,4 +4917,426 @@ class _AddShopScreenState extends State<AddShopScreen>
       }
     }
   }
+
+  // ==========================================
+  // PUNCTURE SHOP SAVE METHODS
+  // ==========================================
+
+  /// Step 1: Save Puncture Business Info (with navigation)
+  Future<void> _savePunctureBusinessInfoStep() async {
+    if (_punctureUserId == null) {
+      _showError('Registration not complete. Please verify phone first.');
+      return;
+    }
+
+    if (_shopNameController.text.isEmpty || _ownerNameController.text.isEmpty) {
+      _showError('Please fill in all required fields');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiService.savePunctureBusinessInfo(
+        punctureUserId: _punctureUserId!,
+        punctureName: _shopNameController.text,
+        ownerName: _ownerNameController.text,
+        mobile: _mobileController.text,
+        email: _emailController.text.isNotEmpty ? _emailController.text : null,
+        yearEstablished: _yearEstablishedController.text.isNotEmpty
+            ? _yearEstablishedController.text
+            : null,
+        punctureType: _selectedPunctureType,
+      );
+
+      if (response['success'] == true) {
+        print('✅ Puncture business info saved');
+        _showSuccess('Business info saved successfully');
+        _tabController.animateTo(2);
+      } else {
+        _showError(response['message'] ?? 'Failed to save business info');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 2: Save Puncture Location (with navigation)
+  Future<void> _savePunctureLocationStep() async {
+    if (_punctureUserId == null) {
+      _showError('Registration not complete');
+      return;
+    }
+
+    if (_addressController.text.isEmpty ||
+        _selectedStateId == null ||
+        _pincodeController.text.isEmpty ||
+        _latitude == null ||
+        _longitude == null) {
+      _showError('Please fill in all location details and capture GPS');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiService.savePunctureLocation(
+        punctureUserId: _punctureUserId!,
+        fullAddress: _addressController.text,
+        landmark: _landmarkController.text.isNotEmpty
+            ? _landmarkController.text
+            : null,
+        stateId: int.parse(_selectedStateId!),
+        district: _districtController.text.isNotEmpty
+            ? _districtController.text
+            : null,
+        pincode: _pincodeController.text,
+        latitude: _latitude!,
+        longitude: _longitude!,
+        locationSource: _locationSource,
+      );
+
+      if (response['success'] == true) {
+        print('✅ Puncture location saved');
+        _showSuccess('Location saved successfully');
+        _tabController.animateTo(3);
+      } else {
+        _showError(response['message'] ?? 'Failed to save location');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 3: Save Puncture Operation (with navigation)
+  Future<void> _savePunctureOperationStep() async {
+    if (_punctureUserId == null) {
+      _showError('Registration not complete');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiService.savePunctureOperation(
+        punctureUserId: _punctureUserId!,
+        openingTime: _is24x7 ? null : '${_operatingHours['opening']}:00',
+        closingTime: _is24x7 ? null : '${_operatingHours['closing']}:00',
+        is24x7: _is24x7,
+      );
+
+      if (response['success'] == true) {
+        print('✅ Puncture operation saved');
+        _showSuccess('Operation details saved successfully');
+        _tabController.animateTo(4);
+      } else {
+        _showError(response['message'] ?? 'Failed to save operation');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 4: Save Puncture Services (with navigation)
+  Future<void> _savePunctureServicesStep() async {
+    if (_punctureUserId == null) {
+      _showError('Registration not complete');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await _apiService.savePunctureServices(
+        punctureUserId: _punctureUserId!,
+        tyreRepair: _tyreRepair,
+        airFilling: _airFilling,
+        mechanic: _mechanicAvailable,
+        tyreReplacement: _tyreReplacement,
+        wheelBalancing: _wheelBalancing,
+        emergencyService: _emergencyService,
+        tubePatching: _tubePatching,
+        valveRepair: _valveRepair,
+        mobileService: _mobileService,
+      );
+
+      if (response['success'] == true) {
+        print('✅ Puncture services saved');
+        _showSuccess('Services saved successfully');
+        _tabController.animateTo(5);
+      } else {
+        _showError(response['message'] ?? 'Failed to save services');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Step 5: Save Puncture Photos (with navigation)
+  Future<void> _savePuncturePhotosStep() async {
+    if (_punctureUserId == null) {
+      _showError('Registration not complete');
+      return;
+    }
+
+    if (_shopImages.isEmpty) {
+      _showError('Please add at least one photo');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final imagePaths = _shopImages.map((file) => file.path).toList();
+
+      final response = await _apiService.uploadPuncturePhotos(
+        punctureUserId: _punctureUserId!,
+        category: _selectedPhotoCategory,
+        imagePaths: imagePaths,
+      );
+
+      if (response['success'] == true) {
+        print('✅ Puncture photos uploaded');
+        _showSuccess('Photos uploaded successfully');
+        _tabController.animateTo(6);
+      } else {
+        _showError(response['message'] ?? 'Failed to upload photos');
+      }
+    } catch (e) {
+      _showError('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Submit Complete Puncture Profile (Final Step)
+  Future<void> _submitPunctureProfile() async {
+    if (_punctureUserId == null) {
+      _showError('Registration not complete. Please verify phone first.');
+      return;
+    }
+
+    if (!_consentGiven) {
+      _showError('Please accept the terms and consent');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // All data is already saved in previous steps
+      // Just show success dialog
+      print('✅ Puncture profile completed successfully');
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            icon: const Icon(
+              Icons.check_circle,
+              color: Color(0xFF34C759),
+              size: 64,
+            ),
+            title: const Text('Profile Completed!'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Puncture shop "${_shopNameController.text}" has been successfully registered.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF34C759).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Column(
+                    children: [
+                      Text(
+                        '✓ Profile is now live',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Drivers can now find and connect with this shop',
+                        style: TextStyle(fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close dialog
+                  Navigator.of(context).pop(); // Go back to shops list
+                },
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      _showError('Failed to complete profile: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  /// Individual save methods for batch submission (if needed)
+  /// These are used by the final submit if you want to re-save everything
+  Future<void> _savePunctureBusinessInfo() async {
+    if (_punctureUserId == null) {
+      throw Exception('Registration not complete');
+    }
+
+    if (_shopNameController.text.isEmpty || _ownerNameController.text.isEmpty) {
+      throw Exception('Please fill in all required fields');
+    }
+
+    final response = await _apiService.savePunctureBusinessInfo(
+      punctureUserId: _punctureUserId!,
+      punctureName: _shopNameController.text,
+      ownerName: _ownerNameController.text,
+      mobile: _mobileController.text,
+      email: _emailController.text.isNotEmpty ? _emailController.text : null,
+      yearEstablished: _yearEstablishedController.text.isNotEmpty
+          ? _yearEstablishedController.text
+          : null,
+      punctureType: _selectedPunctureType,
+    );
+
+    if (response['success'] != true) {
+      throw Exception(response['message'] ?? 'Failed to save business info');
+    }
+
+    print('✅ Puncture business info saved');
+  }
+
+  /// Step 2: Save Puncture Location
+  Future<void> _savePunctureLocation() async {
+    if (_punctureUserId == null) {
+      throw Exception('Registration not complete');
+    }
+
+    if (_addressController.text.isEmpty ||
+        _selectedStateId == null ||
+        _pincodeController.text.isEmpty ||
+        _latitude == null ||
+        _longitude == null) {
+      throw Exception('Please fill in all location details and capture GPS');
+    }
+
+    final response = await _apiService.savePunctureLocation(
+      punctureUserId: _punctureUserId!,
+      fullAddress: _addressController.text,
+      landmark: _landmarkController.text.isNotEmpty
+          ? _landmarkController.text
+          : null,
+      stateId: int.parse(_selectedStateId!),
+      district: _districtController.text.isNotEmpty
+          ? _districtController.text
+          : null,
+      pincode: _pincodeController.text,
+      latitude: _latitude!,
+      longitude: _longitude!,
+      locationSource: _locationSource,
+    );
+
+    if (response['success'] != true) {
+      throw Exception(response['message'] ?? 'Failed to save location');
+    }
+
+    print('✅ Puncture location saved');
+  }
+
+  /// Step 3: Save Puncture Operation
+  Future<void> _savePunctureOperation() async {
+    if (_punctureUserId == null) {
+      throw Exception('Registration not complete');
+    }
+
+    final response = await _apiService.savePunctureOperation(
+      punctureUserId: _punctureUserId!,
+      openingTime: _is24x7 ? null : '${_operatingHours['opening']}:00',
+      closingTime: _is24x7 ? null : '${_operatingHours['closing']}:00',
+      is24x7: _is24x7,
+    );
+
+    if (response['success'] != true) {
+      throw Exception(response['message'] ?? 'Failed to save operation');
+    }
+
+    print('✅ Puncture operation saved');
+  }
+
+  /// Step 4: Save Puncture Services
+  Future<void> _savePunctureServices() async {
+    if (_punctureUserId == null) {
+      throw Exception('Registration not complete');
+    }
+
+    final response = await _apiService.savePunctureServices(
+      punctureUserId: _punctureUserId!,
+      tyreRepair: _tyreRepair,
+      airFilling: _airFilling,
+      mechanic: _mechanicAvailable,
+      tyreReplacement: _tyreReplacement,
+      wheelBalancing: _wheelBalancing,
+      emergencyService: _emergencyService,
+      tubePatching: _tubePatching,
+      valveRepair: _valveRepair,
+      mobileService: _mobileService,
+    );
+
+    if (response['success'] != true) {
+      throw Exception(response['message'] ?? 'Failed to save services');
+    }
+
+    print('✅ Puncture services saved');
+  }
+
+  /// Step 5: Save Puncture Photos
+  Future<void> _savePuncturePhotos() async {
+    if (_punctureUserId == null) {
+      throw Exception('Registration not complete');
+    }
+
+    if (_shopImages.isEmpty) {
+      throw Exception('Please add at least one photo');
+    }
+
+    // Group photos by category and upload
+    final imagePaths = _shopImages.map((file) => file.path).toList();
+
+    final response = await _apiService.uploadPuncturePhotos(
+      punctureUserId: _punctureUserId!,
+      category: _selectedPhotoCategory,
+      imagePaths: imagePaths,
+    );
+
+    if (response['success'] != true) {
+      throw Exception(response['message'] ?? 'Failed to upload photos');
+    }
+
+    print('✅ Puncture photos uploaded');
+  }
+
+  // ==========================================
+  // END PUNCTURE SHOP SAVE METHODS
+  // ==========================================
 }

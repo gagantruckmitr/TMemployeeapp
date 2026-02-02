@@ -108,6 +108,20 @@ class ApiConfig {
   static String get margdarshakEarningsApi =>
       '$margdarshakApiBase/margdarshak/earnings';
 
+  // Margdarshak Puncture Shop Profile Completion APIs
+  static String get margdarshakPunctureBusinessInfoApi =>
+      '$margdarshakApiBase/margdarshak/puncture/business-info';
+  static String get margdarshakPunctureLocationApi =>
+      '$margdarshakApiBase/margdarshak/puncture/location';
+  static String get margdarshakPunctureOperationApi =>
+      '$margdarshakApiBase/margdarshak/puncture/operation';
+  static String get margdarshakPunctureServicesApi =>
+      '$margdarshakApiBase/margdarshak/puncture/services';
+  static String get margdarshakPuncturePhotosApi =>
+      '$margdarshakApiBase/margdarshak/puncture/photos';
+  static String get margdarshakPunctureDetailsApi =>
+      '$margdarshakApiBase/margdarshak/puncture/details';
+
   // Email Configuration
   static const String hrEmail = 'hr@$domain';
   static const String commandCentreEmail = 'harneet.kaur@$domain';

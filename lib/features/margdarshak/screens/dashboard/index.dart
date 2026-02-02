@@ -182,13 +182,13 @@ class _MargdarshakDashboardPageState extends State<MargdarshakDashboardPage> {
 
                       const SizedBox(height: 20),
 
-                      // Stats Grid
-                      _buildStatsGrid(),
+                      // Quick Actions
+                      _buildQuickActions(),
 
                       const SizedBox(height: 20),
 
-                      // Quick Actions
-                      _buildQuickActions(),
+                      // Stats Grid
+                      _buildStatsGrid(),
 
                       const SizedBox(height: 20),
 

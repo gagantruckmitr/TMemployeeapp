@@ -1140,4 +1140,310 @@ class MargdarshakApiService {
       rethrow;
     }
   }
+
+  // ==========================================
+  // Puncture Shop Profile Completion APIs
+  // ==========================================
+
+  /// Save Business Info for Puncture Shop
+  Future<Map<String, dynamic>> savePunctureBusinessInfo({
+    required int punctureUserId,
+    required String punctureName,
+    required String ownerName,
+    required String mobile,
+    String? email,
+    String? yearEstablished,
+    required String punctureType,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConfig.margdarshakPunctureBusinessInfoApi);
+
+      print('🔵 Saving puncture business info...');
+
+      final response = await http
+          .post(
+            url,
+            headers: _authService.getAuthHeaders(),
+            body: json.encode({
+              'puncture_user_id': punctureUserId,
+              'puncture_name': punctureName,
+              'owner_name': ownerName,
+              'mobile': mobile,
+              if (email != null) 'email': email,
+              if (yearEstablished != null) 'year_established': yearEstablished,
+              'puncture_type': punctureType,
+            }),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Business Info Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ Puncture business info saved successfully');
+        }
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to save puncture business info: $e');
+      rethrow;
+    }
+  }
+
+  /// Save Location for Puncture Shop
+  Future<Map<String, dynamic>> savePunctureLocation({
+    required int punctureUserId,
+    required String fullAddress,
+    String? landmark,
+    required int stateId,
+    String? district,
+    required String pincode,
+    required double latitude,
+    required double longitude,
+    required String locationSource,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConfig.margdarshakPunctureLocationApi);
+
+      print('🔵 Saving puncture location...');
+
+      final response = await http
+          .post(
+            url,
+            headers: _authService.getAuthHeaders(),
+            body: json.encode({
+              'puncture_user_id': punctureUserId,
+              'full_address': fullAddress,
+              if (landmark != null) 'landmark': landmark,
+              'state_id': stateId,
+              if (district != null) 'district': district,
+              'pincode': pincode,
+              'latitude': latitude,
+              'longitude': longitude,
+              'location_source': locationSource,
+            }),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Location Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ Puncture location saved successfully');
+        }
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to save puncture location: $e');
+      rethrow;
+    }
+  }
+
+  /// Save Operation Details for Puncture Shop
+  Future<Map<String, dynamic>> savePunctureOperation({
+    required int punctureUserId,
+    String? openingTime,
+    String? closingTime,
+    bool? is24x7,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConfig.margdarshakPunctureOperationApi);
+
+      print('🔵 Saving puncture operation details...');
+
+      final response = await http
+          .post(
+            url,
+            headers: _authService.getAuthHeaders(),
+            body: json.encode({
+              'puncture_user_id': punctureUserId,
+              if (openingTime != null) 'opening_time': openingTime,
+              if (closingTime != null) 'closing_time': closingTime,
+              if (is24x7 != null) 'is_24x7': is24x7,
+            }),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Operation Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ Puncture operation details saved successfully');
+        }
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to save puncture operation details: $e');
+      rethrow;
+    }
+  }
+
+  /// Save Services for Puncture Shop
+  Future<Map<String, dynamic>> savePunctureServices({
+    required int punctureUserId,
+    bool? tyreRepair,
+    bool? airFilling,
+    bool? mechanic,
+    bool? tyreReplacement,
+    bool? wheelBalancing,
+    bool? emergencyService,
+    bool? tubePatching,
+    bool? valveRepair,
+    bool? mobileService,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConfig.margdarshakPunctureServicesApi);
+
+      print('🔵 Saving puncture services...');
+
+      final response = await http
+          .post(
+            url,
+            headers: _authService.getAuthHeaders(),
+            body: json.encode({
+              'puncture_user_id': punctureUserId,
+              if (tyreRepair != null) 'tyre_repair': tyreRepair,
+              if (airFilling != null) 'air_filling': airFilling,
+              if (mechanic != null) 'mechanic': mechanic,
+              if (tyreReplacement != null) 'tyre_replacement': tyreReplacement,
+              if (wheelBalancing != null) 'wheel_balancing': wheelBalancing,
+              if (emergencyService != null)
+                'emergency_service': emergencyService,
+              if (tubePatching != null) 'tube_patching': tubePatching,
+              if (valveRepair != null) 'valve_repair': valveRepair,
+              if (mobileService != null) 'mobile_service': mobileService,
+            }),
+          )
+          .timeout(_timeout);
+
+      print('🔵 Services Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ Puncture services saved successfully');
+        }
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to save puncture services: $e');
+      rethrow;
+    }
+  }
+
+  /// Upload Photos for Puncture Shop
+  Future<Map<String, dynamic>> uploadPuncturePhotos({
+    required int punctureUserId,
+    required String category,
+    required List<String> imagePaths,
+  }) async {
+    try {
+      final url = Uri.parse(ApiConfig.margdarshakPuncturePhotosApi);
+
+      print('🔵 Uploading puncture photos...');
+      print('   Category: $category');
+      print('   Image count: ${imagePaths.length}');
+
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll(_authService.getAuthHeaders());
+      request.headers.remove('Content-Type'); // Let it be set automatically
+
+      request.fields['puncture_user_id'] = punctureUserId.toString();
+      request.fields['category'] = category;
+
+      for (int i = 0; i < imagePaths.length; i++) {
+        request.files.add(
+          await http.MultipartFile.fromPath('image_url[$i]', imagePaths[i]),
+        );
+      }
+
+      final streamedResponse = await request.send().timeout(_timeout);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('🔵 Photos Response:');
+      print('   Status: ${response.statusCode}');
+      print('   Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          print('✅ Puncture photos uploaded successfully');
+        }
+        return data;
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to upload puncture photos: $e');
+      rethrow;
+    }
+  }
+
+  /// Get Puncture Shop Details
+  Future<Map<String, dynamic>> getPunctureDetails({
+    String? userId,
+    String? uniqueId,
+  }) async {
+    try {
+      if (userId == null && uniqueId == null) {
+        throw Exception('Either userId or uniqueId must be provided');
+      }
+
+      final queryParams = <String, String>{};
+      if (userId != null) queryParams['user_id'] = userId;
+      if (uniqueId != null) queryParams['unique_id'] = uniqueId;
+
+      final url = Uri.parse(ApiConfig.margdarshakPunctureDetailsApi)
+          .replace(queryParameters: queryParams);
+
+      print('🔵 Fetching puncture details...');
+      print('   Query: $queryParams');
+
+      final response = await http
+          .get(url, headers: _authService.getAuthHeaders())
+          .timeout(_timeout);
+
+      print('🔵 Details Response:');
+      print('   Status: ${response.statusCode}');
+      // Truncate body log if too long
+      final bodyLog = response.body.length > 500
+          ? '${response.body.substring(0, 500)}...'
+          : response.body;
+      print('   Body: $bodyLog');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == true) {
+          print('✅ Puncture details fetched successfully');
+          return data;
+        } else {
+          throw Exception(data['message'] ?? 'Failed to fetch details');
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch puncture details: $e');
+      rethrow;
+    }
+  }
 }

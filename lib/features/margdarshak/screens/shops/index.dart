@@ -78,6 +78,22 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
 
   /// Map API response to local shop format
   Map<String, dynamic> _mapApiShopToLocal(Map<String, dynamic> apiShop) {
+    // Helper to get valid location
+    String getDistrict() {
+      var city = apiShop['city'];
+      var state = apiShop['state_name'];
+
+      bool isValid(dynamic val) {
+        if (val == null) return false;
+        String s = val.toString().trim();
+        return s.isNotEmpty && s.toLowerCase() != 'null';
+      }
+
+      if (isValid(city)) return city.toString();
+      if (isValid(state)) return state.toString();
+      return 'Unknown';
+    }
+
     return {
       'id': apiShop['id']?.toString() ?? '',
       'name': apiShop['shop_name'] ?? 'Unknown Shop',
@@ -85,7 +101,7 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
       'owner': apiShop['owner_name'] ?? 'Unknown Owner',
       'mobile': apiShop['mobile'] ?? 'N/A',
       'address': apiShop['address'] ?? 'No address provided',
-      'district': apiShop['city'] ?? 'Unknown',
+      'district': getDistrict(),
       'status': apiShop['status'] == '1' ? 'approved' : 'pending',
       'driversCount': apiShop['driver_count'] ?? 0,
       'addedDate': apiShop['created_at'] ?? '',
@@ -549,10 +565,10 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
         )
         .animate()
         .fadeIn(
-          duration: 600.ms,
-          delay: Duration(milliseconds: index * 100),
+          duration: 300.ms,
+          delay: Duration(milliseconds: (index * 30).clamp(0, 300)),
         )
-        .slideX(begin: 0.2, end: 0);
+        .slideX(begin: 0.2, end: 0, duration: 300.ms);
   }
 
   Widget _buildDetailItem(IconData icon, String text) {
