@@ -6,11 +6,13 @@ import '../add_shop/index.dart';
 class ShopDetailsScreen extends StatefulWidget {
   final String uniqueId;
   final String userId;
+  final String shopType; // 'dhaba' or 'puncture'
 
   const ShopDetailsScreen({
     super.key,
     required this.uniqueId,
     required this.userId,
+    this.shopType = 'dhaba',
   });
 
   @override
@@ -22,6 +24,8 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _shopDetails;
   String? _errorMessage;
+
+  bool get isPunctureShop => widget.shopType == 'puncture';
 
   @override
   void initState() {
@@ -36,10 +40,21 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
     });
 
     try {
-      final response = await _apiService.getDhabaDetails(
-        uniqueId: widget.uniqueId,
-        userId: widget.userId,
-      );
+      Map<String, dynamic> response;
+
+      if (isPunctureShop) {
+        // Use puncture details API
+        response = await _apiService.getPunctureDetails(
+          userId: widget.userId,
+          uniqueId: widget.uniqueId,
+        );
+      } else {
+        // Use dhaba details API
+        response = await _apiService.getDhabaDetails(
+          uniqueId: widget.uniqueId,
+          userId: widget.userId,
+        );
+      }
 
       if (response['status'] == true && response['data'] != null) {
         setState(() {
@@ -62,9 +77,9 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7), // Apple-like background
       appBar: AppBar(
-        title: const Text(
-          'Shop Details',
-          style: TextStyle(
+        title: Text(
+          isPunctureShop ? 'Puncture Shop Details' : 'Shop Details',
+          style: const TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 17,
             color: Colors.black,
@@ -82,7 +97,7 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          if (_shopDetails != null)
+          if (_shopDetails != null && !isPunctureShop)
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.blue),
               onPressed: () {
@@ -118,11 +133,263 @@ class _ShopDetailsScreenState extends State<ShopDetailsScreen> {
                 ],
               ),
             )
-          : _buildContent(),
+          : isPunctureShop
+          ? _buildPunctureContent()
+          : _buildDhabaContent(),
     );
   }
 
-  Widget _buildContent() {
+  /// Build content for Puncture shop
+  Widget _buildPunctureContent() {
+    if (_shopDetails == null) return const SizedBox.shrink();
+
+    final userInfo = _shopDetails!['user_info'] ?? {};
+    final businessInfo = _shopDetails!['business_info'] ?? {};
+    final location = _shopDetails!['location'] ?? {};
+    final operation = _shopDetails!['operation'] ?? {};
+    final services = _shopDetails!['services'] ?? {};
+    // Handle photos - can be Map or List (empty array)
+    final photosRaw = _shopDetails!['photos'];
+    final Map<String, dynamic> photos = (photosRaw is Map<String, dynamic>)
+        ? photosRaw
+        : {};
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // User Info Card
+          _buildInfoCard(
+            title: 'Owner Information',
+            children: [
+              _buildRow('Name', userInfo['name'] ?? 'N/A'),
+              _buildRow('Mobile', userInfo['mobile'] ?? 'N/A'),
+              _buildRow('Unique ID', userInfo['unique_id'] ?? 'N/A'),
+              _buildRow('Referral Code', userInfo['referral_code'] ?? 'N/A'),
+              _buildRow('Status', userInfo['status'] ?? 'N/A', isStatus: true),
+              _buildRow('State', userInfo['state_name'] ?? 'N/A'),
+              _buildRow('Drivers', '${userInfo['drivers_count'] ?? 0}'),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Business Info Card
+          _buildInfoCard(
+            title: 'Business Info',
+            children: [
+              _buildRow(
+                'Puncture Name',
+                businessInfo['puncture_name'] ?? 'N/A',
+              ),
+              _buildRow('Owner Name', businessInfo['owner_name'] ?? 'N/A'),
+              _buildRow('Mobile', businessInfo['mobile'] ?? 'N/A'),
+              _buildRow('Email', businessInfo['email'] ?? 'N/A'),
+              _buildRow('Type', businessInfo['puncture_type'] ?? 'N/A'),
+              _buildRow(
+                'Year Established',
+                businessInfo['year_established'] ?? 'N/A',
+              ),
+              _buildRow(
+                'Status',
+                businessInfo['status'] ?? 'N/A',
+                isStatus: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Location Card
+          _buildInfoCard(
+            title: 'Location',
+            children: [
+              _buildRow('Address', location['full_address'] ?? 'N/A'),
+              _buildRow('Landmark', location['landmark'] ?? 'N/A'),
+              _buildRow('District', location['district'] ?? 'N/A'),
+              _buildRow('State', location['state']?['name'] ?? 'N/A'),
+              _buildRow('Pincode', location['pincode'] ?? 'N/A'),
+              _buildRow(
+                'Coords',
+                '${location['latitude'] ?? ''}, ${location['longitude'] ?? ''}',
+              ),
+              _buildRow('Source', location['location_source'] ?? 'N/A'),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Operation Card
+          _buildInfoCard(
+            title: 'Operations',
+            children: [
+              _buildRow('24x7', operation['is_24x7'] == '1' ? 'Yes' : 'No'),
+              if (operation['is_24x7'] != '1') ...[
+                _buildRow('Opening Time', operation['opening_time'] ?? 'N/A'),
+                _buildRow('Closing Time', operation['closing_time'] ?? 'N/A'),
+              ],
+              _buildRow(
+                'On Road Service',
+                operation['on_road_service'] == '1' ? 'Yes' : 'No',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Services Card
+          _buildInfoCard(
+            title: 'Services Offered',
+            children: [
+              if (services['tube_puncture'] == '1')
+                _buildBulletPoint('Tube Puncture'),
+              if (services['tubeless_tyre_repair'] == '1')
+                _buildBulletPoint('Tubeless Tyre Repair'),
+              if (services['tyre_replacement'] == '1')
+                _buildBulletPoint('Tyre Replacement'),
+              if (services['nitrogen_air_filling'] == '1')
+                _buildBulletPoint('Nitrogen Air Filling'),
+              if (services['stepney_installation'] == '1')
+                _buildBulletPoint('Stepney Installation'),
+              if (services['wheel_balancing'] == '1')
+                _buildBulletPoint('Wheel Balancing'),
+              if (services['minor_mechanical_repair'] == '1')
+                _buildBulletPoint('Minor Mechanical Repair'),
+              if (services['jump_start_battery_help'] == '1')
+                _buildBulletPoint('Jump Start / Battery Help'),
+              if (services['emergency_night_service'] == '1')
+                _buildBulletPoint('Emergency Night Service'),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Photos Section
+          if (photos.isNotEmpty) ...[
+            const Text(
+              'Photos',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ..._buildPhotoSections(photos),
+            const SizedBox(height: 24),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Build photo sections from the photos map
+  List<Widget> _buildPhotoSections(Map<String, dynamic> photos) {
+    List<Widget> sections = [];
+
+    photos.forEach((category, photosList) {
+      if (photosList is List && photosList.isNotEmpty) {
+        sections.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 120,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: photosList.length,
+                    itemBuilder: (context, index) {
+                      final photo = photosList[index];
+                      String imageUrl = photo['image_url'] ?? '';
+                      if (imageUrl.startsWith('/')) {
+                        final baseUrl = ApiConfig.publicUrl.endsWith('/')
+                            ? ApiConfig.publicUrl.substring(
+                                0,
+                                ApiConfig.publicUrl.length - 1,
+                              )
+                            : ApiConfig.publicUrl;
+                        imageUrl = '$baseUrl$imageUrl';
+                      }
+
+                      return GestureDetector(
+                        onTap: () => _showFullImage(context, imageUrl),
+                        child: Container(
+                          width: 120,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.grey.shade200,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Center(
+                                  child: Icon(
+                                    Icons.broken_image,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    });
+
+    return sections;
+  }
+
+  /// Show full image in a dialog
+  void _showFullImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: InteractiveViewer(
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: Colors.black54,
+                  child: const Center(
+                    child: Icon(
+                      Icons.broken_image,
+                      color: Colors.white,
+                      size: 48,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Build content for Dhaba shop (original implementation)
+  Widget _buildDhabaContent() {
     if (_shopDetails == null) return const SizedBox.shrink();
 
     final userInfo = _shopDetails!['user_info'] ?? {};

@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/real_auth_service.dart';
 import '../../../core/config/api_config.dart';
 import '../../../app/router/app_router.dart';
-import '../../auth/login_page.dart';
+// import '../../auth/login_page.dart';
 
 /// Apple-style Settings Screen for TMConnect
 /// Following iOS Human Interface Guidelines
@@ -520,17 +520,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Navigator.pop(context);
           Future.delayed(const Duration(milliseconds: 300), () {
             if (mounted) {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => Padding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).viewInsets.bottom,
-                  ),
-                  child: const ForgotPasswordSheet(),
-                ),
-              );
+              // showModalBottomSheet(
+              //   context: context,
+              //   isScrollControlled: true,
+              //   backgroundColor: Colors.transparent,
+              //   builder: (context) => Padding(
+              //     padding: EdgeInsets.only(
+              //       bottom: MediaQuery.of(context).viewInsets.bottom,
+              //     ),
+              //     child: const ForgotPasswordSheet(),
+              //   ),
+              // );
             }
           });
         },

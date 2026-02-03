@@ -518,6 +518,7 @@ class _MargdarshakShopsPageState extends State<MargdarshakShopsPage>
                             builder: (context) => ShopDetailsScreen(
                               uniqueId: shop['uniqueId'] ?? '',
                               userId: shop['id'] ?? '',
+                              shopType: shop['type'] ?? 'dhaba',
                             ),
                           ),
                         );
