@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 
-import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:flutter/services.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/config/api_config.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
-import '../../core/services/smart_calling_service.dart';
 import '../../models/driver_applicant_model.dart';
 import '../../widgets/profile_completion_avatar.dart';
 import 'match_making_screen.dart';
 import '../calls/widgets/call_feedback_modal.dart';
 import '../telecaller/widgets/call_type_selection_dialog.dart';
 import '../telecaller/widgets/easygo_ivr_call_helper.dart';
+import '../telecaller/widgets/manual_call_job_matching_helper.dart';
 import 'driver_detailed_info_screen.dart';
 import '../main_container.dart' as main;
 
@@ -2000,19 +1999,146 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
   }
 
   Future<void> _handleManualCall(DriverApplicant driver, int callerId) async {
-    final cleanMobile = driver.mobile.replaceAll(RegExp(r'[^\d]'), '');
-    final result = await SmartCallingService.instance.initiateManualCall(
-      driverMobile: cleanMobile,
-      callerId: callerId,
-      driverId: driver.driverId.toString(),
+    // Use the new Laravel job matching manual call API
+    await ManualCallJobMatchingHelper.initiateJobMatchingCall(
+      context: context,
+      uniqueIdTransporter: _transporterTmid,
+      uniqueIdDriver: driver.driverTmid,
+      userIdTransporter: _transporterUserId.toString(),
+      userIdDriver: driver.driverId.toString(),
+      jobId: widget.jobId,
+      driverName: driver.name,
+      transporterName: _transporterName,
+      phoneNumber: driver.mobile,
+      onCallInitiated: (id) {
+        print('📞 Callback onCallInitiated triggered with ID: $id');
+        // Show feedback modal after call is initiated
+        if (mounted) {
+          _showJobMatchingFeedbackModal(driver, id);
+        }
+      },
     );
+  }
 
-    if (result['success'] == true) {
-      final driverMobileRaw = result['data']?['driver_mobile_raw'];
-      await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) _showCallFeedbackModal(driver);
-    }
+  // Show job matching feedback modal for manual calls
+  // Uses the same CallFeedbackModal as IVR calls for consistency
+  void _showJobMatchingFeedbackModal(DriverApplicant driver, int callId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CallFeedbackModal(
+        userType: 'driver',
+        userName: driver.name,
+        userTmid: driver.driverTmid,
+        jobId: widget.jobId,
+        onSubmit: (feedback, matchStatus, notes) {
+          // This is required but won't be called since we use onSubmitWithRecording
+        },
+        onSubmitWithRecording: (feedback, matchStatus, notes, recordingFile) async {
+          try {
+            // Extract call_status from feedback string
+            String callStatus = 'not_connected'; // default
+
+            // Check for category prefix in feedback
+            // IMPORTANT: Check "Not Connected" BEFORE "Connected" because "not connected" contains "connected"
+            if (feedback.startsWith('Not Connected:') ||
+                feedback.toLowerCase().contains('not connected:')) {
+              callStatus = 'not_connected';
+            } else if (feedback.startsWith('Call Back Later:') ||
+                feedback.toLowerCase().contains('call back later:')) {
+              callStatus = 'callback_later';
+            } else if (feedback.startsWith('Connected:') ||
+                feedback.toLowerCase().contains('connected:')) {
+              callStatus = 'connected';
+            } else {
+              // Fallback: check if feedback matches known options
+              final connectedOptions = [
+                'Driver Interested',
+                'Driver Not Interested',
+                'Driver Already Booked / Busy',
+                'Driver Does Not Work on That Route',
+                'Driver Rate Mismatch',
+                'Vehicle Not Available',
+                'Vehicle Type Not Matching',
+                'Driver Wants More Details',
+                'Driver Wants to Speak to Transporter',
+                'Driver Wants Call Back Later',
+                'Driver Requested Callback on WhatsApp',
+                'Interview Done',
+              ];
+              final notConnectedOptions = [
+                'Ringing – No Answer',
+                'Switched Off',
+                'Not Reachable',
+                'Call Disconnected',
+                'Number Busy',
+                'Wrong Number',
+                'Third Person Received – Asked to Call Later',
+              ];
+              final callBackOptions = [
+                'Busy Right Now',
+                'Call Tomorrow Morning',
+                'Call in Evening',
+                'Call After 2 Days',
+              ];
+
+              if (connectedOptions.any(
+                (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+              )) {
+                callStatus = 'connected';
+              } else if (notConnectedOptions.any(
+                (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+              )) {
+                callStatus = 'not_connected';
+              } else if (callBackOptions.any(
+                (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+              )) {
+                callStatus = 'callback_later';
+              }
+            }
+
+            // Extract just the option name (e.g., "Driver Interested" from "Connected: Driver Interested")
+            String callFeedback = feedback;
+            if (feedback.contains(':')) {
+              callFeedback = feedback.split(':').last.trim();
+            }
+
+            // Update the job matching call with feedback and recording
+            await ManualCallJobMatchingHelper.updateJobMatchingCall(
+              context: context,
+              id: callId,
+              callStatus: callStatus,
+              callFeedback: callFeedback,
+              callRemarks: notes,
+              matchStatus: matchStatus,
+              driverName: driver.name,
+              transporterName: _transporterName,
+              callRecording: recordingFile,
+            );
+
+            // Close modal
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+
+            // Refresh the applicants list
+            _loadApplicants();
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
   }
 
   void _showCallFeedbackModal(DriverApplicant driver) {

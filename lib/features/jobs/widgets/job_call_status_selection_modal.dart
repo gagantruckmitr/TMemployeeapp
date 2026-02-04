@@ -1,9 +1,18 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../app/theme/app_colors.dart';
 
 class JobCallStatusSelectionModal extends StatefulWidget {
   final String transporterName;
-  final Function(String status, String? feedback, String? remarks, bool closeJob) onStatusSelected;
+  final Function(
+    String status,
+    String? feedback,
+    String? remarks,
+    bool closeJob,
+    File? recording,
+  )
+  onStatusSelected;
 
   const JobCallStatusSelectionModal({
     super.key,
@@ -22,6 +31,8 @@ class _JobCallStatusSelectionModalState
   String? _selectedFeedback;
   bool _isSubmitting = false;
   final TextEditingController _remarksController = TextEditingController();
+  File? _selectedRecordingFile;
+  String? _selectedRecordingName;
 
   final Map<String, List<String>> _feedbackOptions = {
     'Connected': [
@@ -46,6 +57,31 @@ class _JobCallStatusSelectionModalState
       'Call After 2 Days',
     ],
   };
+
+  Future<void> _pickRecording() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', '3gp', 'amr'],
+      );
+
+      if (result != null) {
+        setState(() {
+          _selectedRecordingFile = File(result.files.single.path!);
+          _selectedRecordingName = result.files.single.name;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error selecting file: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -73,14 +109,17 @@ class _JobCallStatusSelectionModalState
         widget.onStatusSelected(
           _selectedStatus!,
           _selectedFeedback!,
-          _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
+          _remarksController.text.trim().isEmpty
+              ? null
+              : _remarksController.text.trim(),
           true, // closeJob = true
+          _selectedRecordingFile,
         );
       }
       // If No or dismissed, stay on the same screen - do nothing
       return;
     }
-   if (_selectedFeedback == 'Not a genuine Transporter') {
+    if (_selectedFeedback == 'Not a genuine Transporter') {
       final shouldCloseJob = await _showCloseJobConfirmation();
       if (shouldCloseJob == true) {
         // User selected Yes - submit with closeJob = true
@@ -88,21 +127,26 @@ class _JobCallStatusSelectionModalState
         widget.onStatusSelected(
           _selectedStatus!,
           _selectedFeedback!,
-          _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
+          _remarksController.text.trim().isEmpty
+              ? null
+              : _remarksController.text.trim(),
           true, // closeJob = true
+          _selectedRecordingFile,
         );
       }
       // If No or dismissed, stay on the same screen - do nothing
       return;
     }
 
-
     setState(() => _isSubmitting = true);
     widget.onStatusSelected(
       _selectedStatus!,
       _selectedFeedback!,
-      _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
+      _remarksController.text.trim().isEmpty
+          ? null
+          : _remarksController.text.trim(),
       false, // closeJob = false
+      _selectedRecordingFile,
     );
   }
 
@@ -120,7 +164,11 @@ class _JobCallStatusSelectionModalState
                 color: Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.red,
+                size: 24,
+              ),
             ),
             const SizedBox(width: 12),
             const Text(
@@ -138,18 +186,26 @@ class _JobCallStatusSelectionModalState
             onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text(
               'No',
-              style: TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: Color(0xFF6B7280),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text(
               'Yes, Close Job',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -215,7 +271,10 @@ class _JobCallStatusSelectionModalState
                 ),
                 // Required feedback indicator
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
@@ -259,7 +318,7 @@ class _JobCallStatusSelectionModalState
               const SizedBox(height: 12),
               _buildFeedbackOptions(),
               const SizedBox(height: 24),
-              
+
               // Remarks Field - Always show when status is selected
               const Text(
                 'Remarks (Optional)',
@@ -289,7 +348,10 @@ class _JobCallStatusSelectionModalState
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 2,
+                    ),
                   ),
                   filled: true,
                   fillColor: const Color(0xFFF9FAFB),
@@ -298,6 +360,10 @@ class _JobCallStatusSelectionModalState
               ),
               const SizedBox(height: 24),
             ],
+
+            // Recording Upload Section
+            _buildRecordingUploadSection(),
+            const SizedBox(height: 24),
 
             // Submit Button
             SizedBox(
@@ -321,8 +387,9 @@ class _JobCallStatusSelectionModalState
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Text(
@@ -385,7 +452,9 @@ class _JobCallStatusSelectionModalState
                     status,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                       color: isSelected ? color : const Color(0xFF374151),
                     ),
                   ),
@@ -426,9 +495,7 @@ class _JobCallStatusSelectionModalState
             child: Row(
               children: [
                 Icon(
-                  isSelected
-                      ? Icons.check_circle
-                      : Icons.radio_button_off,
+                  isSelected ? Icons.check_circle : Icons.radio_button_off,
                   color: isSelected
                       ? AppColors.primary
                       : const Color(0xFF9CA3AF),
@@ -440,7 +507,9 @@ class _JobCallStatusSelectionModalState
                     feedback,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                       color: isSelected
                           ? AppColors.primary
                           : const Color(0xFF374151),
@@ -452,6 +521,81 @@ class _JobCallStatusSelectionModalState
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildRecordingUploadSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Call Recording (Optional)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1A1A1A),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Column(
+            children: [
+              if (_selectedRecordingName != null) ...[
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.audiotrack,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedRecordingName!,
+                        style: const TextStyle(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () {
+                        setState(() {
+                          _selectedRecordingFile = null;
+                          _selectedRecordingName = null;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ] else ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _pickRecording,
+                    icon: const Icon(Icons.attach_file, size: 18),
+                    label: const Text('Select Recording File'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

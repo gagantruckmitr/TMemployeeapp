@@ -150,7 +150,9 @@ class EasyGoIVRCallHelper {
           print('🔵 Response: $result');
 
           // Extract match_id from response
-          matchId = result['match_id']?.toString();
+          matchId =
+              result['match_id']?.toString() ??
+              result['data']?['match_id']?.toString();
           print('🔵 Match ID from API: $matchId');
         } catch (e) {
           print('⚠️ Job Matching IVR API error: $e');

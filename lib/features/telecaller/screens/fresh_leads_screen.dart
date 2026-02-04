@@ -1,7 +1,5 @@
-import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import '../../../core/services/today_leads_service.dart';
 import '../../../core/services/smart_calling_service.dart';
 import '../../../core/services/real_auth_service.dart';
@@ -15,6 +13,7 @@ import '../widgets/call_feedback_modal.dart';
 import '../widgets/transporter_feedback_modal.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/ivr_call_waiting_overlay.dart';
+import '../widgets/manual_call_helper.dart';
 import '../../../widgets/error_handler.dart';
 
 class FreshLeadsScreen extends StatefulWidget {
@@ -365,63 +364,59 @@ class _FreshLeadsScreenState extends State<FreshLeadsScreen> {
     TodayLead lead,
   ) async {
     try {
-      final cleanMobile = contact.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+      // Determine process based on role
+      final process = lead.role == 'driver'
+          ? 'Driver Onboarding'
+          : 'Transporter Onboarding';
 
-      final result = await SmartCallingService.instance.initiateManualCall(
-        driverMobile: cleanMobile,
-        callerId: callerId,
-        driverId: contact.id,
-        contactType: lead.role,
-      );
-
-      if (mounted) {
-        if (result['success'] == true) {
-          final referenceId = result['data']?['reference_id'];
-          final mobileRaw = result['data']?['driver_mobile_raw'];
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('📱 Calling ${contact.name}...'),
-              backgroundColor: AppTheme.success,
-              duration: const Duration(seconds: 2),
-            ),
+      // Use the manual call helper
+      // IMPORTANT: ManualCallHelper already updates feedback via ManualCallService.updateCall()
+      // which uses the correct manual-call-update endpoint.
+      // The onFeedbackSubmitted callback should ONLY handle UI updates, NOT call any other API.
+      await ManualCallHelper.initiateManualCall(
+        context: context,
+        contact: contact,
+        process: process,
+        showRecordingUpload: true, // Show recording upload for fresh leads
+        onFeedbackSubmitted: (feedback) async {
+          // ONLY handle UI state updates here
+          // ManualCallHelper already called ManualCallService.updateCall() for API update
+          // DO NOT call _updateContactStatus() as it would use the wrong IVR endpoint
+          debugPrint(
+            '📝 [FreshLeads] Manual call feedback submitted - UI update only',
           );
 
-          try {
-            await FlutterPhoneDirectCaller.callNumber(mobileRaw);
-
-            await Future.delayed(const Duration(milliseconds: 500));
-
-            if (mounted) {
-              _showFeedbackModal(
-                contact,
-                lead,
-                referenceId: referenceId,
-                callDuration: 0,
-              );
-            }
-          } catch (callError) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Failed to make call: $callError'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
-        } else {
-          final errorMsg = result['error'] ?? 'Unknown error';
           if (mounted) {
+            // Remove from cache and mark as processed in TodayLeadsService
+            TodayLeadsService.instance.removeLeadFromCache(lead.id);
+            debugPrint(
+              '✅ [FreshLeads] Marked lead ${lead.id} as processed in TodayLeadsService',
+            );
+
+            // Clear pending feedback cache since feedback was submitted
+            CallFeedbackGuardService.instance.clearCache();
+
+            // Update local list
+            setState(() {
+              _leads.removeWhere((l) => l.id == lead.id);
+              _remainingFreshLeads =
+                  TodayLeadsService.instance.totalRemainingFromApi > 0
+                  ? TodayLeadsService.instance.totalRemainingFromApi
+                  : TodayLeadsService.instance.remainingFreshLeads;
+            });
+            HapticFeedback.lightImpact();
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed: $errorMsg'),
-                backgroundColor: Colors.red,
+                content: Text('✅ Feedback saved for ${contact.name}'),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
               ),
             );
           }
-        }
-      }
+        },
+      );
     } catch (e) {
       if (mounted) {
         ErrorHandler.showError(context, e);

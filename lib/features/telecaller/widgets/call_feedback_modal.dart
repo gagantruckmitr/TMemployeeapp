@@ -242,15 +242,103 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
   Future<void> _pickRecording() async {
     if (_isPickingFile) return;
 
+    // Show bottom sheet to choose source
+    final source = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Text(
+              'Upload Call Recording',
+              style: AppTheme.titleMedium.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Choose where to upload from',
+              style: AppTheme.bodyMedium.copyWith(
+                color: AppTheme.gray,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSourceOption(
+                    icon: Icons.folder_outlined,
+                    label: 'Files',
+                    subtitle: 'Audio files',
+                    color: AppTheme.primaryBlue,
+                    onTap: () => Navigator.pop(context, 'files'),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildSourceOption(
+                    icon: Icons.photo_library_outlined,
+                    label: 'Gallery',
+                    subtitle: 'Media files',
+                    color: Colors.purple,
+                    onTap: () => Navigator.pop(context, 'gallery'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
     setState(() {
       _isPickingFile = true;
     });
 
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
-        allowMultiple: false,
-      );
+      FilePickerResult? result;
+
+      if (source == 'files') {
+        // Pick audio files from file manager
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.audio,
+          allowMultiple: false,
+        );
+      } else if (source == 'gallery') {
+        // Pick any media file (audio/video) from gallery
+        result = await FilePicker.platform.pickFiles(
+          type: FileType.media,
+          allowMultiple: false,
+        );
+      }
 
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
@@ -271,10 +359,22 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
 
         setState(() {
           _selectedRecording = file;
-          _recordingFileName = result.files.single.name;
+          _recordingFileName = result!.files.single.name;
         });
 
         HapticFeedback.mediumImpact();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '✅ Recording attached: ${result.files.single.name}',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -290,6 +390,49 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
         _isPickingFile = false;
       });
     }
+  }
+
+  Widget _buildSourceOption({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: Icon(icon, color: Colors.white, size: 28),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _removeRecording() {
@@ -1107,58 +1250,98 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
         ),
         const SizedBox(height: 12),
         if (_selectedRecording == null)
-          GestureDetector(
-            onTap: _isPickingFile ? null : _pickRecording,
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: widget.requireRecording
-                      ? Colors.red.withValues(alpha: 0.3)
-                      : AppTheme.primaryBlue.withValues(alpha: 0.2),
-                  width: 1.5,
-                  style: BorderStyle.solid,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryBlue.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+          Column(
+            children: [
+              // Two buttons side by side
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _isPickingFile ? null : _pickRecording,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.primaryBlue.withOpacity(0.1),
+                              AppTheme.primaryBlue.withOpacity(0.05),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppTheme.primaryBlue.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryBlue,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.primaryBlue.withOpacity(
+                                      0.3,
+                                    ),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.upload_file_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Upload Recording',
+                              style: AppTheme.titleMedium.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: AppTheme.primaryBlue,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'From Files or Gallery',
+                              style: AppTheme.bodySmall.copyWith(
+                                color: AppTheme.gray,
+                                fontSize: 11,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              child: Column(
-                children: [
-                  if (_isPickingFile)
-                    const CircularProgressIndicator()
-                  else ...[
-                    Icon(
-                      Icons.cloud_upload_outlined,
-                      size: 40,
-                      color: AppTheme.primaryBlue.withValues(alpha: 0.6),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Upload Call Recording',
-                      style: AppTheme.titleMedium.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Tap to select audio file (Max 50MB)',
-                      style: AppTheme.bodySmall.copyWith(
-                        color: AppTheme.gray,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ],
+              const SizedBox(height: 8),
+              // Hint text
+              Text(
+                'Tap to select audio/video file (Max 50MB)',
+                style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.gray,
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
               ),
-            ),
+              if (_isPickingFile)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
           )
         else
           Container(

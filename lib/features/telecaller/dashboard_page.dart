@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -22,7 +21,6 @@ import '../../core/services/telecaller_service.dart';
 import '../../core/services/activity_tracker_service.dart';
 import '../../core/services/smart_calling_service.dart';
 import 'screens/search_users_screen.dart';
-
 import 'performance_analytics_page.dart';
 import '../../core/services/subscription_service.dart';
 import 'subscriptions/subscriptions_screen.dart';
@@ -579,7 +577,7 @@ class _DashboardPageState extends State<DashboardPage>
                                 const SizedBox(height: 4),
                                 const Center(
                                   child: Text(
-                                    'V. 11',
+                                    'V. 12',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Color.fromARGB(255, 0, 0, 0),
@@ -630,66 +628,6 @@ class _DashboardPageState extends State<DashboardPage>
       ),
     );
   }
-
-  // Widget _buildPeriodFilter() {
-  //   final periods = [
-  //     {'value': 'today', 'label': 'Today'},
-  //     {'value': 'week', 'label': 'Week'},
-  //     {'value': 'month', 'label': 'Month'},
-  //     {'value': 'all', 'label': 'All'},
-  //   ];
-
-  //   return SingleChildScrollView(
-  //     scrollDirection: Axis.horizontal,
-  //     child: Row(
-  //       children: periods.map((period) {
-  //         final isSelected = _selectedPeriod == period['value'];
-  //         return Padding(
-  //           padding: const EdgeInsets.only(right: 6),
-  //           child: Material(
-  //             color: Colors.transparent,
-  //             child: InkWell(
-  //               onTap: () {
-  //                 HapticFeedback.lightImpact();
-  //                 setState(() {
-  //                   _selectedPeriod = period['value']!;
-  //                 });
-  //                 _loadDashboardData();
-  //               },
-  //               borderRadius: BorderRadius.circular(16),
-  //               child: Container(
-  //                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-  //                 decoration: BoxDecoration(
-  //                   color: isSelected ? AppTheme.primaryBlue : Colors.white,
-  //                   borderRadius: BorderRadius.circular(16),
-  //                   border: Border.all(
-  //                     color: isSelected ? AppTheme.primaryBlue : Colors.grey.shade300,
-  //                     width: 1.5,
-  //                   ),
-  //                   boxShadow: isSelected ? [
-  //                     BoxShadow(
-  //                       color: AppTheme.primaryBlue.withOpacity(0.2),
-  //                       blurRadius: 8,
-  //                       offset: const Offset(0, 2),
-  //                     ),
-  //                   ] : [],
-  //                 ),
-  //                 child: Text(
-  //                   period['label']!,
-  //                   style: AppTheme.bodyMedium.copyWith(
-  //                     color: isSelected ? Colors.white : Colors.grey.shade700,
-  //                     fontSize: 13,
-  //                     fontWeight: FontWeight.w600,
-  //                   ),
-  //                 ),
-  //               ),
-  //             ),
-  //           ),
-  //         );
-  //       }).toList(),
-  //     ),
-  //   );
-  // }
 
   Widget _buildSearchBar() {
     return GestureDetector(

@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'dart:io';
+import '../../core/services/manual_call_service.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
-import '../../core/services/smart_calling_service.dart';
 import '../../core/services/call_feedback_guard_service.dart';
 import '../../core/services/match_making_feedback_guard_service.dart';
 import '../../core/services/real_auth_service.dart';
@@ -667,37 +668,57 @@ class _TransporterCard extends StatelessWidget {
 
   Future<void> _handleManualCall(BuildContext context, JobModel job) async {
     try {
-      final callerId = await Phase2AuthService.getUserId();
+      final user = await Phase2AuthService.getCurrentUser();
+      final callerId = user?.id.toString() ?? '0';
+      final callerPhone = user?.mobile ?? '';
+
       final cleanMobile = job.transporterPhone.replaceAll(RegExp(r'[^\d]'), '');
 
-      // Log manual call
-      final result = await SmartCallingService.instance.initiateManualCall(
-        driverMobile: cleanMobile,
-        callerId: callerId,
-        driverId: job.transporterId,
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📱 Initiating call to ${job.transporterName}...'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
 
-      if (result['success'] == true) {
-        final transporterMobileRaw = result['data']?['driver_mobile_raw'];
+      // 1. Log manual call via Laravel API (Job Brief)
+      String? jobBriefId;
+      try {
+        final result = await ManualCallService.initiateJobBriefCall(
+          uniqueId: job.transporterTmid,
+          userId: job.transporterId,
+          assignedTo: callerId,
+          jobId: job.jobId,
+          exten: callerPhone,
+          number: cleanMobile,
+        );
 
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('📱 Calling ${job.transporterName}...'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+        if (result['success'] == true && result['data'] != null) {
+          jobBriefId = (result['data']['job_brief_id'] ?? result['data']['id'])
+              ?.toString();
+          print('✅ Job brief call initiated, ID: $jobBriefId');
         }
+      } catch (e) {
+        print('⚠️ Failed to initiate job brief call log: $e');
+        // Continue to dial even if logging fails
+      }
 
-        // Make direct call
-        await FlutterPhoneDirectCaller.callNumber(transporterMobileRaw);
-        await Future.delayed(const Duration(milliseconds: 500));
+      // 2. Make direct call
+      await FlutterPhoneDirectCaller.callNumber(cleanMobile);
 
-        // Show call status selection modal after call (same flow as IVR)
-        if (context.mounted) {
-          _showCallStatusModalAfterCall(context, job, null);
-        }
+      // 3. Wait a bit then show feedback modal
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (context.mounted) {
+        _showCallStatusModalAfterCall(
+          context,
+          job,
+          jobBriefId,
+          isManualCall: true,
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -730,7 +751,12 @@ class _TransporterCard extends StatelessWidget {
           'job_posting', // Use job_posting to trigger Laravel job brief API
       onCallCompleted: (jobBriefId) {
         // After call ends, show call status selection modal (same as modern_job_card.dart)
-        _showCallStatusModalAfterCall(context, job, jobBriefId);
+        _showCallStatusModalAfterCall(
+          context,
+          job,
+          jobBriefId,
+          isManualCall: false,
+        );
       },
       jobId: job.jobId,
       assignedTo: currentUserId,
@@ -742,8 +768,9 @@ class _TransporterCard extends StatelessWidget {
   Future<void> _showCallStatusModalAfterCall(
     BuildContext context,
     JobModel job,
-    String? jobBriefId,
-  ) async {
+    String? jobBriefId, {
+    bool isManualCall = false,
+  }) async {
     if (!context.mounted) return;
 
     print(
@@ -767,6 +794,7 @@ class _TransporterCard extends StatelessWidget {
                 String? feedback,
                 String? remarks,
                 bool shouldCloseJob,
+                File? recordingFile,
               ) async {
                 print(
                   '🔵 onStatusSelected: status=$status, feedback=$feedback, remarks=$remarks, closeJob=$shouldCloseJob',
@@ -822,6 +850,8 @@ class _TransporterCard extends StatelessWidget {
                     feedback: feedback!,
                     remarks: remarks,
                     closeJob: shouldCloseJob,
+                    callRecording: recordingFile,
+                    isManualCall: isManualCall,
                   );
                 }
               },
@@ -838,26 +868,13 @@ class _TransporterCard extends StatelessWidget {
     required String feedback,
     String? remarks,
     bool closeJob = false,
+    File? callRecording,
+    bool isManualCall = false,
   }) async {
     try {
       final user = await Phase2AuthService.getCurrentUser();
       if (user == null) {
         print('✗ No user found');
-        return;
-      }
-
-      // Get authentication token
-      final token = await RealAuthService.instance.getAuthToken();
-      if (token == null) {
-        print('✗ No auth token found');
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Authentication error. Please login again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
         return;
       }
 
@@ -873,72 +890,148 @@ class _TransporterCard extends StatelessWidget {
         apiCallStatus = status.toLowerCase().replaceAll(' ', '_');
       }
 
-      // Build request body with important fields only
-      final requestBody = {
-        'id': jobBriefId ?? '',
-        'call_status': apiCallStatus,
-        'call_feedback': feedback,
-        'call_remarks': remarks ?? '',
-        'name': job.transporterName,
-        'transporter_tmid': job.transporterTmid,
-        'assigned_to': user.id,
-        'closed_job': closeJob ? 1 : 0,
-        'job_id': job.jobId,
-      };
+      // If NOT manual call (i.e. IVR call), use the Phase2ApiService
+      if (!isManualCall) {
+        // Legacy/IVR flow
+        await Phase2ApiService.updateIVRCallJobBriefFeedback(
+          jobBriefId: jobBriefId ?? '',
+          name: job.transporterName,
+          jobLocation: job.jobLocation,
+          route: job.jobLocation,
+          vehicleType: job.vehicleType,
+          licenseType: job.typeOfLicense,
+          experience: job.requiredExperience,
+          salaryFixed: job.salaryRange,
+          salaryVariable: '0',
+          esiPf: 'no',
+          foodAllowance: '0',
+          tripIncentive: '0',
+          rehneKiSuvidha: 'no',
+          mileage: 'N/A',
+          fastTagRoadKharcha: '0',
+          closedJob: closeJob ? '1' : '0',
+          callStatus: apiCallStatus,
+          callFeedback: feedback,
+          callRemarks: remarks,
+          requiredDrivers: job.numberOfDriverRequired.toString(),
+        );
 
-      print('🔵 API Request Body: $requestBody');
-      print('🔵 Auth Token: ${token.substring(0, 20)}...');
-
-      // Call the API to update job brief with call status
-      final response = await http.post(
-        Uri.parse(
-          '${ApiConfig.laravelApiBase}/ivr-call-update-jobBrief',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: json.encode(requestBody),
-      );
-
-      print('🔵 API Response: ${response.statusCode} - ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true || data['status'] == 'success') {
-          print('✓ Job brief call status updated successfully');
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  closeJob
-                      ? 'Job closed successfully'
-                      : 'Feedback saved successfully',
-                ),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        } else {
-          print('✗ Failed to update call status: ${data['message']}');
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Failed to save feedback: ${data['message'] ?? 'Unknown error'}',
-                ),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      } else {
-        print('✗ API error: ${response.statusCode}');
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('API error: ${response.statusCode}'),
+              content: Text(
+                closeJob
+                    ? 'Job closed successfully'
+                    : 'Feedback saved successfully',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        return;
+      }
+
+      int callId = 0;
+      if (jobBriefId != null) {
+        callId = int.tryParse(jobBriefId) ?? 0;
+      }
+
+      // RESCUE: If ID is 0, attempt to create a call log now
+      if (callId == 0) {
+        print('🔵 Call ID is 0, attempting to create rescue call log...');
+        try {
+          final cleanMobile = job.transporterPhone.replaceAll(
+            RegExp(r'[^\d]'),
+            '',
+          );
+          if (cleanMobile.isNotEmpty) {
+            final initResult = await ManualCallService.initiateJobBriefCall(
+              uniqueId: job.transporterTmid,
+              userId: job.transporterId,
+              assignedTo: user.id.toString(),
+              jobId: job.jobId,
+              exten: user.mobile ?? '',
+              number: cleanMobile,
+            );
+
+            if (initResult['success'] == true && initResult['data'] != null) {
+              callId =
+                  int.tryParse(
+                    (initResult['data']['job_brief_id'] ??
+                                initResult['data']['id'])
+                            ?.toString() ??
+                        '0',
+                  ) ??
+                  0;
+              print('✅ Rescue initiation successful, new ID: $callId');
+            }
+          }
+        } catch (e) {
+          print('⚠️ Rescue initiation failed: $e');
+        }
+      }
+
+      if (callId == 0) {
+        print('✗ Unable to update call status: Invalid ID (0)');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error: Could not verify call log ID.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      print('🔵 Updating Job Brief Call with ManualCallService:');
+      print('   ID: $callId, Status: $apiCallStatus');
+
+      // Use ManualCallService (Laravel API)
+      final result = await ManualCallService.updateJobBriefCall(
+        id: callId,
+        name: job.transporterName,
+        jobLocation: job.jobLocation,
+        route: job.jobLocation, // Fallback to location
+        vehicleType: job.vehicleType,
+        licenseType: job.typeOfLicense,
+        experience: job.requiredExperience,
+        salaryFixed: job.salaryRange,
+        salaryVariable: '0',
+        esiPf: 'no',
+        foodAllowance: 0,
+        tripIncentive: 0,
+        rehneKiSuvidha: 'no',
+        mileage: 'N/A',
+        fastTagRoadKharcha: 0,
+        closedJob: closeJob ? 1 : 0,
+        callStatus: apiCallStatus,
+        callFeedback: feedback,
+        callRemarks: remarks,
+        requiredDrivers: job.numberOfDriverRequired.toString(),
+        callRecording: callRecording,
+      );
+
+      if (context.mounted) {
+        if (result['success'] == true || result['status'] == 'success') {
+          print('✓ Job brief call status updated successfully');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                closeJob
+                    ? 'Job closed successfully'
+                    : 'Feedback saved successfully',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          print('✗ Failed to update call status: ${result['error']}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to save feedback: ${result['error'] ?? 'Unknown error'}',
+              ),
               backgroundColor: Colors.red,
             ),
           );
