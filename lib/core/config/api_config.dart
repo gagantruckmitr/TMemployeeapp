@@ -9,7 +9,7 @@ class ApiConfig {
 
   // PRODUCTION: Plesk Server (Active)
   // static const String domain = 'truckmitr.com';
-  static const String domain = 'devtruckmitr.in';
+  static const String domain = 'truckmitr.com';
   static const String baseUrl = 'https://$domain/truckmitr-app/api';
   static const String serverIp = domain;
   static const String publicUrl = 'https://$domain/public';
@@ -19,6 +19,7 @@ class ApiConfig {
   static const String laravelApiBase = 'https://$domain/api';
   static const String teleheadApiBase = 'https://$domain/api/telehead';
   static const String storageBase = 'https://$domain/storage/app/public';
+  static const String publicStorageBase = 'https://$domain/public/storage';
 
   // Margdarshak uses laravelApiBase
   static String get margdarshakApiBase => laravelApiBase;

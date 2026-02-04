@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/config/api_config.dart';
 import '../../services/margdarshak_auth_service.dart';
 import '../../services/margdarshak_api_service.dart';
 import '../navigation/index.dart';
 import '../../providers/profile_provider.dart';
-import '../bank-details/index.dart';
 import 'edit_profile_screen.dart';
 
 class MargdarshakProfilePage extends ConsumerStatefulWidget {
@@ -271,6 +271,12 @@ class _MargdarshakProfilePageState
   }
 
   Widget _buildProfileHeader() {
+    final profileImage = _profileData['profileImage'];
+    final hasProfileImage = profileImage != null && profileImage.isNotEmpty;
+    final profileImageUrl = hasProfileImage
+        ? '${ApiConfig.publicStorageBase}/$profileImage'
+        : null;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -290,18 +296,56 @@ class _MargdarshakProfilePageState
       ),
       child: Row(
         children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Icon(
-              Icons.person_rounded,
-              color: Colors.white,
-              size: 40,
-            ),
+          Stack(
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  image: hasProfileImage
+                      ? DecorationImage(
+                          image: NetworkImage(profileImageUrl!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: hasProfileImage
+                    ? null
+                    : const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white,
+                        size: 40,
+                      ),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: GestureDetector(
+                  onTap: _navigateToEditProfile,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.edit,
+                      color: Color(0xFF5D4037),
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 20),
           Expanded(

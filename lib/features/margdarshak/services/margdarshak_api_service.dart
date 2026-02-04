@@ -468,8 +468,9 @@ class MargdarshakApiService {
 
   /// Update profile information
   Future<Map<String, dynamic>> updateProfile(
-    Map<String, dynamic> profileData,
-  ) async {
+    Map<String, dynamic> profileData, {
+    File? profileImage,
+  }) async {
     try {
       final url = Uri.parse(
         '${ApiConfig.margdarshakApiBase}/margdarshak/profile-update',
@@ -477,27 +478,64 @@ class MargdarshakApiService {
 
       print('🔵 Updating profile...');
       print('   Data: ${json.encode(profileData)}');
+      print('   Has Image: ${profileImage != null}');
 
-      final response = await http
-          .post(
-            url,
-            headers: _authService.getAuthHeaders(),
-            body: json.encode(profileData),
-          )
-          .timeout(_timeout);
+      // If there's an image, use multipart request
+      if (profileImage != null) {
+        final request = http.MultipartRequest('POST', url);
+        request.headers.addAll(_authService.getAuthHeaders());
 
-      print('🔵 Update Profile Response:');
-      print('   Status: ${response.statusCode}');
-      print('   Body: ${response.body}');
+        // Add profile image
+        request.files.add(
+          await http.MultipartFile.fromPath('profile_image', profileImage.path),
+        );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['status'] == true) {
-          print('✅ Profile updated successfully');
+        // Add other fields
+        profileData.forEach((key, value) {
+          if (value != null) {
+            request.fields[key] = value.toString();
+          }
+        });
+
+        final streamedResponse = await request.send().timeout(_timeout);
+        final response = await http.Response.fromStream(streamedResponse);
+
+        print('🔵 Update Profile Response:');
+        print('   Status: ${response.statusCode}');
+        print('   Body: ${response.body}');
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['status'] == true) {
+            print('✅ Profile updated successfully with image');
+          }
+          return data;
+        } else {
+          throw Exception('HTTP ${response.statusCode}: ${response.body}');
         }
-        return data;
       } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        // No image, use standard JSON post
+        final response = await http
+            .post(
+              url,
+              headers: _authService.getAuthHeaders(),
+              body: json.encode(profileData),
+            )
+            .timeout(_timeout);
+
+        print('🔵 Update Profile Response:');
+        print('   Status: ${response.statusCode}');
+        print('   Body: ${response.body}');
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['status'] == true) {
+            print('✅ Profile updated successfully');
+          }
+          return data;
+        } else {
+          throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        }
       }
     } catch (e) {
       print('❌ Failed to update profile: $e');
@@ -1412,8 +1450,9 @@ class MargdarshakApiService {
       if (userId != null) queryParams['user_id'] = userId;
       if (uniqueId != null) queryParams['unique_id'] = uniqueId;
 
-      final url = Uri.parse(ApiConfig.margdarshakPunctureDetailsApi)
-          .replace(queryParameters: queryParams);
+      final url = Uri.parse(
+        ApiConfig.margdarshakPunctureDetailsApi,
+      ).replace(queryParameters: queryParams);
 
       print('🔵 Fetching puncture details...');
       print('   Query: $queryParams');
