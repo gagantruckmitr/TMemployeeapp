@@ -13,7 +13,6 @@ import '../calls/widgets/call_feedback_modal.dart';
 import '../telecaller/widgets/call_type_selection_dialog.dart';
 import '../telecaller/widgets/easygo_ivr_call_helper.dart';
 import '../telecaller/widgets/manual_call_job_matching_helper.dart';
-import 'widgets/job_matching_feedback_modal.dart';
 import 'driver_detailed_info_screen.dart';
 import '../main_container.dart' as main;
 
@@ -2012,6 +2011,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
       transporterName: _transporterName,
       phoneNumber: driver.mobile,
       onCallInitiated: (id) {
+        print('📞 Callback onCallInitiated triggered with ID: $id');
         // Show feedback modal after call is initiated
         if (mounted) {
           _showJobMatchingFeedbackModal(driver, id);
@@ -2021,6 +2021,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
   }
 
   // Show job matching feedback modal for manual calls
+  // Uses the same CallFeedbackModal as IVR calls for consistency
   void _showJobMatchingFeedbackModal(DriverApplicant driver, int callId) {
     showModalBottomSheet(
       context: context,
@@ -2028,29 +2029,113 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
       isDismissible: false,
       enableDrag: false,
       backgroundColor: Colors.transparent,
-      builder: (context) => JobMatchingFeedbackModal(
-        driverName: driver.name,
-        transporterName: _transporterName,
-        onSubmit: (callStatus, callFeedback, remarks, matchStatus) async {
-          // Update the job matching call with feedback
-          await ManualCallJobMatchingHelper.updateJobMatchingCall(
-            context: context,
-            id: callId,
-            callStatus: callStatus,
-            callFeedback: callFeedback,
-            callRemarks: remarks,
-            matchStatus: matchStatus,
-            driverName: driver.name,
-            transporterName: _transporterName,
-          );
+      builder: (context) => CallFeedbackModal(
+        userType: 'driver',
+        userName: driver.name,
+        userTmid: driver.driverTmid,
+        jobId: widget.jobId,
+        onSubmit: (feedback, matchStatus, notes) {
+          // This is required but won't be called since we use onSubmitWithRecording
+        },
+        onSubmitWithRecording: (feedback, matchStatus, notes, recordingFile) async {
+          try {
+            // Extract call_status from feedback string
+            String callStatus = 'not_connected'; // default
 
-          // Close modal
-          if (mounted) {
-            Navigator.of(context).pop();
+            // Check for category prefix in feedback
+            // IMPORTANT: Check "Not Connected" BEFORE "Connected" because "not connected" contains "connected"
+            if (feedback.startsWith('Not Connected:') ||
+                feedback.toLowerCase().contains('not connected:')) {
+              callStatus = 'not_connected';
+            } else if (feedback.startsWith('Call Back Later:') ||
+                feedback.toLowerCase().contains('call back later:')) {
+              callStatus = 'callback_later';
+            } else if (feedback.startsWith('Connected:') ||
+                feedback.toLowerCase().contains('connected:')) {
+              callStatus = 'connected';
+            } else {
+              // Fallback: check if feedback matches known options
+              final connectedOptions = [
+                'Driver Interested',
+                'Driver Not Interested',
+                'Driver Already Booked / Busy',
+                'Driver Does Not Work on That Route',
+                'Driver Rate Mismatch',
+                'Vehicle Not Available',
+                'Vehicle Type Not Matching',
+                'Driver Wants More Details',
+                'Driver Wants to Speak to Transporter',
+                'Driver Wants Call Back Later',
+                'Driver Requested Callback on WhatsApp',
+                'Interview Done',
+              ];
+              final notConnectedOptions = [
+                'Ringing – No Answer',
+                'Switched Off',
+                'Not Reachable',
+                'Call Disconnected',
+                'Number Busy',
+                'Wrong Number',
+                'Third Person Received – Asked to Call Later',
+              ];
+              final callBackOptions = [
+                'Busy Right Now',
+                'Call Tomorrow Morning',
+                'Call in Evening',
+                'Call After 2 Days',
+              ];
+
+              if (connectedOptions.any(
+                (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+              )) {
+                callStatus = 'connected';
+              } else if (notConnectedOptions.any(
+                (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+              )) {
+                callStatus = 'not_connected';
+              } else if (callBackOptions.any(
+                (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+              )) {
+                callStatus = 'callback_later';
+              }
+            }
+
+            // Extract just the option name (e.g., "Driver Interested" from "Connected: Driver Interested")
+            String callFeedback = feedback;
+            if (feedback.contains(':')) {
+              callFeedback = feedback.split(':').last.trim();
+            }
+
+            // Update the job matching call with feedback and recording
+            await ManualCallJobMatchingHelper.updateJobMatchingCall(
+              context: context,
+              id: callId,
+              callStatus: callStatus,
+              callFeedback: callFeedback,
+              callRemarks: notes,
+              matchStatus: matchStatus,
+              driverName: driver.name,
+              transporterName: _transporterName,
+              callRecording: recordingFile,
+            );
+
+            // Close modal
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+
+            // Refresh the applicants list
+            _loadApplicants();
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           }
-
-          // Refresh the applicants list
-          _loadApplicants();
         },
       ),
     );

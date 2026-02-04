@@ -8,7 +8,7 @@ class ApiConfig {
   // static const String publicUrl = 'http://$serverIp/TMemployeeApp/public';
 
   // PRODUCTION: Plesk Server (Active)
-  static const String domain = 'development.truckmitr.com';
+  static const String domain = 'truckmitr.com';
   static const String baseUrl = 'https://$domain/truckmitr-app/api';
   static const String serverIp = domain;
   static const String publicUrl = 'https://$domain/public';

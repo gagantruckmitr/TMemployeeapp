@@ -15,6 +15,14 @@ class CallFeedbackModal extends StatefulWidget {
   final String? jobId;
   final bool showRecordingUpload; // Show/hide the recording upload section
   final Function(String feedback, String matchStatus, String notes) onSubmit;
+  // Optional: callback that also passes the recording file (for job matching)
+  final Function(
+    String feedback,
+    String matchStatus,
+    String notes,
+    File? recordingFile,
+  )?
+  onSubmitWithRecording;
 
   const CallFeedbackModal({
     super.key,
@@ -26,6 +34,7 @@ class CallFeedbackModal extends StatefulWidget {
     this.showRecordingUpload =
         true, // Default to true for backward compatibility
     required this.onSubmit,
+    this.onSubmitWithRecording,
   });
 
   @override
@@ -176,12 +185,33 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
         properFeedback = '$_selectedFeedbackCategory: $_selectedFeedback';
       }
 
-      // First submit feedback to create/update the call log entry
-      widget.onSubmit(
-        properFeedback,
-        _selectedMatchStatus ?? '',
-        _notesController.text,
+      // Debug: Log recording file state
+      print('📎 CallFeedbackModal _submitFeedback:');
+      print(
+        '   _selectedRecordingFile: ${_selectedRecordingFile?.path ?? "null"}',
       );
+      print('   _selectedRecordingName: $_selectedRecordingName');
+      print(
+        '   onSubmitWithRecording provided: ${widget.onSubmitWithRecording != null}',
+      );
+
+      // If onSubmitWithRecording is provided, use it to pass the recording file
+      if (widget.onSubmitWithRecording != null) {
+        print('   → Calling onSubmitWithRecording with recording file');
+        widget.onSubmitWithRecording!(
+          properFeedback,
+          _selectedMatchStatus ?? '',
+          _notesController.text,
+          _selectedRecordingFile,
+        );
+      } else {
+        // First submit feedback to create/update the call log entry
+        widget.onSubmit(
+          properFeedback,
+          _selectedMatchStatus ?? '',
+          _notesController.text,
+        );
+      }
 
       // Wait a moment for the feedback to be saved
       await Future.delayed(const Duration(milliseconds: 500));

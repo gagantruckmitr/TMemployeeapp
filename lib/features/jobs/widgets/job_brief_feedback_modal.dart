@@ -9,6 +9,8 @@ import '../../../models/job_model.dart';
 import '../../../core/services/phase2_api_service.dart';
 import '../../../core/services/phase2_auth_service.dart';
 
+import '../../../core/services/manual_call_service.dart';
+
 void showJobBriefFeedbackModal({
   required BuildContext context,
   required JobModel job,
@@ -18,27 +20,22 @@ void showJobBriefFeedbackModal({
   String? preSelectedCallStatus,
   String? preSelectedCallFeedback,
   String? preSelectedRemarks,
+  bool isManualCall = false,
 }) {
   print('🔵 showJobBriefFeedbackModal called');
   print('🔵 Job ID: ${job.jobId}');
   print('🔵 Job Brief ID: $jobBriefId');
-  print('🔵 Hide Call Status Fields: $hideCallStatusFields');
-  print('🔵 Pre-selected Call Status: $preSelectedCallStatus');
-  print('🔵 Pre-selected Call Feedback: $preSelectedCallFeedback');
-  print('🔵 Pre-selected Remarks: $preSelectedRemarks');
-  
-  print('🔵 About to show modal bottom sheet');
-  
+  print('🔵 Is Manual Call: $isManualCall');
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    isDismissible: false, // Cannot dismiss by tapping outside
-    enableDrag: false, // Cannot drag to close
+    isDismissible: false,
+    enableDrag: false,
     backgroundColor: Colors.transparent,
     builder: (modalContext) {
-      print('🔵 Modal builder called');
       return PopScope(
-        canPop: false, // Cannot close with back button
+        canPop: false,
         child: JobBriefFeedbackModal(
           job: job,
           jobBriefId: jobBriefId,
@@ -47,12 +44,11 @@ void showJobBriefFeedbackModal({
           preSelectedCallStatus: preSelectedCallStatus,
           preSelectedCallFeedback: preSelectedCallFeedback,
           preSelectedRemarks: preSelectedRemarks,
+          isManualCall: isManualCall,
         ),
       );
     },
   );
-  
-  print('🔵 showModalBottomSheet called');
 }
 
 class JobBriefFeedbackModal extends StatefulWidget {
@@ -63,6 +59,7 @@ class JobBriefFeedbackModal extends StatefulWidget {
   final String? preSelectedCallStatus;
   final String? preSelectedCallFeedback;
   final String? preSelectedRemarks;
+  final bool isManualCall;
 
   const JobBriefFeedbackModal({
     super.key,
@@ -73,6 +70,7 @@ class JobBriefFeedbackModal extends StatefulWidget {
     this.preSelectedCallStatus,
     this.preSelectedCallFeedback,
     this.preSelectedRemarks,
+    this.isManualCall = false,
   });
 
   @override
@@ -99,15 +97,19 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
 
   String _esiPf = 'Yes';
   String _rehneKiSuvidha = 'No';
-  String _fastTagRoadKharcha = 'Company'; // Will convert to 0/1 when sending
+  String _fastTagRoadKharcha = 'Company';
   String _callStatus = 'connected';
   String _callFeedback = 'Match Making Done';
   final _callRemarksController = TextEditingController();
 
-  // Call status options (enum values)
-  final List<String> _callStatusOptions = ['connected', 'not_connected','callback_later'];
-  
-  // Call feedback options based on call status
+  // Call status options
+  final List<String> _callStatusOptions = [
+    'connected',
+    'not_connected',
+    'callback_later',
+  ];
+
+  // Call feedback options
   final Map<String, List<String>> _callFeedbackOptions = {
     'connected': [
       'Match Making Done',
@@ -124,46 +126,35 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
       'Switched Off / Not Reachable',
       'Wrong Number',
     ],
-    'callback_later':[
+    'callback_later': [
       'Busy Right Now',
       'Call Tomorrow Morning',
       'Call in Evening',
       'Call After 2 Days',
-    ]
+    ],
   };
 
-  // Recording upload
   File? _selectedRecordingFile;
   String? _selectedRecordingName;
 
   @override
   void initState() {
     super.initState();
-    print('🔵 JobBriefFeedbackModal initState called');
-    print('🔵 Job ID: ${widget.job.jobId}');
-    print('🔵 Job Brief ID: ${widget.jobBriefId}');
-    print('🔵 Hide Call Status Fields: ${widget.hideCallStatusFields}');
-    
-    // Pre-fill with job data
     _nameController.text = widget.job.transporterName;
     _jobLocationController.text = widget.job.jobLocation;
     _vehicleTypeController.text = widget.job.vehicleType;
     _licenseTypeController.text = widget.job.typeOfLicense;
     _experienceController.text = widget.job.requiredExperience;
-    
-    // Use pre-selected call status if provided
+
     if (widget.preSelectedCallStatus != null) {
       _callStatus = widget.preSelectedCallStatus!;
-      print('🔵 Using pre-selected call status: $_callStatus');
     }
     if (widget.preSelectedCallFeedback != null) {
       _callFeedback = widget.preSelectedCallFeedback!;
-      print('🔵 Using pre-selected call feedback: $_callFeedback');
     }
-    // Use pre-selected remarks if provided
-    if (widget.preSelectedRemarks != null && widget.preSelectedRemarks!.isNotEmpty) {
+    if (widget.preSelectedRemarks != null &&
+        widget.preSelectedRemarks!.isNotEmpty) {
       _callRemarksController.text = widget.preSelectedRemarks!;
-      print('🔵 Using pre-selected remarks: ${widget.preSelectedRemarks}');
     }
   }
 
@@ -199,7 +190,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
           'wma',
           'amr',
           'opus',
-          '3gp'
+          '3gp',
         ],
         allowMultiple: false,
       );
@@ -222,8 +213,6 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
     }
   }
 
-
-
   Future<void> _submitFeedback() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -231,45 +220,82 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
 
     try {
       String? recordingUrl;
-      
-      // First, upload recording if selected
-      if (_selectedRecordingFile != null) {
+
+      // Upload recording if present (legacy flow or manual flow fallback)
+      if (_selectedRecordingFile != null && !widget.isManualCall) {
+        // ... existing upload logic omitted for brevity, keeping manual flow logic separate ...
         try {
           final callerId = await Phase2AuthService.getUserId();
-          
           var request = http.MultipartRequest(
             'POST',
             Uri.parse(
-                '${ApiConfig.baseUrl}/phase2_upload_transporter_recording_api.php'),
+              '${ApiConfig.baseUrl}/phase2_upload_transporter_recording_api.php',
+            ),
           );
-
-          request.files.add(await http.MultipartFile.fromPath(
-            'recording',
-            _selectedRecordingFile!.path,
-          ));
-
+          request.files.add(
+            await http.MultipartFile.fromPath(
+              'recording',
+              _selectedRecordingFile!.path,
+            ),
+          );
           request.fields['job_id'] = widget.job.jobId;
           request.fields['caller_id'] = callerId.toString();
           request.fields['transporter_tmid'] = widget.job.transporterTmid;
-
           final streamedResponse = await request.send();
           final response = await http.Response.fromStream(streamedResponse);
-
           if (response.statusCode == 200) {
             final responseData = json.decode(response.body);
-            if (responseData['success'] == true && responseData['data'] != null) {
+            if (responseData['success'] == true &&
+                responseData['data'] != null) {
               recordingUrl = responseData['data']['url'];
             }
           }
         } catch (e) {
-          // Log error but continue with job brief submission
           print('Recording upload failed: $e');
         }
       }
 
-      // If jobBriefId is available, use the job brief update API
       String? successMessage;
-      if (widget.jobBriefId != null && widget.jobBriefId!.isNotEmpty) {
+
+      if (widget.isManualCall && widget.jobBriefId != null) {
+        // Use Manual Call Service
+        final result = await ManualCallService.updateJobBriefCall(
+          id: int.tryParse(widget.jobBriefId!) ?? 0,
+          name: _nameController.text,
+          jobLocation: _jobLocationController.text,
+          route: _routeController.text,
+          vehicleType: _vehicleTypeController.text,
+          licenseType: _licenseTypeController.text,
+          experience: _experienceController.text,
+          salaryFixed: _salaryFixedController.text,
+          salaryVariable: _salaryVariableController.text.isEmpty
+              ? '0'
+              : _salaryVariableController.text,
+          esiPf: _esiPf.toLowerCase(),
+          foodAllowance: int.tryParse(_foodAllowanceController.text) ?? 0,
+          tripIncentive: int.tryParse(_tripIncentiveController.text) ?? 0,
+          rehneKiSuvidha: _rehneKiSuvidha.toLowerCase(),
+          mileage: _mileageController.text,
+          fastTagRoadKharcha: _fastTagRoadKharcha == 'Company'
+              ? 0
+              : 1, // API expects int?
+          closedJob: 0,
+          callStatus: _callStatus == 'Connected'
+              ? 'connected'
+              : _callStatus, // normalize
+          callFeedback: _callFeedback,
+          callRemarks: _callRemarksController.text,
+          requiredDrivers: _requiredDriversController.text,
+          callRecording:
+              _selectedRecordingFile, // Manual service handles file directly
+        );
+
+        if (result['success'] == true || result['status'] == 'success') {
+          successMessage = 'Manual call job brief updated successfully';
+        } else {
+          throw Exception(result['error'] ?? 'Unknown error');
+        }
+      } else if (widget.jobBriefId != null && widget.jobBriefId!.isNotEmpty) {
         final response = await Phase2ApiService.updateIVRCallJobBriefFeedback(
           jobBriefId: widget.jobBriefId!,
           name: _nameController.text,
@@ -293,7 +319,8 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
           callRemarks: _callRemarksController.text,
           requiredDrivers: _requiredDriversController.text,
         );
-        successMessage = response['message'] ?? 'Job brief updated successfully';
+        successMessage =
+            response['message'] ?? 'Job brief updated successfully';
       } else {
         // Then save job brief with recording URL (legacy method)
         await Phase2ApiService.saveJobBrief(
@@ -342,10 +369,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -376,7 +400,10 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
                     _buildTextField('Name', _nameController, required: true),
                     _buildTextField('Job Location', _jobLocationController),
                     _buildTextField('Route', _routeController, maxLines: 2),
-                    _buildTextField('Required Drivers', _requiredDriversController),
+                    _buildTextField(
+                      'Required Drivers',
+                      _requiredDriversController,
+                    ),
                   ]),
                   const SizedBox(height: 20),
                   _buildSection('Vehicle & License', [
@@ -386,54 +413,79 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
                   ]),
                   const SizedBox(height: 20),
                   _buildSection('Salary Details', [
-                    _buildTextField('Fixed Salary', _salaryFixedController,
-                        keyboardType: TextInputType.number, prefix: '₹'),
                     _buildTextField(
-                        'Variable Salary', _salaryVariableController,
-                        keyboardType: TextInputType.number, prefix: '₹'),
+                      'Fixed Salary',
+                      _salaryFixedController,
+                      keyboardType: TextInputType.number,
+                      prefix: '₹',
+                    ),
+                    _buildTextField(
+                      'Variable Salary',
+                      _salaryVariableController,
+                      keyboardType: TextInputType.number,
+                      prefix: '₹',
+                    ),
                   ]),
                   const SizedBox(height: 20),
                   _buildSection('Benefits & Allowances', [
-                    _buildDropdown('ESI/PF', _esiPf, ['Yes', 'No'],
-                        (val) => setState(() => _esiPf = val!)),
-                    _buildTextField('Food Allowance', _foodAllowanceController,
-                        keyboardType: TextInputType.number, prefix: '₹'),
-                    _buildTextField('Trip Incentive', _tripIncentiveController,
-                        keyboardType: TextInputType.number, prefix: '₹'),
+                    _buildDropdown('ESI/PF', _esiPf, [
+                      'Yes',
+                      'No',
+                    ], (val) => setState(() => _esiPf = val!)),
+                    _buildTextField(
+                      'Food Allowance',
+                      _foodAllowanceController,
+                      keyboardType: TextInputType.number,
+                      prefix: '₹',
+                    ),
+                    _buildTextField(
+                      'Trip Incentive',
+                      _tripIncentiveController,
+                      keyboardType: TextInputType.number,
+                      prefix: '₹',
+                    ),
                     _buildDropdown(
-                        'Rehne Ki Suvidha',
-                        _rehneKiSuvidha,
-                        ['Yes', 'No'],
-                        (val) => setState(() => _rehneKiSuvidha = val!)),
+                      'Rehne Ki Suvidha',
+                      _rehneKiSuvidha,
+                      ['Yes', 'No'],
+                      (val) => setState(() => _rehneKiSuvidha = val!),
+                    ),
                   ]),
                   const SizedBox(height: 20),
                   _buildSection('Other Details', [
                     _buildTextField('Mileage', _mileageController),
                     _buildDropdown(
-                        'FASTag/Road Kharcha',
-                        _fastTagRoadKharcha,
-                        ['Company', 'Driver'],
-                        (val) => setState(() => _fastTagRoadKharcha = val!)),
+                      'FASTag/Road Kharcha',
+                      _fastTagRoadKharcha,
+                      ['Company', 'Driver'],
+                      (val) => setState(() => _fastTagRoadKharcha = val!),
+                    ),
                   ]),
                   const SizedBox(height: 20),
                   // Only show call status fields if not hidden
                   if (!widget.hideCallStatusFields) ...[
                     _buildSection('Call Status & Feedback', [
                       _buildDropdown(
-                          'Call Status',
-                          _callStatus,
-                          _callStatusOptions,
-                          (val) => setState(() {
-                            _callStatus = val!;
-                            // Reset feedback when status changes
-                            _callFeedback = _callFeedbackOptions[val]!.first;
-                          })),
+                        'Call Status',
+                        _callStatus,
+                        _callStatusOptions,
+                        (val) => setState(() {
+                          _callStatus = val!;
+                          // Reset feedback when status changes
+                          _callFeedback = _callFeedbackOptions[val]!.first;
+                        }),
+                      ),
                       _buildDropdown(
-                          'Call Feedback',
-                          _callFeedback,
-                          _callFeedbackOptions[_callStatus]!,
-                          (val) => setState(() => _callFeedback = val!)),
-                      _buildTextField('Call Remarks', _callRemarksController, maxLines: 2),
+                        'Call Feedback',
+                        _callFeedback,
+                        _callFeedbackOptions[_callStatus]!,
+                        (val) => setState(() => _callFeedback = val!),
+                      ),
+                      _buildTextField(
+                        'Call Remarks',
+                        _callRemarksController,
+                        maxLines: 2,
+                      ),
                     ]),
                     const SizedBox(height: 20),
                   ],
@@ -566,9 +618,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
         decoration: InputDecoration(
           labelText: label + (required ? ' *' : ''),
           prefixText: prefix,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
           fillColor: Colors.grey.shade50,
         ),
@@ -591,9 +641,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
         value: value,
         decoration: InputDecoration(
           labelText: label,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
           fillColor: Colors.grey.shade50,
         ),
@@ -630,8 +678,11 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
               if (_selectedRecordingName != null) ...[
                 Row(
                   children: [
-                    const Icon(Icons.audiotrack,
-                        color: AppColors.primary, size: 20),
+                    const Icon(
+                      Icons.audiotrack,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -713,10 +764,7 @@ class _JobBriefFeedbackModalState extends State<JobBriefFeedbackModal> {
               )
             : const Text(
                 'Submit Feedback',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
       ),
     );
