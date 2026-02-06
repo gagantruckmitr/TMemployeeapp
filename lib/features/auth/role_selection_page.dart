@@ -169,6 +169,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Icon
                 Container(

@@ -9,7 +9,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/gestures.dart';
 import '../../services/margdarshak_api_service.dart';
+import '../t&c_privacy_policy/index.dart';
 
 class AddShopScreen extends StatefulWidget {
   final Map<String, dynamic>? editData;
@@ -149,14 +151,7 @@ class _AddShopScreenState extends State<AddShopScreen>
 
   // Photo Categories
   String _selectedPhotoCategory = 'Exterior';
-  final List<String> _photoCategories = [
-    'Exterior',
-    'Interior',
-    'Kitchen',
-    'Food Items',
-    'Parking Area',
-    'Facilities',
-  ];
+  final List<String> _photoCategories = ['Exterior'];
 
   // Puncture Shop Specific Variables
   int? _punctureUserId; // User ID from OTP verification
@@ -179,13 +174,7 @@ class _AddShopScreenState extends State<AddShopScreen>
   bool _mobileService = false;
 
   // Puncture Photo Categories
-  final List<String> _puncturePhotoCategories = [
-    'Front View',
-    'Inside View',
-    'Equipment',
-    'Service Area',
-    'Signboard',
-  ];
+  final List<String> _puncturePhotoCategories = ['Exterior'];
 
   @override
   void initState() {
@@ -374,9 +363,11 @@ class _AddShopScreenState extends State<AddShopScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text(
-          'Add Dhaba Partner',
-          style: TextStyle(
+        title: Text(
+          _selectedShopType == 'puncture'
+              ? 'Add Puncture Shop Partner'
+              : 'Add Dhaba Partner',
+          style: const TextStyle(
             fontWeight: FontWeight.bold,
             color: Color(0xFF2D2D5F),
           ),
@@ -570,6 +561,90 @@ class _AddShopScreenState extends State<AddShopScreen>
                 .fadeIn(duration: 400.ms)
                 .scale(begin: const Offset(0.95, 0.95)),
           ],
+
+          // Consent Checkbox (Apple Style Card)
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04), // Subtle shadow
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+              border: Border.all(color: Colors.grey.shade100),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: Checkbox(
+                    value: _consentGiven,
+                    activeColor: const Color(0xFF34C759), // Apple Green
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6), // Softer corners
+                    ),
+                    side: BorderSide(color: Colors.grey.shade400, width: 1.5),
+                    onChanged: (value) {
+                      setState(() {
+                        _consentGiven = value ?? false;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      text: 'I agree to the ',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Color(0xFF1C1C1E),
+                        height: 1.4,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: 'Terms and Conditions',
+                          style: const TextStyle(
+                            color: Color(0xFF007AFF), // Apple Blue
+                            fontWeight: FontWeight.w600,
+                          ),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () {
+                              TermsPolicyService.showTermsAndConditions(
+                                context,
+                              );
+                            },
+                        ),
+                        const TextSpan(text: ' and '),
+                        TextSpan(
+                          text: 'Privacy Policy',
+                          style: const TextStyle(
+                            color: Color(0xFF007AFF),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () {
+                              TermsPolicyService.showPrivacyPolicy(context);
+                            },
+                        ),
+                        const TextSpan(
+                          text:
+                              ', and verify that valid consent has been obtained.',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1, end: 0),
 
           const SizedBox(height: 32),
         ],
@@ -1699,26 +1774,26 @@ class _AddShopScreenState extends State<AddShopScreen>
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                          // Close Button
-                          Positioned(
-                            right: 16,
-                            top: 12,
-                            child: GestureDetector(
-                              onTap: () => Navigator.pop(modalContext),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 20,
-                                  color: Colors.black54,
-                                ),
-                              ),
-                            ),
-                          ),
+                          //     // Close Button
+                          // Positioned(
+                          //   right: 16,
+                          //   top: 8,
+                          //   child: GestureDetector(
+                          //     onTap: () => Navigator.pop(modalContext),
+                          //     child: Container(
+                          //       padding: const EdgeInsets.all(8),
+                          //       decoration: BoxDecoration(
+                          //         color: Colors.grey.shade100,
+                          //         shape: BoxShape.circle,
+                          //       ),
+                          //       child: const Icon(
+                          //         Icons.close,
+                          //         size: 20,
+                          //         color: Colors.black54,
+                          //       ),
+                          //     ),
+                          //   ),
+                          // ),
                         ],
                       ),
                       Padding(
@@ -2699,28 +2774,69 @@ class _AddShopScreenState extends State<AddShopScreen>
   }
 
   Widget _buildTimeCard(String label, String time, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: const Color(0xFFFF9500), size: 24),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey.shade600,
           ),
-          const SizedBox(height: 4),
-          Text(
-            time,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
           ),
-        ],
-      ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: icon == Icons.wb_sunny_rounded
+                    ? Colors.amber
+                    : Colors.indigoAccent,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  time,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1C1C1E),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  Icons.expand_more_rounded,
+                  color: Colors.grey.shade600,
+                  size: 18,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -2920,55 +3036,7 @@ class _AddShopScreenState extends State<AddShopScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildAppleStyleSectionTitle('Photo Category'),
-          const SizedBox(height: 14),
-
-          SizedBox(
-            height: 46,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _photoCategories.length,
-              itemBuilder: (context, index) {
-                final cat = _photoCategories[index];
-                final isSelected = _selectedPhotoCategory == cat;
-                return GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    setState(() => _selectedPhotoCategory = cat);
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 10),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFFFF9500)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFFFF9500)
-                            : Colors.grey.shade300,
-                      ),
-                    ),
-                    child: Text(
-                      cat,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          _buildAppleStyleSectionTitle('Uploaded Photos'),
+          _buildAppleStyleSectionTitle('Shop Photos (Max 7)'),
           const SizedBox(height: 14),
 
           SizedBox(
@@ -3152,6 +3220,47 @@ class _AddShopScreenState extends State<AddShopScreen>
           _buildAppleStyleSectionTitle('Engagement Settings'),
           const SizedBox(height: 14),
 
+          // Container(
+          //   decoration: BoxDecoration(
+          //     color: Colors.white,
+          //     borderRadius: BorderRadius.circular(16),
+          //     boxShadow: [
+          //       BoxShadow(
+          //         color: Colors.black.withValues(alpha: 0.06),
+          //         blurRadius: 20,
+          //         offset: const Offset(0, 4),
+          //       ),
+          //     ],
+          //   ),
+          //   padding: const EdgeInsets.all(16),
+          //   child: Column(
+          //     children: [
+          //       _buildFacilitySwitch(
+          //         'Allow Calls',
+          //         Icons.call_rounded,
+          //         _allowCall,
+          //         (v) => setState(() => _allowCall = v),
+          //       ),
+          //       _buildFacilitySwitch(
+          //         'Allow Messages',
+          //         Icons.message_rounded,
+          //         _allowMessages,
+          //         (v) => setState(() => _allowMessages = v),
+          //       ),
+          //       _buildFacilitySwitch(
+          //         'Allow Promotions',
+          //         Icons.campaign_rounded,
+          //         _allowPromotions,
+          //         (v) => setState(() => _allowPromotions = v),
+          //       ),
+          //     ],
+          //   ),
+          // ),
+          const SizedBox(height: 24),
+
+          // Photos Section
+          _buildAppleStyleSectionTitle('Shop Photos (${_shopImages.length})'),
+          const SizedBox(height: 14),
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -3165,73 +3274,52 @@ class _AddShopScreenState extends State<AddShopScreen>
               ],
             ),
             padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _buildFacilitySwitch(
-                  'Allow Calls',
-                  Icons.call_rounded,
-                  _allowCall,
-                  (v) => setState(() => _allowCall = v),
-                ),
-                _buildFacilitySwitch(
-                  'Allow Messages',
-                  Icons.message_rounded,
-                  _allowMessages,
-                  (v) => setState(() => _allowMessages = v),
-                ),
-                _buildFacilitySwitch(
-                  'Allow Promotions',
-                  Icons.campaign_rounded,
-                  _allowPromotions,
-                  (v) => setState(() => _allowPromotions = v),
-                ),
-              ],
-            ),
+            child: _shopImages.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.photo_library_outlined,
+                            size: 48,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No photos added',
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                        ),
+                    itemCount: _shopImages.length,
+                    itemBuilder: (context, index) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          _shopImages[index],
+                          fit: BoxFit.cover,
+                        ),
+                      );
+                    },
+                  ),
           ),
 
           const SizedBox(height: 24),
-
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.blue.shade200),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Checkbox(
-                  value: _consentGiven,
-                  onChanged: (v) => setState(() => _consentGiven = v ?? false),
-                  activeColor: const Color(0xFFE65100),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Terms & Data Consent',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'I confirm all information is accurate and consent to data processing.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
 
           const SizedBox(height: 32),
         ],
@@ -3753,8 +3841,8 @@ class _AddShopScreenState extends State<AddShopScreen>
                   (v) => setState(() => _valveRepair = v),
                 ),
                 _buildFacilitySwitch(
-                  'Mobile Service',
-                  Icons.phone_in_talk_rounded,
+                  'Mobility Service',
+                  Icons.directions_car_rounded,
                   _mobileService,
                   (v) => setState(() => _mobileService = v),
                 ),
@@ -3813,10 +3901,7 @@ class _AddShopScreenState extends State<AddShopScreen>
                       SizedBox(height: 4),
                       Text(
                         'Verify all details before submission',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white70,
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.white70),
                       ),
                     ],
                   ),
@@ -3858,7 +3943,10 @@ class _AddShopScreenState extends State<AddShopScreen>
                 ],
                 if (_yearEstablishedController.text.isNotEmpty) ...[
                   const Divider(height: 24),
-                  _buildSummaryRow('Established', _yearEstablishedController.text),
+                  _buildSummaryRow(
+                    'Established',
+                    _yearEstablishedController.text,
+                  ),
                 ],
               ],
             ),
@@ -3969,7 +4057,7 @@ class _AddShopScreenState extends State<AddShopScreen>
           const SizedBox(height: 16),
 
           // Photos Summary
-          _buildAppleStyleSectionTitle('Photos'),
+          _buildAppleStyleSectionTitle('Shop Photos (${_shopImages.length})'),
           const SizedBox(height: 14),
           Container(
             decoration: BoxDecoration(
@@ -3984,10 +4072,49 @@ class _AddShopScreenState extends State<AddShopScreen>
               ],
             ),
             padding: const EdgeInsets.all(16),
-            child: _buildSummaryRow(
-              'Total Photos',
-              '${_shopImages.length} uploaded',
-            ),
+            child: _shopImages.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.photo_library_outlined,
+                            size: 48,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No photos added',
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                        ),
+                    itemCount: _shopImages.length,
+                    itemBuilder: (context, index) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          _shopImages[index],
+                          fit: BoxFit.cover,
+                        ),
+                      );
+                    },
+                  ),
           ),
 
           const SizedBox(height: 24),
@@ -4089,11 +4216,7 @@ class _AddShopScreenState extends State<AddShopScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.check_circle,
-            color: Color(0xFF34C759),
-            size: 16,
-          ),
+          const Icon(Icons.check_circle, color: Color(0xFF34C759), size: 16),
           const SizedBox(width: 6),
           Text(
             label,
@@ -4116,7 +4239,7 @@ class _AddShopScreenState extends State<AddShopScreen>
   Widget _buildBottomNavigation() {
     // Check if phone is verified for Registration tab (index 0)
     final bool canProceedFromRegistration =
-        _tabController.index != 0 || _isPhoneVerified;
+        _tabController.index != 0 || (_isPhoneVerified && _consentGiven);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -4666,27 +4789,54 @@ class _AddShopScreenState extends State<AddShopScreen>
       context: context,
       initialTime: TimeOfDay.now(),
       builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: Color(0xFFE65100)),
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: Color(0xFFFF9500),
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Color(0xFF1C1C1E),
+              ),
+              timePickerTheme: TimePickerThemeData(
+                backgroundColor: Colors.white,
+                hourMinuteShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade300),
+                ),
+                dayPeriodShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+            child: child!,
           ),
-          child: child!,
         );
       },
     );
 
     if (picked != null) {
+      // Format to 12-hour format with AM/PM
+      final hour = picked.hourOfPeriod == 0 ? 12 : picked.hourOfPeriod;
+      final minute = picked.minute.toString().padLeft(2, '0');
+      final period = picked.period == DayPeriod.am ? 'AM' : 'PM';
+      final formattedTime = '$hour:$minute $period';
+
       setState(() {
-        _operatingHours[type] = picked.format(context);
+        _operatingHours[type] = formattedTime;
       });
     }
   }
 
   Future<void> _addPhoto() async {
-    if (_shopImages.length >= 6) {
+    if (_shopImages.length >= 7) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Maximum 6 photos allowed'),
+          content: Text('Maximum 7 photos allowed'),
           backgroundColor: Colors.orange,
         ),
       );

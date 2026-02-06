@@ -146,6 +146,11 @@ class ApiConfig {
   // Production IVR API - Click2Call
   static const String click2CallIvrApi = '$baseUrl/click2call_ivr_api.php';
 
+  // Privacy Policy & Terms and Conditions
+  static String get privacyPolicyApi => '$laravelApiBase/privacy-policy';
+  static String get termsAndConditionsApi =>
+      '$laravelApiBase/terms-and-conditions';
+
   // Timeout Configuration
   static const Duration timeout = Duration(seconds: 30);
   static const Duration shortTimeout = Duration(seconds: 10);
