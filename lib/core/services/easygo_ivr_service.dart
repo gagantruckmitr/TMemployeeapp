@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'real_auth_service.dart';
 
@@ -14,6 +16,37 @@ class EasyGoIVRService {
 
   static const Duration _timeout = Duration(seconds: 30);
   static const String _defaultDID = '8062982912';
+
+  /// Parse JSON error response body into message and optional data.
+  static Map<String, dynamic>? _parseErrorBody(String body) {
+    if (body.isEmpty) return null;
+    try {
+      final decoded = json.decode(body);
+      if (decoded is! Map) return null;
+      final message = decoded['message']?.toString();
+      if (message == null || message.isEmpty) return null;
+      return {
+        'message': message,
+        'data': decoded['data'],
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Build user-friendly error map for IVR failures.
+  static Map<String, dynamic> _errorResult(
+    String error, {
+    String? errorCode,
+    int? pendingCallHistoryId,
+  }) {
+    final result = <String, dynamic>{'success': false, 'error': error};
+    if (errorCode != null) result['error_code'] = errorCode;
+    if (pendingCallHistoryId != null) {
+      result['pending_call_history_id'] = pendingCallHistoryId;
+    }
+    return result;
+  }
 
   /// Fetch user mobile by user ID
   static Future<String?> getUserMobile(String userId) async {
@@ -137,20 +170,69 @@ class EasyGoIVRService {
             'reference_id': callId?.toString(),
           };
         } else {
-          return {
-            'success': false,
-            'error': data['message'] ?? 'Failed to initiate call',
-          };
+          final msg = data['message']?.toString() ?? 'Failed to initiate call';
+          return _errorResult(msg);
         }
-      } else {
-        return {
-          'success': false,
-          'error': 'HTTP ${response.statusCode}: ${response.body}',
-        };
       }
-    } catch (e) {
+
+      // Non-success HTTP: parse body for user-friendly message
+      final parsed = _parseErrorBody(response.body);
+      final apiMessage = parsed?['message'];
+      final apiData = parsed?['data'];
+
+      if (response.statusCode == 422 && apiMessage != null) {
+        // Pending feedback: "Please submit feedback for the previous call before initiating a new call."
+        final pendingId = apiData is Map
+            ? (apiData['pending_call_history_id'] as num?)?.toInt()
+            : null;
+        print(
+          '❌ IVR 422: Pending feedback required. pending_call_history_id: $pendingId',
+        );
+        return _errorResult(
+          apiMessage.trim().isEmpty
+              ? 'Please submit feedback for the previous call before initiating a new call.'
+              : apiMessage,
+          errorCode: 'PENDING_FEEDBACK',
+          pendingCallHistoryId: pendingId,
+        );
+      }
+
+      if (parsed != null && apiMessage != null && apiMessage.isNotEmpty) {
+        return _errorResult(apiMessage);
+      }
+
+      // Fallback by status code
+      final fallback = response.statusCode >= 500
+          ? 'Server error. Please try again later.'
+          : response.statusCode == 408
+              ? 'Request timed out. Please try again.'
+              : response.statusCode == 401
+                  ? 'Session expired. Please log in again.'
+                  : 'Request failed (${response.statusCode}). Please try again.';
+      return _errorResult(fallback);
+    } on TimeoutException catch (e) {
+      print('❌ IVR initiateCall timeout: $e');
+      return _errorResult(
+        'Request timed out. Please check your connection and try again.',
+        errorCode: 'TIMEOUT',
+      );
+    } on SocketException catch (e) {
+      print('❌ IVR initiateCall network: $e');
+      return _errorResult(
+        'No internet connection. Please check your network and try again.',
+        errorCode: 'NETWORK',
+      );
+    } catch (e, stack) {
       print('❌ Exception in Live IVR initiateCall: $e');
-      return {'success': false, 'error': 'Connection error: $e'};
+      print('Stack: $stack');
+      final msg = e.toString();
+      return _errorResult(
+        msg.contains('SocketException') || msg.contains('Failed host lookup')
+            ? 'No internet connection. Please try again.'
+            : msg.contains('TimeoutException') || msg.contains('timed out')
+                ? 'Request timed out. Please try again.'
+                : 'Something went wrong. Please try again.',
+      );
     }
   }
 
@@ -217,20 +299,90 @@ class EasyGoIVRService {
           print('✅ Job matching call initiated. Match ID: $matchId');
           return {'success': true, 'match_id': matchId, 'data': data};
         } else {
-          return {
-            'success': false,
-            'error': data['message'] ?? 'Failed to initiate job matching call',
-          };
+          final msg = data['message']?.toString() ??
+              'Failed to initiate job matching call';
+          return _errorResult(msg);
         }
-      } else {
-        return {
-          'success': false,
-          'error': 'HTTP ${response.statusCode}: ${response.body}',
-        };
       }
-    } catch (e) {
+
+      // Parse error body for user-friendly message
+      Map<String, dynamic>? decoded;
+      try {
+        decoded = json.decode(response.body) as Map<String, dynamic>?;
+      } catch (_) {
+        decoded = null;
+      }
+
+      final apiMessage = decoded?['message']?.toString();
+      final easygoErrorRaw = decoded?['easygo_error']?.toString();
+
+      // 500 with "Job saved but IVR failed" and easygo "Token Expired"
+      if (response.statusCode == 500 &&
+          (apiMessage != null || easygoErrorRaw != null)) {
+        String? easygoMsg;
+        int? easygoCode;
+        if (easygoErrorRaw != null && easygoErrorRaw.isNotEmpty) {
+          try {
+            final easygo = json.decode(easygoErrorRaw) as Map?;
+            if (easygo != null) {
+              easygoMsg = easygo['msg']?.toString();
+              easygoCode = (easygo['code'] as num?)?.toInt();
+            }
+          } catch (_) {}
+        }
+
+        final isTokenExpired = easygoCode == 408 ||
+            (easygoMsg?.toLowerCase().contains('token expired') ?? false);
+        final jobSaved = apiMessage?.toLowerCase().contains('job saved') ?? false;
+
+        if (isTokenExpired) {
+          print('❌ Job Matching IVR: EasyGo token expired (408)');
+          final userMsg = jobSaved
+              ? 'IVR session expired. Your job was saved. Please try again in a moment or log in again.'
+              : 'IVR session expired. Please try again or log in again.';
+          return _errorResult(userMsg, errorCode: 'EASYGO_TOKEN_EXPIRED');
+        }
+
+        if (apiMessage != null && apiMessage.isNotEmpty) {
+          return _errorResult(apiMessage);
+        }
+      }
+
+      if (apiMessage != null && apiMessage.isNotEmpty) {
+        return _errorResult(apiMessage);
+      }
+
+      final fallback = response.statusCode >= 500
+          ? 'Server error. Please try again later.'
+          : response.statusCode == 408
+              ? 'Request timed out. Please try again.'
+              : response.statusCode == 401
+                  ? 'Session expired. Please log in again.'
+                  : 'Request failed (${response.statusCode}). Please try again.';
+      return _errorResult(fallback);
+    } on TimeoutException catch (e) {
+      print('❌ Job Matching IVR timeout: $e');
+      return _errorResult(
+        'Request timed out. Please check your connection and try again.',
+        errorCode: 'TIMEOUT',
+      );
+    } on SocketException catch (e) {
+      print('❌ Job Matching IVR network: $e');
+      return _errorResult(
+        'No internet connection. Please check your network and try again.',
+        errorCode: 'NETWORK',
+      );
+    } catch (e, stack) {
       print('❌ Exception in initiateJobMatchingCall: $e');
-      return {'success': false, 'error': 'Connection error: $e'};
+      print('Stack: $stack');
+      final msg = e.toString();
+      return _errorResult(
+        msg.contains('SocketException') || msg.contains('Failed host lookup')
+            ? 'No internet connection. Please try again.'
+            : msg.contains('TimeoutException') || msg.contains('timed out')
+                ? 'Request timed out. Please try again.'
+                : 'Something went wrong. Please try again.',
+      );
     }
   }
 
@@ -245,7 +397,7 @@ class EasyGoIVRService {
     try {
       final token = await RealAuthService.instance.getAuthToken();
       if (token == null) {
-        return {'success': false, 'error': 'No auth token'};
+        return _errorResult('Session expired. Please log in again.');
       }
 
       final requestBody = <String, dynamic>{
@@ -313,16 +465,38 @@ class EasyGoIVRService {
           print('❌ API rejected update: $errorMsg');
           return {'success': false, 'error': errorMsg, 'data': data};
         }
-      } else {
-        print('❌ HTTP Error: ${response.statusCode} - ${response.body}');
-        return {
-          'success': false,
-          'error': 'HTTP ${response.statusCode}: ${response.body}',
-        };
       }
-    } catch (e) {
+
+      final parsed = _parseErrorBody(response.body);
+      final apiMessage = parsed?['message'];
+      final errorMsg = apiMessage != null && apiMessage.isNotEmpty
+          ? apiMessage
+          : 'Request failed (${response.statusCode}). Please try again.';
+      print('❌ HTTP Error: ${response.statusCode} - $errorMsg');
+      return _errorResult(errorMsg);
+    } on TimeoutException catch (e) {
+      print('❌ Update call timeout: $e');
+      return _errorResult(
+        'Request timed out. Please try again.',
+        errorCode: 'TIMEOUT',
+      );
+    } on SocketException catch (e) {
+      print('❌ Update call network: $e');
+      return _errorResult(
+        'No internet connection. Please try again.',
+        errorCode: 'NETWORK',
+      );
+    } catch (e, stack) {
       print('❌ Failed to update call: $e');
-      return {'success': false, 'error': e.toString()};
+      print('Stack: $stack');
+      final msg = e.toString();
+      return _errorResult(
+        msg.contains('SocketException') || msg.contains('Failed host lookup')
+            ? 'No internet connection. Please try again.'
+            : msg.contains('TimeoutException') || msg.contains('timed out')
+                ? 'Request timed out. Please try again.'
+                : msg,
+      );
     }
   }
 }
