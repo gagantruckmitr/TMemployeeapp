@@ -9,12 +9,14 @@ import '../../../core/services/phase2_auth_service.dart';
 import '../../../models/job_model.dart';
 import '../../../widgets/profile_completion_avatar.dart';
 import '../job_applicants_screen.dart';
+import '../../calls/widgets/call_feedback_modal.dart';
 import 'job_brief_feedback_modal.dart';
 import 'job_call_status_selection_modal.dart';
 import '../../telecaller/widgets/call_type_selection_dialog.dart';
 import '../../telecaller/widgets/easygo_ivr_call_helper.dart';
 import '../../../core/services/manual_call_service.dart';
 import '../../../core/services/phase2_api_service.dart';
+import '../../../core/services/concall_services.dart';
 
 class ModernJobCard extends StatefulWidget {
   final JobModel job;
@@ -118,6 +120,149 @@ class _ModernJobCardState extends State<ModernJobCard> {
     } catch (e) {
       return 'N/A';
     }
+  }
+
+  Future<void> _initiateConCallFirst(String phone) async {
+    if (phone.isEmpty) return;
+
+    if (!_isAssignedToMe) return;
+
+    try {
+      final user = await Phase2AuthService.getCurrentUser();
+      if (user == null || !mounted) return;
+
+      await ConCallService.instance.handleConCallTap(
+        context: context,
+        jobId: widget.job.jobId,
+        phoneExten: user.mobile,
+        targetPhone: phone,
+        assignedTo: widget.job.assignedTo ?? user.id,
+        isDriverCall: false,
+        transporterTmid: widget.job.transporterTmid,
+        transporterUserId: int.tryParse(widget.job.transporterId) ?? 0,
+        transporterName: widget.job.transporterName,
+        onShowFeedback: (matchId) {
+          if (mounted) {
+            _showConCallFeedbackModalWithId(matchId);
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showConCallFeedbackModalWithId(String? matchId) {
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CallFeedbackModal(
+        userType: 'transporter', // Job Card is for the associated Transporter
+        userName: widget.job.transporterName,
+        userTmid: widget.job.transporterTmid,
+        jobId: widget.job.jobId,
+        onSubmit: (feedback, matchStatus, notes) async {
+          try {
+            if (matchId != null && matchId.isNotEmpty) {
+              String callStatus = 'not_connected';
+
+              if (feedback.startsWith('Not Connected:') ||
+                  feedback.toLowerCase().contains('not connected:')) {
+                callStatus = 'not_connected';
+              } else if (feedback.startsWith('Call Back Later:') ||
+                  feedback.toLowerCase().contains('call back later:')) {
+                callStatus = 'callback_later';
+              } else if (feedback.startsWith('Connected:') ||
+                  feedback.toLowerCase().contains('connected:')) {
+                callStatus = 'connected';
+              } else {
+                final connectedOptions = [
+                  'Transporter Interested',
+                  'Transporter Not Interested',
+                  'Position Closed',
+                  'Transporter Rate Mismatch',
+                  'Vehicle Needed Immediately',
+                  'Transporter Wants Call Back Later',
+                ];
+                final notConnectedOptions = [
+                  'Ringing – No Answer',
+                  'Switched Off',
+                  'Not Reachable',
+                  'Call Disconnected',
+                  'Number Busy',
+                  'Wrong Number',
+                  'Third Person Received – Asked to Call Later',
+                ];
+                final callBackOptions = [
+                  'Busy Right Now',
+                  'Call Tomorrow Morning',
+                  'Call in Evening',
+                  'Call After 2 Days',
+                ];
+
+                if (connectedOptions.any(
+                  (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+                )) {
+                  callStatus = 'connected';
+                } else if (notConnectedOptions.any(
+                  (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+                )) {
+                  callStatus = 'not_connected';
+                } else if (callBackOptions.any(
+                  (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+                )) {
+                  callStatus = 'callback_later';
+                }
+              }
+
+              String callFeedback = feedback;
+              if (feedback.contains(':')) {
+                callFeedback = feedback.split(':').last.trim();
+              }
+
+              await Phase2ApiService.updateIVRConCallFeedback(
+                matchId: matchId,
+                callStatus: callStatus,
+                callFeedback: callFeedback,
+                callRemarks: notes,
+                matchStatus: matchStatus,
+              );
+            } else {
+              print('⚠️ No matchId available for ConCall feedback');
+            }
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Feedback saved successfully'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+              Navigator.pop(context); // Close modal
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
   }
 
   Future<void> _makePhoneCall(String phone) async {
@@ -926,6 +1071,46 @@ class _ModernJobCardState extends State<ModernJobCard> {
             child: Container(
               padding: const EdgeInsets.all(10),
               child: const Icon(Icons.call, color: Colors.white, size: 18),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Material(
+          color: _isAssignedToMe ? Colors.blue.shade600 : Colors.grey.shade400,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: _isAssignedToMe
+                ? () async {
+                    await _initiateConCallFirst(widget.job.transporterPhone);
+                  }
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'This job is assigned to another telecaller',
+                        ),
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              child: const Row(
+                children: [
+                  Icon(Icons.groups, color: Colors.white, size: 16),
+                  SizedBox(width: 4),
+                  Text(
+                    'ConCall',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

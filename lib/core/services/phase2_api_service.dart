@@ -88,18 +88,31 @@ class Phase2ApiService {
           case 'approved':
             // Exclude expired and closed jobs from approved section
             filteredJobs = allJobs
-                .where((job) => job.isApproved && !job.isExpiredByDeadline && !job.isClosed)
+                .where(
+                  (job) =>
+                      job.isApproved &&
+                      !job.isExpiredByDeadline &&
+                      !job.isClosed,
+                )
                 .toList();
             break;
           case 'active':
             filteredJobs = allJobs
-                .where((job) => job.isActive && !job.isExpiredByDeadline && !job.isClosed)
+                .where(
+                  (job) =>
+                      job.isActive && !job.isExpiredByDeadline && !job.isClosed,
+                )
                 .toList();
             break;
           case 'pending':
             // Exclude expired and closed jobs from pending section
             filteredJobs = allJobs
-                .where((job) => !job.isApproved && !job.isExpiredByDeadline && !job.isClosed)
+                .where(
+                  (job) =>
+                      !job.isApproved &&
+                      !job.isExpiredByDeadline &&
+                      !job.isClosed,
+                )
                 .toList();
             break;
           case 'inactive':
@@ -237,7 +250,9 @@ class Phase2ApiService {
         throw Exception('Authentication token not found');
       }
 
-      final uri = Uri.parse('${ApiConfig.driversApi}/$driverId/applied-jobs-with-assigned-to');
+      final uri = Uri.parse(
+        '${ApiConfig.driversApi}/$driverId/applied-jobs-with-assigned-to',
+      );
 
       print('=== FETCHING DRIVER DETAILED INFO ===');
       print('Driver ID: $driverId');
@@ -599,9 +614,7 @@ class Phase2ApiService {
         );
       }
 
-      print(
-        'URL: ${ApiConfig.laravelApiBase}/jobs/assigned-to/$callerId',
-      );
+      print('URL: ${ApiConfig.laravelApiBase}/jobs/assigned-to/$callerId');
 
       final uri = Uri.parse(
         '${ApiConfig.laravelApiBase}/jobs/assigned-to/$callerId',
@@ -855,9 +868,7 @@ class Phase2ApiService {
         );
       }
 
-      print(
-        'URL: ${ApiConfig.laravelApiBase}/jobs/assigned-to/$callerId',
-      );
+      print('URL: ${ApiConfig.laravelApiBase}/jobs/assigned-to/$callerId');
 
       final uri = Uri.parse(
         '${ApiConfig.laravelApiBase}/jobs/assigned-to/$callerId',
@@ -1268,9 +1279,7 @@ class Phase2ApiService {
         );
       }
 
-      print(
-        'URL: ${ApiConfig.laravelApiBase}/call-logs/assigned-to/$callerId',
-      );
+      print('URL: ${ApiConfig.laravelApiBase}/call-logs/assigned-to/$callerId');
 
       final response = await http.get(
         Uri.parse(
@@ -1411,9 +1420,7 @@ class Phase2ApiService {
         );
       }
 
-      print(
-        'URL: ${ApiConfig.laravelApiBase}/call-logs/assigned-to/$callerId',
-      );
+      print('URL: ${ApiConfig.laravelApiBase}/call-logs/assigned-to/$callerId');
 
       final response = await http.get(
         Uri.parse(
@@ -1900,9 +1907,7 @@ class Phase2ApiService {
       };
 
       print('=== UPDATE IVR CALL JOB MATCHING FEEDBACK API ===');
-      print(
-        'URL: ${ApiConfig.ivrCallUpdateJobMatchingApi}',
-      );
+      print('URL: ${ApiConfig.ivrCallUpdateJobMatchingApi}');
       print('Request Body: ${json.encode(requestBody)}');
 
       // Get auth token from RealAuthService
@@ -2270,7 +2275,210 @@ class Phase2ApiService {
     }
   }
 
-  // Helper method to format call_status to display format
+  // Initiate ConCall First Call
+  static Future<Map<String, dynamic>> initiateConCallFirst({
+    String? transporterTmid,
+    int? transporterUserId,
+    String? transporterName,
+    String? driverTmid,
+    int? driverUserId,
+    String? driverName,
+    required int assignedTo,
+    required String jobId,
+    required String exten,
+    required String number,
+    bool isDriverCall = false,
+  }) async {
+    try {
+      final token = await RealAuthService.instance.getAuthToken();
+      final uri = Uri.parse(ApiConfig.telecallerConCallApi);
+
+      final Map<String, dynamic> body = {
+        "assigned_to": assignedTo,
+        "job_id": jobId,
+        "exten": exten,
+        "number": number,
+      };
+
+      if (isDriverCall) {
+        body["unique_id_driver"] = driverTmid;
+        body["user_id_driver"] = driverUserId;
+        body["driver_name"] = driverName;
+      } else {
+        body["unique_id_transporter"] = transporterTmid;
+        body["user_id_transporter"] = transporterUserId;
+        body["transporter_name"] = transporterName;
+      }
+
+      print('📞 Initiating FIRST ConCall Request: $body');
+
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: json.encode(body),
+      );
+
+      print(
+        '📞 First ConCall Response (${response.statusCode}): ${response.body}',
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Server error: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('❌ Failed to initiate first concall: $e');
+      throw Exception('Failed to initiate first concall: $e');
+    }
+  }
+
+  // Initiate ConCall Second Call
+  static Future<Map<String, dynamic>> initiateConCallSecond({
+    required int matchId,
+    String? driverTmid,
+    int? driverUserId,
+    String? driverName,
+    String? transporterTmid,
+    int? transporterUserId,
+    String? transporterName,
+    required int assignedTo,
+    required String jobId,
+    required String exten,
+    required String number,
+    bool isTransporterCall = false,
+  }) async {
+    try {
+      final token = await RealAuthService.instance.getAuthToken();
+      final uri = Uri.parse(ApiConfig.telecallerConCallApi);
+
+      final Map<String, dynamic> body = {
+        "match_id": matchId,
+        "assigned_to": assignedTo,
+        "job_id": jobId,
+        "exten": exten,
+        "number": number,
+      };
+
+      if (isTransporterCall) {
+        body["unique_id_transporter"] = transporterTmid;
+        body["user_id_transporter"] = transporterUserId;
+        body["transporter_name"] = transporterName;
+      } else {
+        body["unique_id_driver"] = driverTmid;
+        body["user_id_driver"] = driverUserId;
+        body["driver_name"] = driverName;
+      }
+
+      print('📞 Initiating SECOND ConCall Request: $body');
+
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: json.encode(body),
+      );
+
+      print(
+        '📞 Second ConCall Response (${response.statusCode}): ${response.body}',
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Server error: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('❌ Failed to initiate second concall: $e');
+      throw Exception('Failed to initiate second concall: $e');
+    }
+  }
+
+  // Update IVR ConCall Feedback
+  static Future<Map<String, dynamic>> updateIVRConCallFeedback({
+    required String matchId,
+    required String callStatus,
+    required String callFeedback,
+    String? callRemarks,
+    String? matchStatus,
+  }) async {
+    try {
+      final requestBody = {
+        'id': matchId,
+        'call_status': callStatus,
+        'call_feedback': callFeedback,
+        'call_remarks': callRemarks ?? '',
+        'match_status': matchStatus ?? '',
+      };
+
+      print('=== UPDATE IVR CONCALL FEEDBACK API ===');
+      print('URL: ${ApiConfig.telecallerConCallFeedbackApi}');
+      print('Request Body: ${json.encode(requestBody)}');
+
+      String? authToken;
+      try {
+        authToken = await RealAuthService.instance.getAuthToken();
+      } catch (e) {
+        print('⚠️ Could not get auth token: $e');
+      }
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (authToken != null && authToken.isNotEmpty)
+          'Authorization': 'Bearer $authToken',
+      };
+
+      final response = await http.post(
+        Uri.parse(ApiConfig.telecallerConCallFeedbackApi),
+        headers: headers,
+        body: json.encode(requestBody),
+      );
+
+      print('Response Status: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+
+      if (response.statusCode >= 300 && response.statusCode < 400) {
+        throw Exception(
+          'Server returned redirect (${response.statusCode}). Please check auth token and request format.',
+        );
+      }
+
+      if (response.statusCode == 200) {
+        try {
+          final data = json.decode(response.body);
+          if (data['success'] == true || data['status'] == 'success') {
+            return data;
+          } else {
+            throw Exception(
+              data['message'] ?? 'Failed to update concall feedback',
+            );
+          }
+        } catch (e) {
+          throw Exception('Failed to parse response: $e');
+        }
+      } else {
+        throw Exception(
+          'Server error: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('✗ Exception in updateIVRConCallFeedback: $e');
+      throw Exception('Failed to update concall feedback: $e');
+    }
+  }
+
   static String _formatCallStatus(String callStatus) {
     switch (callStatus.toLowerCase()) {
       case 'connected':
@@ -2372,9 +2580,7 @@ class Phase2ApiService {
         throw Exception('Authentication token not found');
       }
 
-      final uri = Uri.parse(
-        '${ApiConfig.laravelApiBase}/driver-buckets',
-      );
+      final uri = Uri.parse('${ApiConfig.laravelApiBase}/driver-buckets');
 
       print('=== FETCHING DRIVER BUCKETS ===');
       print('URL: $uri');

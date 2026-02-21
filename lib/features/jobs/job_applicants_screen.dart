@@ -7,7 +7,8 @@ import '../../core/config/api_config.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
 import '../../models/driver_applicant_model.dart';
-import '../../widgets/profile_completion_avatar.dart';
+import '../../../widgets/profile_completion_avatar.dart';
+import '../../../core/services/concall_services.dart';
 import 'match_making_screen.dart';
 import '../calls/widgets/call_feedback_modal.dart';
 import '../telecaller/widgets/call_type_selection_dialog.dart';
@@ -46,6 +47,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
   // Job details for IVR call
   String _transporterTmid = '';
   String _transporterName = '';
+  String _transporterPhone = '';
   int _transporterUserId = 0;
   int _assignedTo = 0;
 
@@ -133,6 +135,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
       // Store transporter info for IVR calls
       _transporterTmid = job.transporterTmid;
       _transporterName = job.transporterName;
+      _transporterPhone = job.transporterPhone;
       _transporterUserId = int.tryParse(job.transporterId) ?? 0;
       _assignedTo = job.assignedTo ?? (await Phase2AuthService.getUserId());
 
@@ -924,6 +927,7 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
                     ),
                   ),
                 ),
+
                 const SizedBox(width: 8),
                 Material(
                   color: const Color(0xFF007AFF),
@@ -1265,10 +1269,10 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
                   const SizedBox(width: 8),
                   Expanded(
                     child: Material(
-                      color: Colors.purple.shade50,
+                      color: Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(10),
                       child: InkWell(
-                        onTap: () => _addToBucket(driver),
+                        onTap: () => _initiateConCall(driver),
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1278,18 +1282,18 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.inventory_2_outlined,
-                                color: Colors.purple.shade700,
+                                Icons.groups,
+                                color: Colors.blue.shade700,
                                 size: 16,
                               ),
                               const SizedBox(width: 6),
                               Flexible(
                                 child: Text(
-                                  'Bucket',
+                                  'ConCall',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.purple.shade700,
+                                    color: Colors.blue.shade700,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
@@ -1952,6 +1956,57 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
     );
   }
 
+  Future<void> _initiateConCall(DriverApplicant driver) async {
+    if (driver.mobile.isEmpty) return;
+
+    try {
+      final user = await Phase2AuthService.getCurrentUser();
+      if (user == null || !mounted) return;
+
+      final cleanTransporterPhone = _transporterPhone.replaceAll(
+        RegExp(r'[^\d]'),
+        '',
+      );
+      if (cleanTransporterPhone.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Transporter phone number not found')),
+          );
+        }
+        return;
+      }
+
+      await ConCallService.instance.handleConCallTap(
+        context: context,
+        jobId: widget.jobId,
+        phoneExten: user.mobile,
+        targetPhone: driver.mobile,
+        assignedTo: _assignedTo,
+        isDriverCall: true,
+        driverTmid: driver.driverTmid,
+        driverUserId: driver.driverId,
+        driverName: driver.name,
+        transporterTmid: _transporterTmid,
+        transporterUserId: _transporterUserId,
+        transporterName: _transporterName,
+        onShowFeedback: (matchId) {
+          if (mounted) {
+            _showConCallFeedbackModalWithMatchId(driver, matchId);
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _initiateCall(DriverApplicant driver) async {
     if (driver.mobile.isEmpty) return;
 
@@ -2022,6 +2077,144 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
 
   // Show job matching feedback modal for manual calls
   // Uses the same CallFeedbackModal as IVR calls for consistency
+  // Show feedback modal with match_id for ConCalls
+  // Uses API: ${ApiConfig.laravelApiBase}/ivr-concalls-update
+  void _showConCallFeedbackModalWithMatchId(
+    DriverApplicant driver,
+    String? matchId,
+  ) {
+    print(
+      '🔵 _showConCallFeedbackModalWithMatchId called with matchId: $matchId',
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CallFeedbackModal(
+        userType: 'driver',
+        userName: driver.name,
+        userTmid: driver.driverTmid,
+        jobId: widget.jobId,
+        onSubmit: (feedback, matchStatus, notes) async {
+          try {
+            if (matchId != null && matchId.isNotEmpty) {
+              print('🔵 Updating concall job matching with matchId: $matchId');
+
+              String callStatus = 'not_connected'; // default
+
+              if (feedback.startsWith('Not Connected:') ||
+                  feedback.toLowerCase().contains('not connected:')) {
+                callStatus = 'not_connected';
+              } else if (feedback.startsWith('Call Back Later:') ||
+                  feedback.toLowerCase().contains('call back later:')) {
+                callStatus = 'callback_later';
+              } else if (feedback.startsWith('Connected:') ||
+                  feedback.toLowerCase().contains('connected:')) {
+                callStatus = 'connected';
+              } else {
+                final connectedOptions = [
+                  'Driver Interested',
+                  'Driver Not Interested',
+                  'Driver Already Booked / Busy',
+                  'Driver Does Not Work on That Route',
+                  'Driver Rate Mismatch',
+                  'Vehicle Not Available',
+                  'Vehicle Type Not Matching',
+                  'Driver Wants More Details',
+                  'Driver Wants to Speak to Transporter',
+                  'Driver Wants Call Back Later',
+                  'Driver Requested Callback on WhatsApp',
+                  'Interview Done',
+                ];
+                final notConnectedOptions = [
+                  'Ringing – No Answer',
+                  'Switched Off',
+                  'Not Reachable',
+                  'Call Disconnected',
+                  'Number Busy',
+                  'Wrong Number',
+                  'Third Person Received – Asked to Call Later',
+                ];
+                final callBackOptions = [
+                  'Busy Right Now',
+                  'Call Tomorrow Morning',
+                  'Call in Evening',
+                  'Call After 2 Days',
+                ];
+
+                if (connectedOptions.any(
+                  (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+                )) {
+                  callStatus = 'connected';
+                } else if (notConnectedOptions.any(
+                  (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+                )) {
+                  callStatus = 'not_connected';
+                } else if (callBackOptions.any(
+                  (opt) => feedback.toLowerCase().contains(opt.toLowerCase()),
+                )) {
+                  callStatus = 'callback_later';
+                }
+              }
+
+              String callFeedback = feedback;
+              if (feedback.contains(':')) {
+                callFeedback = feedback.split(':').last.trim();
+              }
+
+              print('🔵 Extracted concall status: $callStatus');
+              print('🔵 Extracted concall feedback: $callFeedback');
+
+              await Phase2ApiService.updateIVRConCallFeedback(
+                matchId: matchId,
+                callStatus: callStatus,
+                callFeedback: callFeedback,
+                callRemarks: notes,
+                matchStatus: matchStatus,
+              );
+            } else {
+              print('⚠️ No matchId, using regular feedback save');
+              final callerId = await Phase2AuthService.getUserId();
+              await Phase2ApiService.saveCallFeedback(
+                callerId: callerId,
+                driverTmid: driver.driverTmid.isNotEmpty
+                    ? driver.driverTmid
+                    : null,
+                driverId: driver.driverId,
+                driverName: driver.name,
+                feedback: feedback,
+                matchStatus: matchStatus,
+                notes: notes,
+                jobId: widget.jobId,
+              );
+            }
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Feedback saved successfully'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+              Navigator.pop(context); // Close modal
+              _loadApplicants();
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
   void _showJobMatchingFeedbackModal(DriverApplicant driver, int callId) {
     showModalBottomSheet(
       context: context,

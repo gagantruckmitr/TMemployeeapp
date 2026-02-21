@@ -60,6 +60,9 @@ class ApiConfig {
   static const String ivrCallUpdateApi = '$laravelApiBase/ivr-call-update';
   static const String socialMediaIvrCallApi =
       '$laravelApiBase/social-media-ivr-call';
+  static const String telecallerConCallApi = '$laravelApiBase/ivr-concalls';
+  static const String telecallerConCallFeedbackApi =
+      '$laravelApiBase/ivr-concalls-update';
 
   // Email Configuration
   static const String hrEmail = 'hr@$domain';
