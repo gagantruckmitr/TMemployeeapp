@@ -132,7 +132,7 @@ class ApiConfig {
   static bool get isLocalhost =>
       serverIp == 'localhost' || serverIp == '127.0.0.1';
 
-  // Helper method to get current configuration info
+  // Helper method to get current configuration infop
   static Map<String, String> get configInfo => {
     'Server IP': serverIp,
     'Base URL': baseUrl,

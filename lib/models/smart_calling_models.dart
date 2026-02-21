@@ -416,9 +416,22 @@ class CallHistoryEntry {
       }
     }
 
-    // Try assigned_to mapping
+    // Try assigned_to field directly (can be string name or int ID)
     if (telecallerName == null || telecallerName.isEmpty) {
-      telecallerName = _getTelecallerName(json['assigned_to']);
+      final assignedTo = json['assigned_to'];
+      // Check if it's already a string name (not a number)
+      if (assignedTo is String && assignedTo.isNotEmpty) {
+        // If it's not a pure number, use it as the name
+        if (int.tryParse(assignedTo) == null) {
+          telecallerName = assignedTo;
+        } else {
+          // It's a numeric string, try mapping
+          telecallerName = _getTelecallerName(assignedTo);
+        }
+      } else if (assignedTo is int) {
+        // It's an integer ID, try mapping
+        telecallerName = _getTelecallerName(assignedTo);
+      }
     }
 
     // Try caller_id mapping
