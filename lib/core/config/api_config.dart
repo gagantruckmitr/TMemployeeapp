@@ -63,6 +63,7 @@ class ApiConfig {
   static const String telecallerConCallApi = '$laravelApiBase/ivr-concalls';
   static const String telecallerConCallFeedbackApi =
       '$laravelApiBase/ivr-concalls-update';
+  static const String conCallHistoryApi = '$laravelApiBase/concalls-history';
 
   // Email Configuration
   static const String hrEmail = 'hr@$domain';
@@ -124,6 +125,11 @@ class ApiConfig {
   // Helper method to get call logs assigned to URL
   static String getCallLogsAssignedToUrl(int callerId) {
     return '$laravelApiBase/call-logs/assigned-to/$callerId';
+  }
+
+  // Helper method to get con call history URL
+  static String getConCallHistoryUrl(int assignedTo) {
+    return '$laravelApiBase/concalls-history/assigned-to/$assignedTo';
   }
 
   // Helper method to get TaskSuite API URL with endpoint

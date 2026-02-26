@@ -638,6 +638,7 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
             case ConnectedFeedback.agreeForSubscriptionTomorrow:
             case ConnectedFeedback.alreadySubscribed:
             case ConnectedFeedback.readyForInterview:
+            case ConnectedFeedback.matchMakingDone:
               return CallbackStatus.interested;
             case ConnectedFeedback.neitherTransporterNorDriver:
             case ConnectedFeedback.transporterButRegisteredAsDriver:
@@ -651,6 +652,8 @@ class _CallbackRequestsScreenState extends State<CallbackRequestsScreen>
             case ConnectedFeedback.willSubscribeWhenNeedJob:
             case ConnectedFeedback.wantsToThink:
             case ConnectedFeedback.thirdPersonReceivedAskedToCallLater:
+            case ConnectedFeedback.transporterWillConfirmLater:
+            case ConnectedFeedback.driverWillConfirmLater:
               return CallbackStatus.futureProspects;
             case ConnectedFeedback.needsHelpInProfile:
             case ConnectedFeedback.doesntUnderstandApp:

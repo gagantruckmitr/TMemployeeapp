@@ -577,7 +577,7 @@ class _DashboardPageState extends State<DashboardPage>
                                 const SizedBox(height: 4),
                                 const Center(
                                   child: Text(
-                                    'V. 13',
+                                    'V. 15',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Color.fromARGB(255, 0, 0, 0),

@@ -207,6 +207,7 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
         case ConnectedFeedback.agreeForSubscriptionTomorrow:
         case ConnectedFeedback.alreadySubscribed:
         case ConnectedFeedback.readyForInterview:
+        case ConnectedFeedback.matchMakingDone:
           return Colors.green;
         case ConnectedFeedback.needsHelpInProfile:
         case ConnectedFeedback.doesntUnderstandApp:
@@ -219,6 +220,8 @@ class _CallFeedbackModalState extends State<CallFeedbackModal>
         case ConnectedFeedback.wantsToThink:
         case ConnectedFeedback.needLoad:
         case ConnectedFeedback.needJobUrgently:
+        case ConnectedFeedback.transporterWillConfirmLater:
+        case ConnectedFeedback.driverWillConfirmLater:
           return Colors.yellow.shade700;
         case ConnectedFeedback.neitherTransporterNorDriver:
         case ConnectedFeedback.transporterButRegisteredAsDriver:

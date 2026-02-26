@@ -193,6 +193,9 @@ class _ModernJobCardState extends State<ModernJobCard> {
                   'Transporter Rate Mismatch',
                   'Vehicle Needed Immediately',
                   'Transporter Wants Call Back Later',
+                  'Match Making Done',
+                  'Transporter will confirm later',
+                  'Driver will confirm later',
                 ];
                 final notConnectedOptions = [
                   'Ringing – No Answer',

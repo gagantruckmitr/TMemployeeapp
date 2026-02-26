@@ -36,6 +36,10 @@ enum ConnectedFeedback {
   thirdPersonReceivedAskedToCallLater(
     'Third Person Received – Asked to Call Later',
   ),
+  // ConCall specific options
+  matchMakingDone('Match Making Done'),
+  transporterWillConfirmLater('Transporter will confirm later'),
+  driverWillConfirmLater('Driver will confirm later'),
   others('Others');
 
   const ConnectedFeedback(this.displayName);

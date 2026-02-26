@@ -12,6 +12,7 @@ import '../widgets/driver_contact_card.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/ivr_call_waiting_overlay.dart';
 import '../widgets/call_feedback_modal.dart';
+import '../widgets/transporter_feedback_modal.dart';
 import '../widgets/manual_call_helper.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -550,79 +551,175 @@ class _BacklogScreenState extends State<BacklogScreen>
   }
 
   void _showFeedbackModal(DriverContact lead, {String? referenceId}) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      isDismissible: false,
-      enableDrag: false,
-      builder: (modalContext) => PopScope(
-        canPop: false,
-        child: CallFeedbackModal(
-          contact: lead,
-          referenceId: referenceId,
-          allowDismiss: false,
-          onFeedbackSubmitted: (feedback) async {
-            try {
-              final success = await _updateContactStatus(
-                lead,
-                feedback,
-                referenceId: referenceId,
-              );
+    // Show appropriate feedback modal based on role
+    if (lead.role == 'transporter') {
+      // Convert to TransporterContact for transporter feedback
+      final transporterContact = TransporterContact(
+        id: lead.id,
+        tmid: lead.tmid,
+        name: lead.name,
+        company: lead.company,
+        phoneNumber: lead.phoneNumber,
+        state: lead.state,
+        subscriptionStatus: lead.subscriptionStatus,
+        status: lead.status,
+        lastFeedback: lead.lastFeedback,
+        lastCallTime: lead.lastCallTime,
+        remarks: lead.remarks,
+        paymentInfo: lead.paymentInfo,
+        registrationDate: lead.registrationDate,
+        profileCompletion: lead.profileCompletion,
+        profilePicture: lead.profilePicture,
+      );
 
-              if (modalContext.mounted) {
-                Navigator.of(modalContext).pop();
-              }
-
-              if (success && mounted) {
-                HapticFeedback.lightImpact();
-                setState(() {
-                  _processedLeadIds.add(lead.id);
-                  _backlogLeads?.removeWhere((c) => c.id == lead.id);
-                });
-                // Also remove from cache
-                _cacheService.removeLeadFromCache(lead.id);
-                // Clear pending feedback cache since feedback was submitted
-                CallFeedbackGuardService.instance.clearCache();
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('✅ Feedback saved for ${lead.name}'),
-                    backgroundColor: Colors.green,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 2),
-                  ),
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        isDismissible: false,
+        enableDrag: false,
+        builder: (modalContext) => PopScope(
+          canPop: false,
+          child: TransporterFeedbackModal(
+            contact: transporterContact,
+            referenceId: referenceId,
+            onFeedbackSubmitted: (feedback) async {
+              try {
+                final success = await _updateContactStatus(
+                  lead,
+                  feedback,
+                  referenceId: referenceId,
                 );
-              } else if (!success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('❌ Failed to save feedback for ${lead.name}'),
-                    backgroundColor: Colors.red,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 3),
-                  ),
-                );
-              }
-            } catch (e) {
-              if (modalContext.mounted) {
-                Navigator.of(modalContext).pop();
-              }
 
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('❌ Error: ${e.toString()}'),
-                    backgroundColor: Colors.red,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 3),
-                  ),
-                );
+                if (modalContext.mounted) {
+                  Navigator.of(modalContext).pop();
+                }
+
+                if (success && mounted) {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    _processedLeadIds.add(lead.id);
+                    _backlogLeads?.removeWhere((c) => c.id == lead.id);
+                  });
+                  // Also remove from cache
+                  _cacheService.removeLeadFromCache(lead.id);
+                  // Clear pending feedback cache since feedback was submitted
+                  CallFeedbackGuardService.instance.clearCache();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('✅ Feedback saved for ${lead.name}'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                } else if (!success && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Failed to save feedback for ${lead.name}'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (modalContext.mounted) {
+                  Navigator.of(modalContext).pop();
+                }
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
               }
-            }
-          },
+            },
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      // Driver feedback
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        isDismissible: false,
+        enableDrag: false,
+        builder: (modalContext) => PopScope(
+          canPop: false,
+          child: CallFeedbackModal(
+            contact: lead,
+            referenceId: referenceId,
+            allowDismiss: false,
+            onFeedbackSubmitted: (feedback) async {
+              try {
+                final success = await _updateContactStatus(
+                  lead,
+                  feedback,
+                  referenceId: referenceId,
+                );
+
+                if (modalContext.mounted) {
+                  Navigator.of(modalContext).pop();
+                }
+
+                if (success && mounted) {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    _processedLeadIds.add(lead.id);
+                    _backlogLeads?.removeWhere((c) => c.id == lead.id);
+                  });
+                  // Also remove from cache
+                  _cacheService.removeLeadFromCache(lead.id);
+                  // Clear pending feedback cache since feedback was submitted
+                  CallFeedbackGuardService.instance.clearCache();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('✅ Feedback saved for ${lead.name}'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                } else if (!success && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Failed to save feedback for ${lead.name}'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (modalContext.mounted) {
+                  Navigator.of(modalContext).pop();
+                }
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ),
+      );
+    }
   }
 
   Future<bool> _updateContactStatus(
@@ -631,29 +728,50 @@ class _BacklogScreenState extends State<BacklogScreen>
     String? referenceId,
   }) async {
     String feedbackText = '';
+    final contactType = contact.role ?? 'driver';
 
-    switch (feedback.status) {
-      case CallStatus.connected:
-        feedbackText = feedback.connectedFeedback?.displayName ?? 'Connected';
-        break;
-      case CallStatus.callBack:
-        feedbackText = feedback.callBackReason?.displayName ?? 'Call Back';
-        break;
-      case CallStatus.callBackLater:
-        feedbackText = feedback.callBackTime?.displayName ?? 'Call Back Later';
-        break;
-      case CallStatus.notReachable:
-        feedbackText = 'Not Reachable';
-        break;
-      case CallStatus.notInterested:
-        feedbackText = 'Not Interested';
-        break;
-      case CallStatus.invalid:
-        feedbackText = 'Invalid Number';
-        break;
-      case CallStatus.pending:
-        feedbackText = 'Pending';
-        break;
+    if (contactType == 'transporter') {
+      switch (feedback.status) {
+        case CallStatus.connected:
+          feedbackText =
+              feedback.transporterConnectedFeedback?.displayName ?? 'Connected';
+          break;
+        case CallStatus.callBack:
+          feedbackText = feedback.callBackReason?.displayName ?? 'Call Back';
+          break;
+        case CallStatus.callBackLater:
+          feedbackText =
+              feedback.callBackTime?.displayName ?? 'Call Back Later';
+          break;
+        default:
+          feedbackText = 'Unknown';
+          break;
+      }
+    } else {
+      switch (feedback.status) {
+        case CallStatus.connected:
+          feedbackText = feedback.connectedFeedback?.displayName ?? 'Connected';
+          break;
+        case CallStatus.callBack:
+          feedbackText = feedback.callBackReason?.displayName ?? 'Call Back';
+          break;
+        case CallStatus.callBackLater:
+          feedbackText =
+              feedback.callBackTime?.displayName ?? 'Call Back Later';
+          break;
+        case CallStatus.notReachable:
+          feedbackText = 'Not Reachable';
+          break;
+        case CallStatus.notInterested:
+          feedbackText = 'Not Interested';
+          break;
+        case CallStatus.invalid:
+          feedbackText = 'Invalid Number';
+          break;
+        case CallStatus.pending:
+          feedbackText = 'Pending';
+          break;
+      }
     }
 
     try {
@@ -712,7 +830,6 @@ class _BacklogScreenState extends State<BacklogScreen>
               RegExp(r'[^\d]'),
               '',
             );
-            final contactType = contact.role ?? 'driver';
             final process = contactType == 'transporter'
                 ? 'Transporter Onboarding'
                 : 'Driver Onboarding';

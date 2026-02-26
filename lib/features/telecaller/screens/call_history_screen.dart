@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import '../../../app/theme/app_theme.dart';
@@ -19,6 +18,7 @@ import '../../../core/utils/phone_masking_utils.dart';
 import '../widgets/call_feedback_modal.dart';
 import '../widgets/call_type_selection_dialog.dart';
 import '../widgets/easygo_ivr_call_helper.dart';
+import '../widgets/manual_call_helper.dart';
 import '../../../widgets/error_handler.dart';
 
 class CallHistoryScreen extends StatefulWidget {
@@ -1996,29 +1996,42 @@ class _CallHistoryCardState extends State<_CallHistoryCard> {
       );
 
       if (callType == 'manual') {
-        // For manual calls, phone number might be hidden for privacy
-        // The manual_call_api will fetch the actual number from database
-        final result = await SmartCallingService.instance.initiateManualCall(
-          driverMobile: cleanPhone.isEmpty ? widget.entry.driverId : cleanPhone,
-          callerId: callerId,
-          driverId: widget.entry.driverId,
-          callSource: 'call_history_recall', // Mark as recall from history
+        // Create DriverContact for ManualCallHelper
+        final contact = DriverContact(
+          id: widget.entry.driverId,
+          tmid: widget.entry.tmid,
+          name: widget.entry.driverName,
+          phoneNumber: widget.entry.phoneNumber,
+          company: '',
+          state: '',
+          subscriptionStatus: SubscriptionStatus.inactive,
+          status: widget.entry.status,
         );
 
-        if (result['success'] == true && mounted) {
-          final driverMobileRaw = result['data']?['driver_mobile_raw'];
-          final newCallLogId = result['data']?['call_log_id']?.toString();
-
-          await FlutterPhoneDirectCaller.callNumber(driverMobileRaw);
-          await Future.delayed(const Duration(milliseconds: 500));
-
-          if (mounted) {
-            // Use new call_log_id if available, otherwise use existing entry id
-            _showUpdateFeedbackModal(
-              callLogId: newCallLogId ?? widget.entry.id,
-            );
-          }
-        }
+        // Use ManualCallHelper for better experience with recording upload
+        await ManualCallHelper.initiateManualCall(
+          context: context,
+          contact: contact,
+          process: widget.entry.process ?? 'Driver Onboarding',
+          showRecordingUpload: true,
+          onFeedbackSubmitted: (feedback) async {
+            // ManualCallHelper already handles the API update
+            // Just show success message and trigger refresh
+            if (mounted) {
+              HapticFeedback.lightImpact();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('✅ Feedback saved for ${contact.name}'),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+              // Trigger parent refresh if callback exists
+              widget.onUpdate?.call();
+            }
+          },
+        );
       } else if (callType == 'easygo_ivr') {
         // For IVR calls, if phone number is empty, fetch it from database first
         String phoneToUse = widget.entry.phoneNumber;

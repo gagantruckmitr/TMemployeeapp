@@ -66,6 +66,10 @@ class _CallFeedbackModalState extends State<CallFeedbackModal> {
       'Driver Wants Call Back Later',
       'Driver Requested Callback on WhatsApp',
       'Interview Done',
+      'Match Making Done',
+      'Transporter will confirm later',
+      'Driver will confirm later',
+      'Other',
     ],
     'Not Connected': [
       'Ringing – No Answer',

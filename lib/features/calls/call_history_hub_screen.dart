@@ -1,16 +1,14 @@
-import '../../../core/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'dart:io';
 import '../../core/services/manual_call_service.dart';
+import '../../core/services/concall_services.dart';
+import '../../models/concall_history_model.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/services/phase2_api_service.dart';
 import '../../core/services/phase2_auth_service.dart';
 import '../../core/services/call_feedback_guard_service.dart';
 import '../../core/services/match_making_feedback_guard_service.dart';
-import '../../core/services/real_auth_service.dart';
 import '../../models/job_model.dart';
 import 'transporter_call_history_screen.dart';
 import 'call_history_screen.dart';
@@ -43,7 +41,7 @@ class _CallHistoryHubScreenState extends State<CallHistoryHubScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _checkPendingFeedback();
   }
 
@@ -89,6 +87,7 @@ class _CallHistoryHubScreenState extends State<CallHistoryHubScreen>
               children: [
                 CallHistoryScreen(initialPeriod: _selectedPeriod),
                 const TransporterListScreen(),
+                const ConCallHistoryScreen(),
               ],
             ),
           ),
@@ -330,6 +329,8 @@ class _CallHistoryHubScreenState extends State<CallHistoryHubScreen>
         indicatorColor: AppColors.primary,
         indicatorWeight: 2.5,
         indicatorSize: TabBarIndicatorSize.label,
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
         labelStyle: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
@@ -360,6 +361,17 @@ class _CallHistoryHubScreenState extends State<CallHistoryHubScreen>
                 Icon(Icons.local_shipping_rounded, size: 18),
                 const SizedBox(width: 6),
                 const Text('Transporters'),
+              ],
+            ),
+          ),
+          Tab(
+            height: 44,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.call_merge_rounded, size: 18),
+                const SizedBox(width: 6),
+                const Text('Con Calls'),
               ],
             ),
           ),
@@ -1460,6 +1472,582 @@ class _TransporterCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+
+// Con Call History Screen
+class ConCallHistoryScreen extends StatefulWidget {
+  const ConCallHistoryScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ConCallHistoryScreen> createState() => _ConCallHistoryScreenState();
+}
+
+class _ConCallHistoryScreenState extends State<ConCallHistoryScreen> {
+  List<ConCallHistoryModel> _conCalls = [];
+  List<ConCallHistoryModel> _filteredConCalls = [];
+  bool _isLoading = true;
+  String? _error;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadConCallHistory();
+    _searchController.addListener(_filterConCalls);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadConCallHistory() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final user = await Phase2AuthService.getCurrentUser();
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
+
+      final conCalls = await ConCallService.instance.fetchConCallHistory(user.id);
+
+      setState(() {
+        _conCalls = conCalls;
+        _filteredConCalls = _conCalls;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _filterConCalls() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredConCalls = _conCalls;
+      } else {
+        _filteredConCalls = _conCalls.where((call) {
+          final driverName = call.driverName.toLowerCase();
+          final transporterName = call.transporterName.toLowerCase();
+          final jobId = call.jobId.toLowerCase();
+          final driverTmid = call.uniqueIdDriver.toLowerCase();
+          final transporterTmid = call.uniqueIdTransporter.toLowerCase();
+          
+          return driverName.contains(query) ||
+              transporterName.contains(query) ||
+              jobId.contains(query) ||
+              driverTmid.contains(query) ||
+              transporterTmid.contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Search bar
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          color: Colors.white,
+          child: TextField(
+            controller: _searchController,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Search con calls...',
+              hintStyle: const TextStyle(fontSize: 13),
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: () {
+                        _searchController.clear();
+                      },
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(
+                  color: AppColors.primary,
+                  width: 2,
+                ),
+              ),
+              filled: true,
+              fillColor: Colors.grey[50],
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+          ),
+        ),
+
+        // Con Call list
+        Expanded(child: _buildBody()),
+      ],
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                'Error Loading Con Calls',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.darkGray,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _loadConCallHistory,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_filteredConCalls.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _searchController.text.isEmpty
+                  ? Icons.call_merge_rounded
+                  : Icons.search_off,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _searchController.text.isEmpty
+                  ? 'No con calls found'
+                  : 'No results for "${_searchController.text}"',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadConCallHistory,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _filteredConCalls.length,
+        itemBuilder: (context, index) {
+          final conCall = _filteredConCalls[index];
+          return _ConCallCard(conCall: conCall);
+        },
+      ),
+    );
+  }
+}
+
+class _ConCallCard extends StatelessWidget {
+  final ConCallHistoryModel conCall;
+
+  const _ConCallCard({
+    Key? key,
+    required this.conCall,
+  }) : super(key: key);
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+
+      final dateOnly = DateTime(date.year, date.month, date.day);
+      final todayOnly = DateTime(now.year, now.month, now.day);
+      final yesterdayOnly = todayOnly.subtract(const Duration(days: 1));
+
+      final daysDiff = todayOnly.difference(dateOnly).inDays;
+
+      if (dateOnly == todayOnly) {
+        return 'Today ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+      } else if (dateOnly == yesterdayOnly) {
+        return 'Yesterday';
+      } else if (daysDiff < 7 && daysDiff > 0) {
+        return '$daysDiff days ago';
+      } else {
+        return '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      return '';
+    }
+  }
+
+  Color _getStatusColor(String? status) {
+    if (status == null) return Colors.grey;
+    switch (status.toLowerCase()) {
+      case 'connected':
+        return Colors.green;
+      case 'not_connected':
+        return Colors.red;
+      case 'callback_later':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _formatStatus(String? status) {
+    if (status == null) return 'Pending';
+    return status.replaceAll('_', ' ').split(' ').map((word) {
+      return word[0].toUpperCase() + word.substring(1);
+    }).join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200, width: 1),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with Job ID and Status
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Job ID Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.work_outline,
+                        size: 14,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        conCall.jobId,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Status Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(conCall.callStatus).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _formatStatus(conCall.callStatus),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _getStatusColor(conCall.callStatus),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Driver Info
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.person_rounded,
+                    size: 20,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        conCall.driverName,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.darkGray,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        conCall.uniqueIdDriver,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Transporter Info
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.local_shipping_rounded,
+                    size: 20,
+                    color: Colors.orange.shade700,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        conCall.transporterName,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.darkGray,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        conCall.uniqueIdTransporter,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            // Call Details Section
+            if (conCall.callFeedback != null || conCall.callRemarks != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (conCall.callFeedback != null) ...[
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.feedback_outlined,
+                            size: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Feedback:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              conCall.callFeedback!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.darkGray,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (conCall.callRemarks != null) ...[
+                      if (conCall.callFeedback != null) const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.note_outlined,
+                            size: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Remarks:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              conCall.callRemarks!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.darkGray,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+
+            // Footer with time and duration
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time_rounded,
+                  size: 14,
+                  color: Colors.grey.shade500,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _formatDate(conCall.createdAt),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                if (conCall.callDuration != null) ...[
+                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.timer_outlined,
+                    size: 14,
+                    color: Colors.grey.shade500,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${conCall.callDuration}s',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+                if (conCall.activeTime != null) ...[
+                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.hourglass_bottom_rounded,
+                    size: 14,
+                    color: Colors.grey.shade500,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${conCall.activeTime}s active',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       ),
     );

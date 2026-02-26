@@ -2126,6 +2126,9 @@ class _JobApplicantsScreenState extends State<JobApplicantsScreen>
                   'Driver Wants Call Back Later',
                   'Driver Requested Callback on WhatsApp',
                   'Interview Done',
+                  'Match Making Done',
+                  'Transporter will confirm later',
+                  'Driver will confirm later',
                 ];
                 final notConnectedOptions = [
                   'Ringing – No Answer',
